@@ -3,6 +3,6 @@
     "private": true,
     "type": "module",
     "dependencies": {
-        "maaths": "workspace:^"
+        "buffcat": "workspace:^"
     }
 }

@@ -38,7 +38,7 @@ importers:
 
   docs:
     dependencies:
-      maaths:
+      buffcat:
         specifier: workspace:^
         version: link:..
 
