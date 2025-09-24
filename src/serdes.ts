@@ -48,19 +48,75 @@ export function serDes<S extends Schema>(
     return { ser, des, source: { size: calculateSizeSrc, ser: serializerSrc, des: deserializerSrc } };
 }
 
-function schemaContainsString(s: Schema): boolean {
+function needsU8(s: Schema): boolean {
+    if (s.type === 'int8') return true;
+    if (s.type === 'uint8') return true;
+    if (s.type === 'int16') return true;
+    if (s.type === 'uint16') return true;
+    if (s.type === 'int32') return true;
+    if (s.type === 'uint32') return true;
     if (s.type === 'string') return true;
     if (s.type === 'record') return true;
-    if (s.type === 'list') return schemaContainsString(s.of);
-    if (s.type === 'object') return Object.values(s.fields).some(schemaContainsString);
+    if (s.type === 'list') return needsU8(s.of);
+    if (s.type === 'object') return Object.values(s.fields).some(needsU8);
     return false;
 }
 
 function buildCalculateSizeSrc(schema: Schema): string {
+    // helper to compute a fully-fixed size at codegen time; returns number or null
+    function fixedSize(s: Schema): number | null {
+        switch (s.type) {
+            case 'boolean':
+            case 'int8':
+            case 'uint8':
+                return 1;
+            case 'int16':
+            case 'uint16':
+                return 2;
+            case 'int32':
+            case 'uint32':
+            case 'float32':
+                return 4;
+            case 'number':
+            case 'float64':
+                return 8;
+            case 'string':
+                return null; // string length is dynamic (even though it has a 4-byte prefix)
+            case 'list': {
+                if ('length' in s && typeof s.length === 'number') {
+                    const elemFixed = fixedSize(s.of);
+                    if (elemFixed !== null) return elemFixed * s.length;
+                    return null;
+                }
+                return null;
+            }
+            case 'object': {
+                let total = 0;
+                for (const f of Object.values(s.fields)) {
+                    const fs = fixedSize(f);
+                    if (fs === null) return null;
+                    total += fs;
+                }
+                return total;
+            }
+            case 'record':
+                return null;
+            default:
+                return null;
+        }
+    }
+
+    // if the whole schema is fixed-size, emit a constant return
+    const schemaKnownSize = fixedSize(schema);
+
+    if (schemaKnownSize !== null) {
+        return `return ${schemaKnownSize};`;
+    }
+
     let code = '';
 
+    // keep small runtime vars
     code += 'let size = 0;';
-
     code += 'let len = 0;';
     code += 'let bytes = 0;';
 
@@ -82,19 +138,33 @@ function buildCalculateSizeSrc(schema: Schema): string {
                 return ` size += 8;`;
             case 'string':
                 return `bytes = textEncoder.encode(${v} ?? ''); size += 4 + bytes.length;`;
-            case 'list':
+            case 'list': {
+                // fixed-length list
                 if ('length' in s && typeof s.length === 'number') {
                     const len = s.length;
+                    const elemFixed = fixedSize(s.of);
+                    if (elemFixed !== null) {
+                        // fixed total for this sub-list
+                        return ` size += ${elemFixed * len};`;
+                    }
+                    // fall back to element-wise computation
                     let inner = `len = ${len}; for (let i = 0; i < len; i++) { `;
                     inner += gen(s.of, `${v}[i]`);
                     inner += ` }`;
                     return inner;
                 } else {
+                    // variable-length list: length prefix is 4 bytes
+                    const elemFixed = fixedSize(s.of);
+                    if (elemFixed !== null) {
+                        // can compute per-length contribution at runtime without per-element loop
+                        return ` size += 4; if (Array.isArray(${v})) { size += ${elemFixed} * ${v}.length; }`;
+                    }
                     let inner = ` size += 4; if (Array.isArray(${v})) { for (let i = 0; i < ${v}.length; i++) { `;
                     inner += gen(s.of, `${v}[i]`);
                     inner += ` } }`;
                     return inner;
                 }
+            }
             case 'object': {
                 let inner = '';
                 for (const [k, f] of Object.entries(s.fields)) {
@@ -131,7 +201,7 @@ function buildCalculateSizeSrc(schema: Schema): string {
 function buildSerializerSrc(schema: Schema): string {
     let code = `let o = offset;`;
 
-    if (schemaContainsString(schema)) {
+    if (needsU8(schema)) {
         code += 'const u8 = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength); ';
     }
 
@@ -215,7 +285,7 @@ function buildDeserializerSrc(schema: Schema): string {
 
     code += 'let len = 0;';
 
-    if (schemaContainsString(schema)) {
+    if (needsU8(schema)) {
         code += 'const u8 = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength); ';
     }
 
