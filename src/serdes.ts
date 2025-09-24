@@ -9,7 +9,7 @@ export function serDes<S extends Schema>(
 } {
     const serializerSrc = buildSerializerSrc(schema);
     const deserializerSrc = buildDeserializerSrc(schema);
-    const calculateSizeSrc = buildCalculateSizeSrc(schema, 'value');
+    const calculateSizeSrc = buildCalculateSizeSrc(schema);
 
     // shared encoder/decoder to avoid constructing per call
     const sharedTextEncoder = new TextEncoder();
@@ -28,7 +28,10 @@ export function serDes<S extends Schema>(
         textDecoder: TextDecoder,
     ) => SchemaType<S>;
 
-    const calculateSizeFn = new Function('value', 'textEncoder', calculateSizeSrc) as (value: any, textEncoder: TextEncoder) => number;
+    const calculateSizeFn = new Function('value', 'textEncoder', calculateSizeSrc) as (
+        value: any,
+        textEncoder: TextEncoder,
+    ) => number;
 
     const ser = (value: SchemaType<S>): ArrayBuffer => {
         const size = calculateSizeFn(value, sharedTextEncoder);
@@ -45,7 +48,15 @@ export function serDes<S extends Schema>(
     return { ser, des, source: { size: calculateSizeSrc, ser: serializerSrc, des: deserializerSrc } };
 }
 
-function buildCalculateSizeSrc(schema: Schema, valueVar: string): string {
+function schemaContainsString(s: Schema): boolean {
+    if (s.type === 'string') return true;
+    if (s.type === 'record') return true;
+    if (s.type === 'list') return schemaContainsString(s.of);
+    if (s.type === 'object') return Object.values(s.fields).some(schemaContainsString);
+    return false;
+}
+
+function buildCalculateSizeSrc(schema: Schema): string {
     let code = '';
 
     code += 'let size = 0;';
@@ -110,7 +121,7 @@ function buildCalculateSizeSrc(schema: Schema, valueVar: string): string {
         }
     }
 
-    code += gen(schema, valueVar);
+    code += gen(schema, 'value');
 
     code += ' return size;';
 
@@ -119,6 +130,10 @@ function buildCalculateSizeSrc(schema: Schema, valueVar: string): string {
 
 function buildSerializerSrc(schema: Schema): string {
     let code = `let o = offset;`;
+
+    if (schemaContainsString(schema)) {
+        code += 'const u8 = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength); ';
+    }
 
     code += 'let bytes = 0;';
     code += 'let keys;';
@@ -146,7 +161,7 @@ function buildSerializerSrc(schema: Schema): string {
             case 'float64':
                 return `buffer.setFloat64(o, ${v}); o += 8;`;
             case 'string': {
-                return `bytes = textEncoder.encode(${v} ?? ''); buffer.setUint32(o, bytes.length); o += 4; new Uint8Array(buffer.buffer, buffer.byteOffset + o, bytes.length).set(bytes); o += bytes.length;`;
+                return `bytes = textEncoder.encode(${v} ?? ''); buffer.setUint32(o, bytes.length); o += 4; u8.set(bytes, o); o += bytes.length;`;
             }
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
@@ -177,7 +192,7 @@ function buildSerializerSrc(schema: Schema): string {
                 inner += ` const k = keys[i];`;
                 inner += ` const kb = textEncoder.encode(k);`;
                 inner += ` buffer.setUint32(o, kb.length); o += 4;`;
-                inner += ` new Uint8Array(buffer.buffer, buffer.byteOffset + o, kb.length).set(kb);`;
+                inner += ` u8.set(kb, o);`;
                 inner += ` o += kb.length;`;
                 inner += gen(s.field, `${v}[k]`);
                 inner += ` }`;
@@ -199,6 +214,10 @@ function buildDeserializerSrc(schema: Schema): string {
     let code = 'let o = offset;';
 
     code += 'let len = 0;';
+
+    if (schemaContainsString(schema)) {
+        code += 'const u8 = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength); ';
+    }
 
     function gen(s: Schema, target: string): string {
         switch (s.type) {
@@ -223,7 +242,7 @@ function buildDeserializerSrc(schema: Schema): string {
             case 'float64':
                 return `${target} = buffer.getFloat64(o); o += 8;`;
             case 'string': {
-                return `len = buffer.getUint32(o); o += 4; ${target} = len === 0 ? '' : textDecoder.decode(new Uint8Array(buffer.buffer, buffer.byteOffset + o, len)); o += len;`;
+                return `len = buffer.getUint32(o); o += 4; ${target} = len === 0 ? '' : textDecoder.decode(u8.subarray(o, o + len)); o += len;`;
             }
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
@@ -254,7 +273,7 @@ function buildDeserializerSrc(schema: Schema): string {
                     ${target} = {};
                     for (let i = 0; i < count; i++) {
                         const klen = buffer.getUint32(o); o += 4;
-                        const k = klen === 0 ? '' : textDecoder.decode(new Uint8Array(buffer.buffer, buffer.byteOffset + o, klen));
+                        const k = klen === 0 ? '' : textDecoder.decode(u8.subarray(o, o + klen));
                         o += klen;
                         ${gen(s.field, `${target}[k]`)}
                     }

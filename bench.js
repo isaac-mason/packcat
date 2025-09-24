@@ -55,7 +55,7 @@ const listSerDes = serDes(listNum);
 const recordSerDes = serDes(recSchema);
 const playerSerDes = serDes(playerSchema);
 
-console.log(recordSerDes.source)
+console.log(playerSerDes.source)
 
 console.log('Running benches...');
 
