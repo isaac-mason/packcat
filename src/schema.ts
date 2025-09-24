@@ -1,7 +1,3 @@
-/* schema type */
-
-// schemas are simple objects
-
 export type BooleanSchema = {
     type: 'boolean';
 };
@@ -84,11 +80,32 @@ export type Schema =
     | RecordSchema
     | AnySchema;
 
-/* schema to type utility */
 type Simplify<T> = { [K in keyof T]: T[K] } & {};
 
+type NextDepth = {
+    0: 0;
+    1: 0;
+    2: 1;
+    3: 2;
+    4: 3;
+    5: 4;
+    6: 5;
+    7: 6;
+    8: 7;
+    9: 8;
+    10: 9;
+    11: 10;
+    12: 11;
+    13: 12;
+    14: 13;
+    15: 14;
+};
+
+type DecrementDepth<N extends keyof NextDepth> = N extends keyof NextDepth ? NextDepth[N] : 0;
+
 // biome-ignore format: readability
-export type SchemaType<S extends Schema> =
+export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
+	Depth extends 0 ? any :
 	S extends BooleanSchema ? boolean :
 	S extends StringSchema ? string :
 	S extends NumberSchema ? number :
@@ -101,118 +118,51 @@ export type SchemaType<S extends Schema> =
 	S extends Float32Schema ? number :
 	S extends Float64Schema ? number :
 	S extends AnySchema<infer T> ? T :
-	S extends { type: "list"; of: infer U extends Schema } ? SchemaType<U>[] :
-    S extends { type: "object"; fields: infer F extends Record<string, Schema> } ? Simplify<{ [K in keyof F]: SchemaType<F[K]> }> :
-	S extends { type: "record"; field: infer F extends Schema } ? Record<string, SchemaType<F>> :
+	S extends ListSchema ? SchemaType<S['of'], DecrementDepth<Depth>>[] :
+	S extends ObjectSchema ? Simplify<{ [K in keyof S['fields']]: SchemaType<S['fields'][K], DecrementDepth<Depth>> }> :
+	S extends RecordSchema ? Record<string, SchemaType<S['field'], DecrementDepth<Depth>>> :
 	never;
 
 /* lightweight helpers that just return objects */
 
-export const boolean = <O extends Partial<Omit<BooleanSchema, 'type'>>>(opts: O = {} as O): { type: 'boolean' } & O => ({
-    ...opts,
-    type: 'boolean',
-});
+export const boolean = (): { type: 'boolean' } => ({ type: 'boolean' });
 
-export const string = <O extends Partial<Omit<StringSchema, 'type'>>>(opts: O = {} as O): { type: 'string' } & O => ({
-    ...opts,
-    type: 'string',
-});
+export const string = (): { type: 'string' } => ({ type: 'string' });
 
-export const number = <O extends Partial<Omit<NumberSchema, 'type'>>>(opts: O = {} as O): { type: 'number' } & O => ({
-    ...opts,
-    type: 'number',
-});
+export const number = (): { type: 'number' } => ({ type: 'number' });
 
-export const int8 = <O extends Partial<Omit<Int8Schema, 'type'>>>(opts: O = {} as O): { type: 'int8' } & O => ({
-    ...opts,
-    type: 'int8',
-});
+export const int8 = (): { type: 'int8' } => ({ type: 'int8' });
 
-export const uint8 = <O extends Partial<Omit<Uint8Schema, 'type'>>>(opts: O = {} as O): { type: 'uint8' } & O => ({
-    ...opts,
-    type: 'uint8',
-});
+export const uint8 = (): { type: 'uint8' } => ({ type: 'uint8' });
 
-export const int16 = <O extends Partial<Omit<Int16Schema, 'type'>>>(opts: O = {} as O): { type: 'int16' } & O => ({
-    ...opts,
-    type: 'int16',
-});
+export const int16 = (): { type: 'int16' } => ({ type: 'int16' });
 
-export const uint16 = <O extends Partial<Omit<Uint16Schema, 'type'>>>(opts: O = {} as O): { type: 'uint16' } & O => ({
-    ...opts,
-    type: 'uint16',
-});
+export const uint16 = (): { type: 'uint16' } => ({ type: 'uint16' });
 
-export const int32 = <O extends Partial<Omit<Int32Schema, 'type'>>>(opts: O = {} as O): { type: 'int32' } & O => ({
-    ...opts,
-    type: 'int32',
-});
+export const int32 = (): { type: 'int32' } => ({ type: 'int32' });
 
-export const uint32 = <O extends Partial<Omit<Uint32Schema, 'type'>>>(opts: O = {} as O): { type: 'uint32' } & O => ({
-    ...opts,
-    type: 'uint32',
-});
+export const uint32 = (): { type: 'uint32' } => ({ type: 'uint32' });
 
-export const float32 = <O extends Partial<Omit<Float32Schema, 'type'>>>(opts: O = {} as O): { type: 'float32' } & O => ({
-    ...opts,
-    type: 'float32',
-});
+export const float32 = (): { type: 'float32' } => ({ type: 'float32' });
 
-export const float64 = <O extends Partial<Omit<Float64Schema, 'type'>>>(opts: O = {} as O): { type: 'float64' } & O => ({
-    ...opts,
-    type: 'float64',
-});
+export const float64 = (): { type: 'float64' } => ({ type: 'float64' });
 
-export const any = <T, O extends Partial<Omit<AnySchema<T>, 'type' | '__tsType'>>>(opts: O = {} as O): AnySchema<T> & O =>
+export const any = <T>(): AnySchema<T> =>
     ({
         type: 'any',
-        ...opts,
-    }) as AnySchema<T> & O;
+    }) as AnySchema<T>;
 
-export function list<T extends Schema>(of: T): { type: 'list'; of: T };
-export function list<T extends Schema, O extends Partial<Omit<ListSchema, 'type' | 'of'>>>(
-    of: T,
-    opts: O,
-): { type: 'list'; of: T } & O;
-export function list<T extends Schema, O extends Partial<Omit<ListSchema, 'type' | 'of'>>>(
-    of: T,
-    opts?: O,
-): { type: 'list'; of: T } | ({ type: 'list'; of: T } & O) {
-    return {
-        type: 'list',
-        of,
-        ...(opts as O | undefined),
-    } as unknown as any;
-}
+export const list = <T extends Schema>(of: T): { type: 'list'; of: T } => ({
+    type: 'list',
+    of,
+});
 
-export function object<F extends Record<string, Schema>>(fields: F): { type: 'object'; fields: F };
-export function object<F extends Record<string, Schema>, O extends Partial<Omit<ObjectSchema, 'type' | 'fields'>>>(
-    fields: F,
-    opts: O,
-): { type: 'object'; fields: F } & O;
-export function object<F extends Record<string, Schema>, O extends Partial<Omit<ObjectSchema, 'type' | 'fields'>>>(
-    fields: F,
-    opts?: O,
-): { type: 'object'; fields: F } | ({ type: 'object'; fields: F } & O) {
-    return {
-        type: 'object',
-        fields,
-        ...(opts as O | undefined),
-    } as unknown as any;
-}
+export const object = <F extends Record<string, Schema>>(fields: F): { type: 'object'; fields: F } => ({
+    type: 'object',
+    fields,
+});
 
-export function record<F extends Schema>(fields: F): { type: 'record'; field: F };
-export function record<F extends Schema, O extends Partial<Omit<RecordSchema, 'type' | 'field'>>>(
-    field: F,
-    opts: O,
-): { type: 'record'; field: F } & O;
-export function record<F extends Schema, O extends Partial<Omit<RecordSchema, 'type' | 'field'>>>(
-    field: F,
-    opts?: O,
-): { type: 'record'; field: F } | ({ type: 'record'; field: F } & O) {
-    return {
-        type: 'record',
-        field,
-        ...(opts as O | undefined),
-    } as unknown as any;
-}
+export const record = <F extends Schema>(field: F): { type: 'record'; field: F } => ({
+    type: 'record',
+    field,
+});

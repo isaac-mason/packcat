@@ -1,6 +1,9 @@
 import type { Schema, SchemaType } from './schema';
 
-export function serDes<S extends Schema>(schema: S) {
+export function serDes<S extends Schema>(schema: S): {
+    ser: (value: SchemaType<S>) => ArrayBuffer;
+    des: (buffer: ArrayBuffer) => SchemaType<S>;
+} {
     const state = { hasString: false };
 
     const serializerSrc = buildSerializerSrc(schema, 'value', 'buffer', 'offset', state, true);
@@ -20,7 +23,7 @@ export function serDes<S extends Schema>(schema: S) {
 
     const calculateSizeFn = new Function('value', calculateSizeSrc) as (value: any) => number;
 
-    const serialize = (value: SchemaType<S>): ArrayBuffer => {
+    const ser = (value: SchemaType<S>): ArrayBuffer => {
         const size = calculateSizeFn(value);
         const buffer = new ArrayBuffer(size);
         const view = new DataView(buffer);
@@ -28,17 +31,18 @@ export function serDes<S extends Schema>(schema: S) {
         return buffer;
     };
 
-    const deserialize = (buffer: ArrayBuffer) => {
-        return deserializerFn(new DataView(buffer), 0);
+    const des = (buffer: ArrayBuffer) => {
+        return deserializerFn(new DataView(buffer), 0).value;
     };
 
-    return { serialize, deserialize };
+    return { ser, des };
 }
 
 function containsString(s: Schema): boolean {
     if (s.type === 'string') return true;
     if (s.type === 'list') return containsString(s.of);
     if (s.type === 'object') return Object.values(s.fields).some(containsString);
+    if (s.type === 'record') return containsString(s.field);
     return false;
 }
 
@@ -85,6 +89,13 @@ function buildCalculateSizeSrc(schema: Schema, valueVar: string): string {
                     body += ` } }`;
                     return body;
                 }
+            case 'record': {
+                // variable map: encode count (uint32) then for-in over keys: key string length+bytes + value
+                let out = ` size += 4; if (${v} && typeof ${v} === 'object') { for (const _k in ${v}) { const _kb = textEncoder.encode(_k); size += 4 + _kb.length; `;
+                out += gen(s.field, `${v}[_k]`);
+                out += ` } }`;
+                return out;
+            }
             case 'object': {
                 let out = '';
                 for (const [k, f] of Object.entries(s.fields)) {
@@ -236,6 +247,20 @@ function buildDeserializerSrc(schema: Schema): string {
                 for (const [key, fieldSchema] of Object.entries(s.fields)) {
                     parts += gen(fieldSchema, `${target}[${JSON.stringify(key)}]`);
                 }
+                return parts;
+            }
+            case 'record': {
+                // read count, then loop that many key/value entries
+                let parts = `{
+                    const _count = buffer.getUint32(o); o += 4;
+                    ${target} = {};
+                    for (let _i = 0; _i < _count; _i++) {
+                        const _klen = buffer.getUint32(o); o += 4;
+                        const _k = textDecoder.decode(new Uint8Array(buffer.buffer, buffer.byteOffset + o, _klen));
+                        o += _klen;
+                        ${gen(s.field, `${target}[_k]`)}
+                    }
+                }`;
                 return parts;
             }
             default:
