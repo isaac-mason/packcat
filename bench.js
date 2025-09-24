@@ -1,8 +1,7 @@
-import { boolean, list, number, object, record, serDes, string, uint32 } from './dist/index.js';
+import { boolean, list, number, object, record, serDes, string, uint8, uint16, uint32 } from './dist/index.js';
 
 function now() {
-    const [s, ns] = process.hrtime();
-    return s * 1e3 + ns / 1e6;
+    return performance.now();
 }
 
 function bench(name, fn, iterations = 100_000) {
@@ -21,6 +20,14 @@ const simpleStr = string();
 const objSchema = object({ a: number(), b: string(), c: boolean() });
 const listNum = list(number());
 const recSchema = record(uint32());
+const playerSchema = object({
+    id: uint32(),
+    name: string(),
+    score: number(),
+    isActive: boolean(),
+    inventory: record(object({ item: uint8(), quantity: uint16() })),
+    friends: list(uint32()),
+});
 
 // Data
 const numVal = 42.5;
@@ -28,6 +35,17 @@ const strVal = 'hello world';
 const objVal = { a: 123.45, b: 'test', c: true };
 const listVal = [1, 2, 3, 4, 5];
 const recVal = { a: 1, b: 42, ключ: 7, '😊': 999 };
+const playerVal = {
+    id: 1,
+    name: 'PlayerOne',
+    score: 1000,
+    isActive: true,
+    inventory: {
+        potion: { item: 1, quantity: 10 },
+        sword: { item: 2, quantity: 1 },
+    },
+    friends: [2, 3, 4],
+};
 
 // SerDes factories
 const numberSerDes = serDes(simpleNum);
@@ -35,6 +53,7 @@ const stringSerDes = serDes(simpleStr);
 const objSerDes = serDes(objSchema);
 const listSerDes = serDes(listNum);
 const recordSerDes = serDes(recSchema);
+const playerSerDes = serDes(playerSchema);
 
 console.log(recordSerDes.source)
 
@@ -69,6 +88,12 @@ console.log('---');
 bench('ser record', () => recordSerDes.ser(recVal), 20000);
 const serRecord = recordSerDes.ser(recVal);
 bench('des record', () => recordSerDes.des(serRecord), 20000);
+
+console.log('---');
+
+bench('ser player', () => playerSerDes.ser(playerVal), 10000);
+const serPlayer = playerSerDes.ser(playerVal);
+bench('des player', () => playerSerDes.des(serPlayer), 10000);
 
 console.log('---');
 

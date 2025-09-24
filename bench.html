@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+    <script>
+        const logInterceptor = (fn) => (...msg) => {
+            const logs = document.getElementById('logs');
+            const div = document.createElement('div');
+            div.textContent = msg.map(JSON.stringify).join('');
+            logs.appendChild(div);
+            fn(...msg);
+        };
+        console.log = logInterceptor(console.log);
+        console.error = logInterceptor(console.error);
+    </script>
+    <script type="module" src="./bench.js"></script>
+    <body>
+        <div id="logs"></div>
+    </body>
+</html>

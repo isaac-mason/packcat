@@ -158,7 +158,7 @@ function buildSerializerSrc(schema: Schema): string {
                 return `{
                     const bytes = textEncoder.encode(${v} ?? '');
                     buffer.setUint32(o, bytes.length); o += 4;
-                    for (let i = 0; i < bytes.length; i++) { buffer.setUint8(o + i, bytes[i]); }
+                    new Uint8Array(buffer.buffer, buffer.byteOffset + o, bytes.length).set(bytes);
                     o += bytes.length;
                 }`;
             }
@@ -191,7 +191,7 @@ function buildSerializerSrc(schema: Schema): string {
                         const k = keys[i];
                         const kb = textEncoder.encode(k);
                         buffer.setUint32(o, kb.length); o += 4;
-                        for (let j = 0; j < kb.length; j++) { buffer.setUint8(o + j, kb[j]); }
+                        new Uint8Array(buffer.buffer, buffer.byteOffset + o, kb.length).set(kb);
                         o += kb.length;
                         ${gen(s.field, `${v}[k]`)}
                     }
@@ -211,6 +211,10 @@ function buildSerializerSrc(schema: Schema): string {
 
 function buildDeserializerSrc(schema: Schema): string {
     let code = 'let o = offset;';
+
+    if (containsString(schema)) {
+        code += 'const textDecoder = new TextDecoder(); ';
+    }
 
     function gen(s: Schema, target: string): string {
         switch (s.type) {
@@ -235,11 +239,7 @@ function buildDeserializerSrc(schema: Schema): string {
             case 'float64':
                 return `${target} = buffer.getFloat64(o); o += 8;`;
             case 'string': {
-                return `{
-                    const len = buffer.getUint32(o); o += 4;
-                    ${target} = len === 0 ? '' : textDecoder.decode(new Uint8Array(buffer.buffer, buffer.byteOffset + o, len));
-                    o += len;
-                }`;
+                return `let len = buffer.getUint32(o); o += 4; ${target} = len === 0 ? '' : textDecoder.decode(new Uint8Array(buffer.buffer, buffer.byteOffset + o, len)); o += len;`;
             }
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
@@ -284,11 +284,6 @@ function buildDeserializerSrc(schema: Schema): string {
     const rootAssign = 'let value;';
     code += rootAssign;
     code += gen(schema, 'value');
-
-    if (containsString(schema)) {
-        code = `const textDecoder = new TextDecoder(); ${code}`;
-    }
-
     code += 'return value;';
 
     return code;
