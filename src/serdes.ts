@@ -11,50 +11,47 @@ export function serDes<S extends Schema>(
     const deserializerSrc = buildDeserializerSrc(schema);
     const calculateSizeSrc = buildCalculateSizeSrc(schema, 'value');
 
-    const serializerFn = new Function('value', 'buffer', 'offset', serializerSrc) as (
+    // shared encoder/decoder to avoid constructing per call
+    const sharedTextEncoder = new TextEncoder();
+    const sharedTextDecoder = new TextDecoder();
+
+    const serializerFn = new Function('value', 'buffer', 'offset', 'textEncoder', serializerSrc) as (
         value: SchemaType<S>,
         buffer: DataView,
         offset: number,
+        textEncoder: TextEncoder,
     ) => number;
 
-    const deserializerFn = new Function('buffer', 'offset', deserializerSrc) as (
+    const deserializerFn = new Function('buffer', 'offset', 'textDecoder', deserializerSrc) as (
         buffer: DataView,
         offset: number,
+        textDecoder: TextDecoder,
     ) => SchemaType<S>;
 
-    const calculateSizeFn = new Function('value', calculateSizeSrc) as (value: any) => number;
+    const calculateSizeFn = new Function('value', 'textEncoder', calculateSizeSrc) as (value: any, textEncoder: TextEncoder) => number;
 
     const ser = (value: SchemaType<S>): ArrayBuffer => {
-        const size = calculateSizeFn(value);
+        const size = calculateSizeFn(value, sharedTextEncoder);
         const buffer = new ArrayBuffer(size);
         const view = new DataView(buffer);
-        serializerFn(value, view, 0);
+        serializerFn(value, view, 0, sharedTextEncoder);
         return buffer;
     };
 
     const des = (buffer: ArrayBuffer) => {
-        return deserializerFn(new DataView(buffer), 0);
+        return deserializerFn(new DataView(buffer), 0, sharedTextDecoder);
     };
 
     return { ser, des, source: { size: calculateSizeSrc, ser: serializerSrc, des: deserializerSrc } };
 }
 
-function containsString(s: Schema): boolean {
-    if (s.type === 'string') return true;
-    if (s.type === 'record') return true;
-    if (s.type === 'list') return containsString(s.of);
-    if (s.type === 'object') return Object.values(s.fields).some(containsString);
-    return false;
-}
-
 function buildCalculateSizeSrc(schema: Schema, valueVar: string): string {
     let code = '';
 
-    if (containsString(schema)) {
-        code += 'const textEncoder = new TextEncoder(); ';
-    }
-
     code += 'let size = 0;';
+
+    code += 'let len = 0;';
+    code += 'let bytes = 0;';
 
     function gen(s: Schema, v: string): string {
         switch (s.type) {
@@ -73,44 +70,39 @@ function buildCalculateSizeSrc(schema: Schema, valueVar: string): string {
             case 'float64':
                 return ` size += 8;`;
             case 'string':
-                // encode using shared textEncoder, count bytes, add 4 for length
-                return `{
-                    const _b = textEncoder.encode(${v} ?? '');
-                    size += 4 + _b.length;
-                }`;
+                return `bytes = textEncoder.encode(${v} ?? ''); size += 4 + bytes.length;`;
             case 'list':
                 if ('length' in s && typeof s.length === 'number') {
                     const len = s.length;
-                    let body = `const len = ${len}; for (let i = 0; i < len; i++) { `;
-                    body += gen(s.of, `${v}[i]`);
-                    body += ` }`;
-                    return body;
+                    let inner = `len = ${len}; for (let i = 0; i < len; i++) { `;
+                    inner += gen(s.of, `${v}[i]`);
+                    inner += ` }`;
+                    return inner;
                 } else {
-                    let body = ` size += 4; if (Array.isArray(${v})) { for (let i = 0; i < ${v}.length; i++) { `;
-                    body += gen(s.of, `${v}[i]`);
-                    body += ` } }`;
-                    return body;
+                    let inner = ` size += 4; if (Array.isArray(${v})) { for (let i = 0; i < ${v}.length; i++) { `;
+                    inner += gen(s.of, `${v}[i]`);
+                    inner += ` } }`;
+                    return inner;
                 }
             case 'object': {
-                let out = '';
+                let inner = '';
                 for (const [k, f] of Object.entries(s.fields)) {
-                    out += gen(f, `${v}[${JSON.stringify(k)}]`);
+                    inner += gen(f, `${v}[${JSON.stringify(k)}]`);
                 }
-                return out;
+                return inner;
             }
             case 'record': {
-                return `{
-                    size += 4;
-                    if (${v} && typeof ${v} === 'object') {
-                        const keys = Object.keys(${v});
-                        for (let i = 0; i < keys.length; i++) {
-                            const k = keys[i];
-                            const kb = textEncoder.encode(k);
-                            size += 4 + kb.length;
-                            ${gen(s.field, `${v}[k]`)}
-                        }
-                    }
-                }`;
+                let inner = '';
+                inner += 'size += 4;';
+                inner += `if (${v} && typeof ${v} === 'object') { `;
+                inner += `const keys = Object.keys(${v}); `;
+                inner += `for (let i = 0; i < keys.length; i++) { `;
+                inner += `const k = keys[i]; `;
+                inner += `const kb = textEncoder.encode(k); `;
+                inner += `size += 4 + kb.length; `;
+                inner += gen(s.field, `${v}[k]`);
+                inner += `}}`;
+                return inner;
             }
             default: {
                 return ` throw new Error('Unsupported schema type: ${s.type}');`;
@@ -128,9 +120,8 @@ function buildCalculateSizeSrc(schema: Schema, valueVar: string): string {
 function buildSerializerSrc(schema: Schema): string {
     let code = `let o = offset;`;
 
-    if (containsString(schema)) {
-        code += 'const textEncoder = new TextEncoder(); ';
-    }
+    code += 'let bytes = 0;';
+    code += 'let keys;';
 
     function gen(s: Schema, v: string): string {
         switch (s.type) {
@@ -155,25 +146,20 @@ function buildSerializerSrc(schema: Schema): string {
             case 'float64':
                 return `buffer.setFloat64(o, ${v}); o += 8;`;
             case 'string': {
-                return `{
-                    const bytes = textEncoder.encode(${v} ?? '');
-                    buffer.setUint32(o, bytes.length); o += 4;
-                    new Uint8Array(buffer.buffer, buffer.byteOffset + o, bytes.length).set(bytes);
-                    o += bytes.length;
-                }`;
+                return `bytes = textEncoder.encode(${v} ?? ''); buffer.setUint32(o, bytes.length); o += 4; new Uint8Array(buffer.buffer, buffer.byteOffset + o, bytes.length).set(bytes); o += bytes.length;`;
             }
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
                     const len = s.length;
-                    let body = `for (let i = 0; i < ${len}; i++) { `;
-                    body += gen(s.of, `${v}[i]`);
-                    body += ` }`;
-                    return body;
+                    let inner = `for (let i = 0; i < ${len}; i++) { `;
+                    inner += gen(s.of, `${v}[i]`);
+                    inner += ` }`;
+                    return inner;
                 } else {
-                    let body = `buffer.setUint32(o, ${v}.length); o += 4; for (let i = 0; i < ${v}.length; i++) { `;
-                    body += gen(s.of, `${v}[i]`);
-                    body += ` }`;
-                    return body;
+                    let inner = `buffer.setUint32(o, ${v}.length); o += 4; for (let i = 0; i < ${v}.length; i++) { `;
+                    inner += gen(s.of, `${v}[i]`);
+                    inner += ` }`;
+                    return inner;
                 }
             }
             case 'object': {
@@ -184,18 +170,18 @@ function buildSerializerSrc(schema: Schema): string {
                 return out;
             }
             case 'record': {
-                return `{
-                    const keys = ${v} ? Object.keys(${v}) : [];
-                    buffer.setUint32(o, keys.length); o += 4;
-                    for (let i = 0; i < keys.length; i++) {
-                        const k = keys[i];
-                        const kb = textEncoder.encode(k);
-                        buffer.setUint32(o, kb.length); o += 4;
-                        new Uint8Array(buffer.buffer, buffer.byteOffset + o, kb.length).set(kb);
-                        o += kb.length;
-                        ${gen(s.field, `${v}[k]`)}
-                    }
-                }`;
+                let inner = '';
+                inner += `keys = ${v} ? Object.keys(${v}) : [];`;
+                inner += `buffer.setUint32(o, keys.length); o += 4;`;
+                inner += `for (let i = 0; i < keys.length; i++) {`;
+                inner += ` const k = keys[i];`;
+                inner += ` const kb = textEncoder.encode(k);`;
+                inner += ` buffer.setUint32(o, kb.length); o += 4;`;
+                inner += ` new Uint8Array(buffer.buffer, buffer.byteOffset + o, kb.length).set(kb);`;
+                inner += ` o += kb.length;`;
+                inner += gen(s.field, `${v}[k]`);
+                inner += ` }`;
+                return inner;
             }
             default:
                 return `throw new Error('Unsupported schema type: ${s.type}');`;
@@ -212,9 +198,7 @@ function buildSerializerSrc(schema: Schema): string {
 function buildDeserializerSrc(schema: Schema): string {
     let code = 'let o = offset;';
 
-    if (containsString(schema)) {
-        code += 'const textDecoder = new TextDecoder(); ';
-    }
+    code += 'let len = 0;';
 
     function gen(s: Schema, target: string): string {
         switch (s.type) {
@@ -239,7 +223,7 @@ function buildDeserializerSrc(schema: Schema): string {
             case 'float64':
                 return `${target} = buffer.getFloat64(o); o += 8;`;
             case 'string': {
-                return `let len = buffer.getUint32(o); o += 4; ${target} = len === 0 ? '' : textDecoder.decode(new Uint8Array(buffer.buffer, buffer.byteOffset + o, len)); o += len;`;
+                return `len = buffer.getUint32(o); o += 4; ${target} = len === 0 ? '' : textDecoder.decode(new Uint8Array(buffer.buffer, buffer.byteOffset + o, len)); o += len;`;
             }
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
@@ -251,18 +235,18 @@ function buildDeserializerSrc(schema: Schema): string {
                     return `${target} = new Array(${len}); ${inner}`;
                 } else {
                     // variable-length list: first read length
-                    let inner = `const len = buffer.getUint32(o); o += 4; ${target} = new Array(len); for (let i = 0; i < len; i++) { `;
+                    let inner = `len = buffer.getUint32(o); o += 4; ${target} = new Array(len); for (let i = 0; i < len; i++) { `;
                     inner += gen(s.of, `${target}[i]`);
                     inner += ` }`;
                     return inner;
                 }
             }
             case 'object': {
-                let parts = `${target} = {};`;
+                let inner = `${target} = {};`;
                 for (const [key, fieldSchema] of Object.entries(s.fields)) {
-                    parts += gen(fieldSchema, `${target}[${JSON.stringify(key)}]`);
+                    inner += gen(fieldSchema, `${target}[${JSON.stringify(key)}]`);
                 }
-                return parts;
+                return inner;
             }
             case 'record': {
                 return `{
