@@ -37,3 +37,4 @@ console.log(buffer); // ArrayBuffer
 const deserialized = playerSerdes.des(buffer);
 
 console.log(deserialized); // { name: 'Hero', health: 100, level: 5, inventory: { sword: [Object], potion: [Object] }, buffs: [ 1, 2, 3 ] }
+/* SNIPPET_END: serdes */

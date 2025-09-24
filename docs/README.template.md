@@ -16,6 +16,10 @@ First, define your data format with the schema utils:
 
 <Snippet source="./snippets.ts" select="schema" />
 
+Next, you can create a serializer/deserializer for that schema, and use `SchemaType` to infer the TypeScript type of the schema:
+
+<Snippet source="./snippets.ts" select="serdes" />
+
 ## API Documentation
 
 ### Ser/Des

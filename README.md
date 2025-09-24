@@ -32,12 +32,42 @@ const playerSchema = object({
 type PlayerType = SchemaType<typeof playerSchema>;
 ```
 
+Next, you can create a serializer/deserializer for that schema, and use `SchemaType` to infer the TypeScript type of the schema:
+
+```ts
+import { serDes } from 'buffcat';
+
+const playerSerdes = serDes(playerSchema);
+
+const player: PlayerType = {
+    name: 'Hero',
+    health: 100,
+    level: 5,
+    inventory: {
+        sword: { item: 'Sword', qty: 1 },
+        potion: { item: 'Health Potion', qty: 3 },
+    },
+    buffs: [1, 2, 3],
+};
+
+const buffer = playerSerdes.ser(player);
+
+console.log(buffer); // ArrayBuffer
+
+const deserialized = playerSerdes.des(buffer);
+
+console.log(deserialized); // { name: 'Hero', health: 100, level: 5, inventory: { sword: [Object], potion: [Object] }, buffs: [ 1, 2, 3 ] }
+```
+
 ## API Documentation
 
 ### Ser/Des
 
 ```ts
-export function serDes<S extends Schema>(schema: S);
+export function serDes<S extends Schema>(schema: S): {
+    ser: (value: SchemaType<S>) => ArrayBuffer;
+    des: (buffer: ArrayBuffer) => SchemaType<S>;
+};
 ```
 
 ### Schema
