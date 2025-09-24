@@ -22,7 +22,8 @@
         "format": "biome format --write src/. tst/.",
         "lint": "biome lint --write src/. tst/.",
         "test": "vitest",
-        "docs": "(cd docs && node ./build.js)"
+        "docs": "(cd docs && node ./build.js)",
+        "bench": "node ./bench.js"
     },
     "packageManager": "pnpm@8.15.2+sha1.798034f615aa211c6c2ae00010cc20be5fc102ee",
     "devDependencies": {

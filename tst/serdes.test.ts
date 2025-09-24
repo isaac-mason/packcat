@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boolean, serDes, list, number, object, string } from '../src';
+import { boolean, list, number, object, record, serDes, string, uint32 } from '../src';
 
 describe('serDes', () => {
     it('should serialize/deserialize fixed-length list (vec3)', () => {
@@ -63,5 +63,19 @@ describe('serDes', () => {
         const buffer = ser(obj);
         const result = des(buffer);
         expect(result).toEqual(obj);
+    });
+
+    it('should serialize/deserialize record (empty, simple, unicode keys)', () => {
+        const { ser, des } = serDes(record(uint32()));
+
+        // empty
+        const empty = {};
+        expect(des(ser(empty))).toEqual(empty);
+
+        const simple = { a: 1, b: 42, hello: 12345 };
+        expect(des(ser(simple))).toEqual(simple);
+
+        const unicode = { ключ: 7, '😊': 999 };
+        expect(des(ser(unicode))).toEqual(unicode);
     });
 });
