@@ -1,6 +1,8 @@
 import type { Schema, SchemaType } from './schema';
 
-export function serDes<S extends Schema>(schema: S): {
+export function serDes<S extends Schema>(
+    schema: S,
+): {
     ser: (value: SchemaType<S>) => ArrayBuffer;
     des: (buffer: ArrayBuffer) => SchemaType<S>;
 } {
@@ -251,7 +253,7 @@ function buildDeserializerSrc(schema: Schema): string {
             }
             case 'record': {
                 // read count, then loop that many key/value entries
-                let parts = `{
+                const parts = `{
                     const _count = buffer.getUint32(o); o += 4;
                     ${target} = {};
                     for (let _i = 0; _i < _count; _i++) {
