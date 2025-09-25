@@ -1,5 +1,14 @@
 import type { Schema, SchemaType } from './schema';
 
+type Tmps = {
+    f32: Float32Array;
+    f32_u8: Uint8Array;
+    f64: Float64Array;
+    f64_u8: Uint8Array;
+    textEncoder: TextEncoder;
+    textDecoder: TextDecoder;
+}
+
 export function serDes<S extends Schema>(
     schema: S,
 ): {
@@ -7,36 +16,56 @@ export function serDes<S extends Schema>(
     des: (buffer: ArrayBuffer) => SchemaType<S>;
     source: { ser: string; des: string };
 } {
+    const f32_buffer = new ArrayBuffer(4);
+    const f32 = new Float32Array(f32_buffer);
+    const f32_u8 = new Uint8Array(f32_buffer);
+
+    const f64_buffer = new ArrayBuffer(8);
+    const f64 = new Float64Array(f64_buffer);
+    const f64_u8 = new Uint8Array(f64_buffer);
+
+    const textEncoder = new TextEncoder();
+    const textDecoder = new TextDecoder();
+
+    const tmps: Tmps = {
+        f32,
+        f32_u8,
+        f64,
+        f64_u8,
+        textEncoder,
+        textDecoder,
+    };
+
     const serSource = buildSer(schema);
     const desSource = buildDes(schema);
 
-    const sharedTextEncoder = new TextEncoder();
-    const sharedTextDecoder = new TextDecoder();
 
-    const serFn = new Function('value', 'textEncoder', serSource) as (
+    const serFn = new Function('value', '{ textEncoder, f32, f32_u8, f64, f64_u8 }', serSource) as (
         value: SchemaType<S>,
-        textEncoder: TextEncoder,
+        tmps: Tmps,
     ) => ArrayBuffer;
 
-    const desFn = new Function('view', 'offset', 'textDecoder', desSource) as (
-        view: DataView,
-        offset: number,
-        textDecoder: TextDecoder,
+    const desFn = new Function('buffer', '{ textDecoder, f32, f32_u8, f64, f64_u8 }', desSource) as (
+        buffer: ArrayBuffer,
+        tmps: Tmps,
     ) => SchemaType<S>;
 
     const ser = (value: SchemaType<S>): ArrayBuffer => {
-        return serFn(value, sharedTextEncoder);
+        return serFn(value, tmps);
     };
 
     const des = (buffer: ArrayBuffer) => {
-        return desFn(new DataView(buffer), 0, sharedTextDecoder);
+        return desFn(buffer, tmps);
     };
 
     return { ser, des, source: { ser: serSource, des: desSource } };
 }
 
 function buildSer(schema: Schema): string {
-    let code = 'let len = 0; let bytes = 0;';
+    let code = '';
+
+    code += 'let len = 0;';
+    code += 'let bytes = 0;';
 
     const schemaFixedSize = fixedSize(schema);
 
@@ -51,17 +80,17 @@ function buildSer(schema: Schema): string {
             case 'boolean':
             case 'int8':
             case 'uint8':
-                return ` size += 1;`;
+                return 'size += 1;';
             case 'int16':
             case 'uint16':
-                return ` size += 2;`;
+                return 'size += 2;';
             case 'int32':
             case 'uint32':
             case 'float32':
-                return ` size += 4;`;
+                return 'size += 4;';
             case 'number':
             case 'float64':
-                return ` size += 8;`;
+                return 'size += 8;';
             case 'string':
                 return `bytes = textEncoder.encode(${v} ?? ''); size += 4 + bytes.length;`;
             case 'list': {
@@ -131,27 +160,27 @@ function buildSer(schema: Schema): string {
     function gen(s: Schema, v: string): string {
         switch (s.type) {
             case 'boolean':
-                return `u8[o++] = ${v} ? 1 : 0;`;
+                return writeBool(v);
             case 'number':
-                return `view.setFloat64(o, ${v}); o += 8;`;
+                return writeF64(v);
             case 'int8':
-                return `u8[o++] = ${v} & 0xff;`;
+                return writeI8(v);
             case 'uint8':
-                return `u8[o++] = ${v} & 0xff;`;
+                return writeU8(v);
             case 'int16':
-                return `val = ${v} & 0xffff; u8[o++] = val & 0xff; u8[o++] = (val >> 8) & 0xff;`;
+                return writeI16(v);
             case 'uint16':
-                return `val = ${v} & 0xffff; u8[o++] = val & 0xff; u8[o++] = (val >> 8) & 0xff;`;
+                return writeU16(v);
             case 'int32':
-                return `val = ${v} | 0; u8[o++] = val & 0xff; u8[o++] = (val >> 8) & 0xff; u8[o++] = (val >> 16) & 0xff; u8[o++] = (val >> 24) & 0xff;`;
+                return writeI32(v);
             case 'uint32':
-                return `val = ${v} >>> 0; u8[o++] = val & 0xff; u8[o++] = (val >> 8) & 0xff; u8[o++] = (val >> 16) & 0xff; u8[o++] = (val >> 24) & 0xff;`;
+                return writeU32(v);
             case 'float32':
-                return `view.setFloat32(o, ${v}); o += 4;`;
+                return writeF32(v);
             case 'float64':
-                return `view.setFloat64(o, ${v}); o += 8;`;
+                return writeF64(v);
             case 'string': {
-                return `bytes = textEncoder.encode(${v} ?? ''); view.setUint32(o, bytes.length); o += 4; u8.set(bytes, o); o += bytes.length;`;
+                return writeString(v);
             }
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
@@ -177,15 +206,15 @@ function buildSer(schema: Schema): string {
             case 'record': {
                 let inner = '';
                 inner += `keys = ${v} ? Object.keys(${v}) : [];`;
-                inner += `view.setUint32(o, keys.length); o += 4;`;
+                inner += writeU32('keys.length');
                 inner += `for (let i = 0; i < keys.length; i++) {`;
-                inner += ` const k = keys[i];`;
-                inner += ` const kb = textEncoder.encode(k);`;
-                inner += ` view.setUint32(o, kb.length); o += 4;`;
-                inner += ` u8.set(kb, o);`;
-                inner += ` o += kb.length;`;
+                inner += `const k = keys[i];`;
+                inner += `const kb = textEncoder.encode(k);`;
+                inner += writeU32('kb.length');
+                inner += `u8.set(kb, o);`;
+                inner += `o += kb.length;`;
                 inner += gen(s.field, `${v}[k]`);
-                inner += ` }`;
+                inner += `}`;
                 return inner;
             }
             default:
@@ -197,6 +226,109 @@ function buildSer(schema: Schema): string {
 
     code += 'return arrayBuffer;';
 
+    return code;
+}
+
+
+function readBool(target: string): string {
+    return `${target} = u8[o++] !== 0;`;
+}
+
+function writeBool(value: string): string {
+    return `u8[o++] = ${value} ? 1 : 0;`;
+}
+
+function readI8(target: string): string {
+    return `${target} = (u8[o++] << 24) >> 24;`;
+}
+
+function writeI8(value: string): string {
+    return `u8[o++] = ${value};`;
+}
+
+function readU8(target: string): string {
+    return `${target} = u8[o++];`;
+}
+
+function writeU8(value: string): string {
+    return `u8[o++] = ${value} & 0xff;`;
+}
+
+function readI16(target: string): string {
+    return `val = u8[o++] | (u8[o++] << 8); ${target} = (val << 16) >> 16;`;
+}
+
+function writeI16(value: string): string {
+    return `val = ${value} & 0xffff; u8[o++] = val & 0xff; u8[o++] = (val >> 8) & 0xff;`;
+}
+
+function readU16(target: string): string {
+    return `val = u8[o++] | (u8[o++] << 8); ${target} = val & 0xffff;`;
+}
+
+function writeU16(value: string): string {
+    return `val = ${value} & 0xffff; u8[o++] = val & 0xff; u8[o++] = (val >> 8) & 0xff;`;
+}
+
+function readI32(target: string): string {
+    return `val = (u8[o++] | (u8[o++] << 8) | (u8[o++] << 16) | (u8[o++] << 24)) | 0; ${target} = val | 0;`;
+}
+
+function writeI32(value: string): string {
+    return `val = ${value} | 0; u8[o++] = val & 0xff; u8[o++] = (val >> 8) & 0xff; u8[o++] = (val >> 16) & 0xff; u8[o++] = (val >> 24) & 0xff;`;
+}
+
+function readU32(target: string): string {
+    return `${target} = (u8[o++] | (u8[o++] << 8) | (u8[o++] << 16) | (u8[o++] << 24)) >>> 0;`;
+}
+
+function writeU32(value: string): string {
+    return `val = ${value} >>> 0; u8[o++] = val & 0xff; u8[o++] = (val >> 8) & 0xff; u8[o++] = (val >> 16) & 0xff; u8[o++] = (val >> 24) & 0xff;`;
+}
+
+function readString(target: string): string {
+    let code = '';
+    code += readU32('len');
+    code += `${target} = len === 0 ? '' : textDecoder.decode(u8.subarray(o, o + len)); o += len;`;
+
+    return code;
+}
+
+function writeString(value: string): string {
+    let code = '';
+    code += `bytes = textEncoder.encode(${value} ?? '');`;
+    code += writeU32('bytes.length');
+    code += `u8.set(bytes, o); o += bytes.length;`;
+    return code;
+}
+
+function readF32(target: string): string {
+    let code = '';
+    code += `f32_u8[0] = u8[o++]; f32_u8[1] = u8[o++]; f32_u8[2] = u8[o++]; f32_u8[3] = u8[o++];`;
+    code += `${target} = f32[0];`;
+    return code;   
+}
+
+function writeF32(value: string): string {
+    let code = '';
+    code += `f32[0] = ${value};`;
+    code += `u8[o++] = f32_u8[0]; u8[o++] = f32_u8[1]; u8[o++] = f32_u8[2]; u8[o++] = f32_u8[3];`;
+    return code;
+}
+
+function readF64(target: string): string {
+    let code = '';
+    code += `f64_u8[0] = u8[o++]; f64_u8[1] = u8[o++]; f64_u8[2] = u8[o++]; f64_u8[3] = u8[o++];`;
+    code += `f64_u8[4] = u8[o++]; f64_u8[5] = u8[o++]; f64_u8[6] = u8[o++]; f64_u8[7] = u8[o++];`;
+    code += `${target} = f64[0];`;
+    return code;   
+}
+
+function writeF64(value: string): string {
+    let code = '';
+    code += `f64[0] = ${value};`;
+    code += `u8[o++] = f64_u8[0]; u8[o++] = f64_u8[1]; u8[o++] = f64_u8[2]; u8[o++] = f64_u8[3];`;
+    code += `u8[o++] = f64_u8[4]; u8[o++] = f64_u8[5]; u8[o++] = f64_u8[6]; u8[o++] = f64_u8[7];`;
     return code;
 }
 
@@ -243,37 +375,38 @@ function fixedSize(s: Schema): number | null {
 }
 
 function buildDes(schema: Schema): string {
-    let code = 'let o = offset;';
+    let code = '';
 
+    code += 'let o = 0;';
+    code += 'const view = new DataView(buffer);';
+    code += 'const u8 = new Uint8Array(buffer);';
     code += 'let len = 0;';
     code += 'let val = 0;';
-
-    code += 'const u8 = new Uint8Array(view.buffer, view.byteOffset, view.byteLength); ';
 
     function gen(s: Schema, target: string): string {
         switch (s.type) {
             case 'boolean':
-                return `${target} = u8[o++] !== 0;`;
+                return readBool(target);
             case 'number':
-                return `${target} = view.getFloat64(o); o += 8;`;
+                return readF64(target);
             case 'int8':
-                return `${target} = (u8[o++] << 24) >> 24;`;
+                return readI8(target);
             case 'uint8':
-                return `${target} = u8[o++];`;
+                return readU8(target);
             case 'int16':
-                return `val = u8[o++] | (u8[o++] << 8); ${target} = (val << 16) >> 16;`;
+                return readI16(target);
             case 'uint16':
-                return `${target} = u8[o++] | (u8[o++] << 8);`;
+                return readU16(target);
             case 'int32':
-                return `val = (u8[o++] | (u8[o++] << 8) | (u8[o++] << 16) | (u8[o++] << 24)) | 0; ${target} = val | 0;`;
+                return readI32(target);
             case 'uint32':
-                return `${target} = (u8[o++] | (u8[o++] << 8) | (u8[o++] << 16) | (u8[o++] << 24)) >>> 0;`;
+                return readU32(target);
             case 'float32':
-                return `${target} = view.getFloat32(o); o += 4;`;
+                return readF32(target);
             case 'float64':
-                return `${target} = view.getFloat64(o); o += 8;`;
+                return readF64(target);
             case 'string': {
-                return `len = view.getUint32(o); o += 4; ${target} = len === 0 ? '' : textDecoder.decode(u8.subarray(o, o + len)); o += len;`;
+                return readString(target);
             }
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
@@ -299,16 +432,15 @@ function buildDes(schema: Schema): string {
                 return inner;
             }
             case 'record': {
-                return `{
-                    const count = view.getUint32(o); o += 4;
-                    ${target} = {};
-                    for (let i = 0; i < count; i++) {
-                        const klen = view.getUint32(o); o += 4;
-                        const k = klen === 0 ? '' : textDecoder.decode(u8.subarray(o, o + klen));
-                        o += klen;
-                        ${gen(s.field, `${target}[k]`)}
-                    }
-                }`;
+                let inner = '';
+                inner += readU32('count');
+                inner += `${target} = {};`;
+                inner += `for (let i = 0; i < count; i++) { `;
+                inner += readU32('klen');
+                inner += `const k = klen === 0 ? '' : textDecoder.decode(u8.subarray(o, o + klen)); o += klen;`;
+                inner += gen(s.field, `${target}[k]`);
+                inner += `}`;
+                return inner;
             }
             default:
                 return `throw new Error('Unsupported schema type: ${s.type}');`;
