@@ -75,6 +75,50 @@ describe('serDes', () => {
         expect(result).toEqual(obj);
     });
 
+    test('ser/des object in object', () => {
+        const { ser, des } = serDes(
+            object({
+                id: uint32(),
+                name: string(),
+                active: boolean(),
+                stats: object({
+                    score: number(),
+                    level: uint32(),
+                }),
+            }),
+        );
+        const obj = {
+            id: 1,
+            name: 'PlayerOne',
+            active: true,
+            stats: {
+                score: 9876.5,
+                level: 42,
+            },
+        };
+        const buffer = ser(obj);
+        const result = des(buffer);
+        expect(result).toEqual(obj);
+    });
+
+    test('ser/des list of objects', () => {
+        const { ser, des } = serDes(
+            list(
+                object({
+                    id: uint32(),
+                    name: string(),
+                }),
+            ),
+        );
+        const arr = [
+            { id: 1, name: 'Alice' },
+            { id: 2, name: 'Bob' },
+        ];
+        const buffer = ser(arr);
+        const result = des(buffer);
+        expect(result).toEqual(arr);
+    });
+
     test('ser/des record (empty, simple, unicode keys)', () => {
         const { ser, des } = serDes(record(uint32()));
 
@@ -87,5 +131,16 @@ describe('serDes', () => {
 
         const unicode = { ключ: 7, '😊': 999 };
         expect(des(ser(unicode))).toEqual(unicode);
+    });
+
+    test('ser/des record of records', () => {
+        const { ser, des } = serDes(record(record(uint32())));
+        const data = {
+            group1: { a: 1, b: 2 },
+            group2: { x: 42, y: 99 },
+        };
+        const buffer = ser(data);
+        const result = des(buffer);
+        expect(result).toEqual(data);
     });
 });

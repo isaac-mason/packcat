@@ -222,13 +222,14 @@ function buildSer(schema: Schema): string {
             }
             case 'record': {
                 const i = variable(depth, 'i');
+                const keys = variable(depth, 'keys');
 
                 let inner = '';
-                inner += `keys = Object.keys(${v});`;
-                inner += writeU32('keys.length');
-                inner += `for (let ${i} = 0; ${i} < keys.length; ${i}++) {`;
-                inner += writeString(`keys[${i}]`);
-                inner += write(s.field, `${v}[keys[${i}]]`, depth + 1);
+                inner += `${keys} = Object.keys(${v});`;
+                inner += writeU32(`${keys}.length`);
+                inner += `for (let ${i} = 0; ${i} < ${keys}.length; ${i}++) {`;
+                inner += writeString(`${keys}[${i}]`);
+                inner += write(s.field, `${v}[${keys}[${i}]]`, depth + 1);
                 inner += `}`;
                 return inner;
             }
