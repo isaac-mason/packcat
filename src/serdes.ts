@@ -70,7 +70,7 @@ function buildSer(schema: Schema): string {
 
     type SizeCalc = { code: string; fixed: number };
 
-    function genCalcSize(s: Schema, v: string): SizeCalc {
+    function genCalcSize(s: Schema, v: string, depth: number): SizeCalc {
         switch (s.type) {
             case 'boolean':
             case 'int8':
@@ -91,24 +91,24 @@ function buildSer(schema: Schema): string {
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
                     const len = s.length;
-                    const elem = genCalcSize(s.of, `${v}[i]`);
+                    const elem = genCalcSize(s.of, `${v}[i]`, depth + 1);
                     if (elem.code === '' && elem.fixed > 0) {
                         return { code: '', fixed: elem.fixed * len };
                     }
                     // element-wise computation at runtime
-                    const inner = `len = ${len}; for (let i = 0; i < len; i++) { ${elem.code} }`;
+                    const inner = `len = ${len}; for (let ${index(depth)} = 0; ${index(depth)} < len; ${index(depth)}++) { ${elem.code} }`;
                     return { code: inner, fixed: 0 };
                 } else {
-                    const elem = genCalcSize(s.of, `${v}[i]`);
+                    const elem = genCalcSize(s.of, `${v}[${index(depth)}]`, depth + 1);
                     if (elem.code === '' && elem.fixed > 0) {
                         // length prefix is unconditional (writer always writes length), hoist the 4 bytes
                         // per-item fixed contribution can be multiplied by length at runtime
                         return {
-                            code: `if (Array.isArray(${v})) { size += ${elem.fixed} * ${v}.length; }`,
+                            code: `size += ${elem.fixed} * ${v}.length;`,
                             fixed: 4,
                         };
                     }
-                    const inner = `if (Array.isArray(${v})) { for (let i = 0; i < ${v}.length; i++) { ${elem.code} } }`;
+                    const inner = `for (let ${index(depth)} = 0; ${index(depth)} < ${v}.length; ${index(depth)}++) { ${elem.code} }`;
                     return { code: `size += 4; ${inner}`, fixed: 0 };
                 }
             }
@@ -117,7 +117,7 @@ function buildSer(schema: Schema): string {
                 let fixed = 0;
                 const parts: string[] = [];
                 for (const [k, f] of Object.entries(s.fields)) {
-                    const child = genCalcSize(f, `${v}[${JSON.stringify(k)}]`);
+                    const child = genCalcSize(f, `${v}[${JSON.stringify(k)}]`, depth + 1);
                     // always accumulate unconditional fixed bytes
                     fixed += child.fixed;
                     if (child.code !== '') {
@@ -127,17 +127,17 @@ function buildSer(schema: Schema): string {
                 return { code: parts.join(' '), fixed };
             }
             case 'record': {
-                const child = genCalcSize(s.field, `${v}[k]`);
+                const child = genCalcSize(s.field, `${v}[k]`, depth + 1);
                 let inner = '';
                 inner += `size += 4; if (${v} && typeof ${v} === 'object') { const keys = Object.keys(${v}); `;
                 if (child.fixed > 0) {
                     inner += ` size += ${child.fixed} * keys.length; `;
                 }
-                inner += ` for (let i = 0; i < keys.length; i++) { const k = keys[i]; const kb = textEncoder.encode(k); size += 4 + kb.length; `;
+                inner += `for (let ${index(depth)} = 0; ${index(depth)} < keys.length; ${index(depth)}++) { const k = keys[i]; size += 4 + utf8Length(k); `;
                 if (child.code !== '') {
                     inner += child.code;
                 }
-                inner += ` } }`;
+                inner += `}}`;
                 return { code: inner, fixed: 0 };
             }
             default:
@@ -153,7 +153,7 @@ function buildSer(schema: Schema): string {
         code += `let size = ${schemaFixedSize};`;
     } else {
         // else, emit code for known size and dynamic parts
-        const calc = genCalcSize(schema, 'value');
+        const calc = genCalcSize(schema, 'value', 1);
 
         code += `let size = ${calc.fixed};`;
         code += calc.code;
@@ -167,6 +167,8 @@ function buildSer(schema: Schema): string {
 
     code += 'let keys;';
     code += 'let val = 0;';
+    code += 'let o_size = 0;';
+    code += 'let textEncoderResult;';
 
     function gen(s: Schema, v: string, depth: number): string {
         switch (s.type) {
@@ -202,7 +204,6 @@ function buildSer(schema: Schema): string {
                     }
                     return inner;
                 } else {
-                    // let inner = `view.setUint32(o, ${v}.length); o += 4; for (let i = 0; i < ${v}.length; i++) { `;
                     let inner = '';
                     inner += writeU32(`${v}.length`);
                     inner += `for (let ${index(depth)} = 0; ${index(depth)} < ${v}.length; ${index(depth)}++) {`;
@@ -223,12 +224,8 @@ function buildSer(schema: Schema): string {
                 inner += `keys = Object.keys(${v});`;
                 inner += writeU32('keys.length');
                 inner += `for (let ${index(depth)} = 0; ${index(depth)} < keys.length; ${index(depth)}++) {`;
-                inner += `const k = keys[${index(depth)}];`;
-                inner += `const kb = textEncoder.encode(k);`;
-                inner += writeU32('kb.length');
-                inner += `u8.set(kb, o);`;
-                inner += `o += kb.length;`;
-                inner += gen(s.field, `${v}[k]`, depth + 1);
+                inner += writeString(`keys[${index(depth)}]`);
+                inner += gen(s.field, `${v}[keys[${index(depth)}]]`, depth + 1);
                 inner += `}`;
                 return inner;
             }
@@ -358,105 +355,109 @@ function utf8Length(s: string) {
     return l;
 }
 
-function readBool(target: string): string {
-    return `${target} = u8[o++] !== 0;`;
+function readBool(target: string, offset = 'o'): string {
+    return `${target} = u8[${offset}++] !== 0;`;
 }
 
-function writeBool(value: string): string {
-    return `u8[o++] = ${value} ? 1 : 0;`;
+function writeBool(value: string, offset = 'o'): string {
+    return `u8[${offset}++] = ${value} ? 1 : 0;`;
 }
 
-function readI8(target: string): string {
-    return `${target} = (u8[o++] << 24) >> 24;`;
+function readI8(target: string, offset = 'o'): string {
+    return `${target} = (u8[${offset}++] << 24) >> 24;`;
 }
 
-function writeI8(value: string): string {
-    return `u8[o++] = ${value};`;
+function writeI8(value: string, offset = 'o'): string {
+    return `u8[${offset}++] = ${value};`;
 }
 
-function readU8(target: string): string {
-    return `${target} = u8[o++];`;
+function readU8(target: string, offset = 'o'): string {
+    return `${target} = u8[${offset}++];`;
 }
 
-function writeU8(value: string): string {
-    return `u8[o++] = ${value} & 0xff;`;
+function writeU8(value: string, offset = 'o'): string {
+    return `u8[${offset}++] = ${value} & 0xff;`;
 }
 
-function readI16(target: string): string {
-    return `val = u8[o++] | (u8[o++] << 8); ${target} = (val << 16) >> 16;`;
+function readI16(target: string, offset = 'o'): string {
+    return `val = u8[${offset}++] | (u8[${offset}++] << 8); ${target} = (val << 16) >> 16;`;
 }
 
-function writeI16(value: string): string {
-    return `val = ${value} & 0xffff; u8[o++] = val & 0xff; u8[o++] = (val >> 8) & 0xff;`;
+function writeI16(value: string, offset = 'o'): string {
+    return `val = ${value} & 0xffff; u8[${offset}++] = val & 0xff; u8[${offset}++] = (val >> 8) & 0xff;`;
 }
 
-function readU16(target: string): string {
-    return `val = u8[o++] | (u8[o++] << 8); ${target} = val & 0xffff;`;
+function readU16(target: string, offset = 'o'): string {
+    return `val = u8[${offset}++] | (u8[${offset}++] << 8); ${target} = val & 0xffff;`;
 }
 
-function writeU16(value: string): string {
-    return `val = ${value} & 0xffff; u8[o++] = val & 0xff; u8[o++] = (val >> 8) & 0xff;`;
+function writeU16(value: string, offset = 'o'): string {
+    return `val = ${value} & 0xffff; u8[${offset}++] = val & 0xff; u8[${offset}++] = (val >> 8) & 0xff;`;
 }
 
-function readI32(target: string): string {
-    return `val = (u8[o++] | (u8[o++] << 8) | (u8[o++] << 16) | (u8[o++] << 24)) | 0; ${target} = val | 0;`;
+function readI32(target: string, offset = 'o'): string {
+    return `val = (u8[${offset}++] | (u8[${offset}++] << 8) | (u8[${offset}++] << 16) | (u8[${offset}++] << 24)) | 0; ${target} = val | 0;`;
 }
 
-function writeI32(value: string): string {
-    return `val = ${value} | 0; u8[o++] = val & 0xff; u8[o++] = (val >> 8) & 0xff; u8[o++] = (val >> 16) & 0xff; u8[o++] = (val >> 24) & 0xff;`;
+function writeI32(value: string, offset = 'o'): string {
+    return `val = ${value} | 0; u8[${offset}++] = val & 0xff; u8[${offset}++] = (val >> 8) & 0xff; u8[${offset}++] = (val >> 16) & 0xff; u8[${offset}++] = (val >> 24) & 0xff;`;
 }
 
-function readU32(target: string): string {
-    return `${target} = (u8[o++] | (u8[o++] << 8) | (u8[o++] << 16) | (u8[o++] << 24)) >>> 0;`;
+function readU32(target: string, offset = 'o'): string {
+    return `${target} = (u8[${offset}++] | (u8[${offset}++] << 8) | (u8[${offset}++] << 16) | (u8[${offset}++] << 24)) >>> 0;`;
 }
 
-function writeU32(value: string): string {
-    return `val = ${value} >>> 0; u8[o++] = val & 0xff; u8[o++] = (val >> 8) & 0xff; u8[o++] = (val >> 16) & 0xff; u8[o++] = (val >> 24) & 0xff;`;
+function writeU32(value: string, offset = 'o'): string {
+    return `val = ${value} >>> 0; u8[${offset}++] = val & 0xff; u8[${offset}++] = (val >> 8) & 0xff; u8[${offset}++] = (val >> 16) & 0xff; u8[${offset}++] = (val >> 24) & 0xff;`;
 }
 
-function readString(target: string): string {
+function readF32(target: string, offset = 'o'): string {
     let code = '';
-    code += readU32('len');
-    code += `${target} = len === 0 ? '' : textDecoder.decode(u8.subarray(o, o + len)); o += len;`;
-
-    return code;
-}
-
-function writeString(value: string): string {
-    let code = '';
-    code += `bytes = textEncoder.encode(${value});`;
-    code += writeU32('bytes.length');
-    code += `u8.set(bytes, o); o += bytes.length;`;
-    return code;
-}
-
-function readF32(target: string): string {
-    let code = '';
-    code += `f32_u8[0] = u8[o++]; f32_u8[1] = u8[o++]; f32_u8[2] = u8[o++]; f32_u8[3] = u8[o++];`;
+    code += `f32_u8[0] = u8[${offset}++]; f32_u8[1] = u8[${offset}++]; f32_u8[2] = u8[${offset}++]; f32_u8[3] = u8[${offset}++];`;
     code += `${target} = f32[0];`;
     return code;
 }
 
-function writeF32(value: string): string {
+function writeF32(value: string, offset = 'o'): string {
     let code = '';
     code += `f32[0] = ${value};`;
-    code += `u8[o++] = f32_u8[0]; u8[o++] = f32_u8[1]; u8[o++] = f32_u8[2]; u8[o++] = f32_u8[3];`;
+    code += `u8[${offset}++] = f32_u8[0]; u8[${offset}++] = f32_u8[1]; u8[${offset}++] = f32_u8[2]; u8[${offset}++] = f32_u8[3];`;
     return code;
 }
 
-function readF64(target: string): string {
+function readF64(target: string, offset = 'o'): string {
     let code = '';
-    code += `f64_u8[0] = u8[o++]; f64_u8[1] = u8[o++]; f64_u8[2] = u8[o++]; f64_u8[3] = u8[o++];`;
-    code += `f64_u8[4] = u8[o++]; f64_u8[5] = u8[o++]; f64_u8[6] = u8[o++]; f64_u8[7] = u8[o++];`;
+    code += `f64_u8[0] = u8[${offset}++]; f64_u8[1] = u8[${offset}++]; f64_u8[2] = u8[${offset}++]; f64_u8[3] = u8[${offset}++];`;
+    code += `f64_u8[4] = u8[${offset}++]; f64_u8[5] = u8[${offset}++]; f64_u8[6] = u8[${offset}++]; f64_u8[7] = u8[${offset}++];`;
     code += `${target} = f64[0];`;
     return code;
 }
 
-function writeF64(value: string): string {
+function writeF64(value: string, offset = 'o'): string {
     let code = '';
     code += `f64[0] = ${value};`;
-    code += `u8[o++] = f64_u8[0]; u8[o++] = f64_u8[1]; u8[o++] = f64_u8[2]; u8[o++] = f64_u8[3];`;
-    code += `u8[o++] = f64_u8[4]; u8[o++] = f64_u8[5]; u8[o++] = f64_u8[6]; u8[o++] = f64_u8[7];`;
+    code += `u8[${offset}++] = f64_u8[0]; u8[${offset}++] = f64_u8[1]; u8[${offset}++] = f64_u8[2]; u8[${offset}++] = f64_u8[3];`;
+    code += `u8[${offset}++] = f64_u8[4]; u8[${offset}++] = f64_u8[5]; u8[${offset}++] = f64_u8[6]; u8[${offset}++] = f64_u8[7];`;
+    return code;
+}
+
+function readString(target: string, offset = 'o'): string {
+    let code = '';
+    code += readU32('len', offset);
+    code += `${target} = len === 0 ? '' : textDecoder.decode(u8.subarray(${offset}, ${offset} + len)); ${offset} += len;`;
+
+    return code;
+}
+
+function writeString(value: string, offset = 'o'): string {
+    let code = '';
+
+    code += `o_size = ${offset};`;
+    code += `${offset} += 4;`;
+    code += `textEncoderResult = textEncoder.encodeInto(${value}, u8.subarray(${offset}));`;
+    code += `o = ${offset} + textEncoderResult.written;`;
+    code += writeU32('textEncoderResult.written', 'o_size');
+
     return code;
 }
 

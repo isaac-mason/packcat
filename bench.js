@@ -30,8 +30,8 @@ const playerVal = {
     score: 1000,
     isActive: true,
     inventory: {
-        potion: { item: 1, quantity: 10 },
-        sword: { item: 2, quantity: 1 },
+        "0": { item: 1, quantity: 10 },
+        "1": { item: 2, quantity: 1 },
     },
     friends: [2, 3, 4],
 };
@@ -85,7 +85,7 @@ bench('JSON.stringify positions', () => JSON.stringify(positionsVal), 10000);
 const serJsonPositions = JSON.stringify(positionsVal);
 bench('JSON.parse positions', () => JSON.parse(serJsonPositions), 10000);
 
-console.log('serJsonPositions byteLength:', new TextEncoder().encode(serJsonPlayer).byteLength);
+console.log('serJsonPositions byteLength:', new TextEncoder().encode(serJsonPositions).byteLength);
 
 console.log('---');
 
