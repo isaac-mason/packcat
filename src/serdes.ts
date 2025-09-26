@@ -1,13 +1,5 @@
 import type { Schema, SchemaType } from './schema';
 
-type Tmps = {
-    f32: Float32Array;
-    f32_u8: Uint8Array;
-    f64: Float64Array;
-    f64_u8: Uint8Array;
-    textEncoder: TextEncoder;
-    textDecoder: TextDecoder;
-};
 export function serDes<S extends Schema>(
     schema: S,
 ): {
@@ -26,35 +18,35 @@ export function serDes<S extends Schema>(
     const textEncoder = new TextEncoder();
     const textDecoder = new TextDecoder();
 
-    const tmps: Tmps = {
+    const ctx: Ctx = {
         f32,
         f32_u8,
         f64,
         f64_u8,
         textEncoder,
         textDecoder,
+        utf8Length,
     };
 
     const serSource = buildSer(schema);
     const desSource = buildDes(schema);
 
-    const serFn = new Function('value', '{ textEncoder, f32, f32_u8, f64, f64_u8 }, utf8Length', serSource) as (
+    const serFn = new Function('value', '{ textEncoder, f32, f32_u8, f64, f64_u8, utf8Length }', serSource) as (
         value: SchemaType<S>,
-        tmps: Tmps,
-        utf8Length: (s: string) => number,
+        tmps: Ctx,
     ) => ArrayBuffer;
 
     const desFn = new Function('buffer', '{ textDecoder, f32, f32_u8, f64, f64_u8 }', desSource) as (
         buffer: ArrayBuffer,
-        tmps: Tmps,
+        tmps: Ctx,
     ) => SchemaType<S>;
 
     const ser = (value: SchemaType<S>): ArrayBuffer => {
-        return serFn(value, tmps, utf8Length);
+        return serFn(value, ctx);
     };
 
     const des = (buffer: ArrayBuffer) => {
-        return desFn(buffer, tmps);
+        return desFn(buffer, ctx);
     };
 
     return { ser, des, source: { ser: serSource, des: desSource } };
@@ -90,26 +82,31 @@ function buildSer(schema: Schema): string {
                 return { code: `len = utf8Length(${v}); size += 4 + len;`, fixed: 0 };
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
-                    const len = s.length;
-                    const elem = genCalcSize(s.of, `${v}[i]`, depth + 1);
+                    // fixed-length list: each element exists at compile time
+                    const i = variable(depth, 'i');
+                    const elem = genCalcSize(s.of, `${v}[${i}]`, depth + 1);
+                    // if the element is fully fixed-size, we can compute total size at compile time
                     if (elem.code === '' && elem.fixed > 0) {
-                        return { code: '', fixed: elem.fixed * len };
+                        return { code: '', fixed: elem.fixed * s.length };
                     }
-                    // element-wise computation at runtime
-                    const inner = `len = ${len}; for (let ${index(depth)} = 0; ${index(depth)} < len; ${index(depth)}++) { ${elem.code} }`;
+                    // element-wise computation at runtime for dynamic parts
+                    const inner = `for (let ${i} = 0; ${i} < ${s.length}; ${i}++) { ${elem.code} }`;
                     return { code: inner, fixed: 0 };
                 } else {
-                    const elem = genCalcSize(s.of, `${v}[${index(depth)}]`, depth + 1);
-                    if (elem.code === '' && elem.fixed > 0) {
-                        // length prefix is unconditional (writer always writes length), hoist the 4 bytes
-                        // per-item fixed contribution can be multiplied by length at runtime
-                        return {
-                            code: `size += ${elem.fixed} * ${v}.length;`,
-                            fixed: 4,
-                        };
+                    // variable-length list: include 4-byte length prefix and per-element dynamic parts
+                    const i = variable(depth, 'i');
+                    const elem = genCalcSize(s.of, `${v}[${i}]`, depth + 1);
+
+                    let parts = '';
+                    if (elem.fixed > 0) {
+                        // account for unconditional fixed bytes per element
+                        parts += `size += ${elem.fixed} * ${v}.length;`;
                     }
-                    const inner = `for (let ${index(depth)} = 0; ${index(depth)} < ${v}.length; ${index(depth)}++) { ${elem.code} }`;
-                    return { code: `size += 4; ${inner}`, fixed: 0 };
+                    if (elem.code && elem.code !== '') {
+                        parts += `for (let ${i} = 0; ${i} < ${v}.length; ${i}++) { ${elem.code} }`;
+                    }
+
+                    return { code: `size += 4; ${parts}`, fixed: 0 };
                 }
             }
             case 'object': {
@@ -127,13 +124,15 @@ function buildSer(schema: Schema): string {
                 return { code: parts.join(' '), fixed };
             }
             case 'record': {
+                const i = variable(depth, 'i');
+
                 const child = genCalcSize(s.field, `${v}[k]`, depth + 1);
                 let inner = '';
                 inner += `size += 4; if (${v} && typeof ${v} === 'object') { const keys = Object.keys(${v}); `;
                 if (child.fixed > 0) {
                     inner += ` size += ${child.fixed} * keys.length; `;
                 }
-                inner += `for (let ${index(depth)} = 0; ${index(depth)} < keys.length; ${index(depth)}++) { const k = keys[i]; size += 4 + utf8Length(k); `;
+                inner += `for (let ${i} = 0; ${i} < keys.length; ${i}++) { const k = keys[${i}]; size += 4 + utf8Length(k); `;
                 if (child.code !== '') {
                     inner += child.code;
                 }
@@ -170,7 +169,7 @@ function buildSer(schema: Schema): string {
     code += 'let o_size = 0;';
     code += 'let textEncoderResult;';
 
-    function gen(s: Schema, v: string, depth: number): string {
+    function write(s: Schema, v: string, depth: number): string {
         switch (s.type) {
             case 'boolean':
                 return writeBool(v);
@@ -200,14 +199,16 @@ function buildSer(schema: Schema): string {
                     // generate unrolled fixed-length list serialization
                     let inner = '';
                     for (let i = 0; i < s.length; i++) {
-                        inner += gen(s.of, `${v}[${i}]`, depth + 1);
+                        inner += write(s.of, `${v}[${i}]`, depth + 1);
                     }
                     return inner;
                 } else {
+                    const i = variable(depth, 'i');
+
                     let inner = '';
                     inner += writeU32(`${v}.length`);
-                    inner += `for (let ${index(depth)} = 0; ${index(depth)} < ${v}.length; ${index(depth)}++) {`;
-                    inner += gen(s.of, `${v}[${index(depth)}]`, depth + 1);
+                    inner += `for (let ${i} = 0; ${i} < ${v}.length; ${i}++) {`;
+                    inner += write(s.of, `${v}[${i}]`, depth + 1);
                     inner += '}';
                     return inner;
                 }
@@ -215,17 +216,19 @@ function buildSer(schema: Schema): string {
             case 'object': {
                 let out = '';
                 for (const [k, f] of Object.entries(s.fields)) {
-                    out += gen(f, `${v}[${JSON.stringify(k)}]`, depth + 1);
+                    out += write(f, `${v}[${JSON.stringify(k)}]`, depth + 1);
                 }
                 return out;
             }
             case 'record': {
+                const i = variable(depth, 'i');
+
                 let inner = '';
                 inner += `keys = Object.keys(${v});`;
                 inner += writeU32('keys.length');
-                inner += `for (let ${index(depth)} = 0; ${index(depth)} < keys.length; ${index(depth)}++) {`;
-                inner += writeString(`keys[${index(depth)}]`);
-                inner += gen(s.field, `${v}[keys[${index(depth)}]]`, depth + 1);
+                inner += `for (let ${i} = 0; ${i} < keys.length; ${i}++) {`;
+                inner += writeString(`keys[${i}]`);
+                inner += write(s.field, `${v}[keys[${i}]]`, depth + 1);
                 inner += `}`;
                 return inner;
             }
@@ -234,7 +237,7 @@ function buildSer(schema: Schema): string {
         }
     }
 
-    code += gen(schema, 'value', 1);
+    code += write(schema, 'value', 1);
 
     code += 'return arrayBuffer;';
 
@@ -250,7 +253,7 @@ function buildDes(schema: Schema): string {
     code += 'let len = 0;';
     code += 'let val = 0;';
 
-    function gen(s: Schema, target: string, depth: number): string {
+    function read(s: Schema, target: string, depth: number): string {
         switch (s.type) {
             case 'boolean':
                 return readBool(target);
@@ -280,18 +283,20 @@ function buildDes(schema: Schema): string {
                     // fixed-length list: generate unrolled reads
                     let inner = '';
                     inner += `${target} = new Array(${s.length});`;
-                    const len = s.length;
-                    for (let i = 0; i < len; i++) {
-                        inner += gen(s.of, `${target}[${i}]`, depth + 1);
+                    for (let i = 0; i < s.length; i++) {
+                        inner += read(s.of, `${target}[${i}]`, depth + 1);
                     }
                     return inner;
                 } else {
                     // variable-length list: read length then loop
+                    const i = variable(depth, 'i');
+                    const l = variable(depth, 'l');
+
                     let inner = '';
-                    inner += readU32('len');
-                    inner += `${target} = new Array(len);`;
-                    inner += `for (let ${index(depth)} = 0; ${index(depth)} < len; ${index(depth)}++) { `;
-                    inner += gen(s.of, `${target}[${index(depth)}]`, depth + 1);
+                    inner += readU32(l);
+                    inner += `${target} = new Array(${l});`;
+                    inner += `for (let ${i} = 0; ${i} < ${l}; ${i}++) { `;
+                    inner += read(s.of, `${target}[${i}]`, depth + 1);
                     inner += ` }`;
                     return inner;
                 }
@@ -299,18 +304,22 @@ function buildDes(schema: Schema): string {
             case 'object': {
                 let inner = `${target} = {};`;
                 for (const [key, fieldSchema] of Object.entries(s.fields)) {
-                    inner += gen(fieldSchema, `${target}[${JSON.stringify(key)}]`, depth + 1);
+                    inner += read(fieldSchema, `${target}[${JSON.stringify(key)}]`, depth + 1);
                 }
                 return inner;
             }
             case 'record': {
+                const i = variable(depth, 'i');
+                const k = variable(depth, 'k');
+                const count = variable(depth, 'count');
+
                 let inner = '';
-                inner += readU32('count');
+                inner += readU32(count);
                 inner += `${target} = {};`;
-                inner += `for (let ${index(depth)} = 0; ${index(depth)} < count; ${index(depth)}++) { `;
+                inner += `for (let ${i} = 0; ${i} < ${count}; ${i}++) { `;
                 inner += readU32('klen');
-                inner += `const k = klen === 0 ? '' : textDecoder.decode(u8.subarray(o, o + klen)); o += klen;`;
-                inner += gen(s.field, `${target}[k]`, depth + 1);
+                inner += `const ${k} = klen === 0 ? '' : textDecoder.decode(u8.subarray(o, o + klen)); o += klen;`;
+                inner += read(s.field, `${target}[${k}]`, depth + 1);
                 inner += `}`;
                 return inner;
             }
@@ -321,14 +330,24 @@ function buildDes(schema: Schema): string {
 
     const rootAssign = 'let value;';
     code += rootAssign;
-    code += gen(schema, 'value', 1);
+    code += read(schema, 'value', 1);
     code += 'return value;';
 
     return code;
 }
 
-function index(depth: number): string {
-    return 'i'.repeat(depth);
+type Ctx = {
+    f32: Float32Array;
+    f32_u8: Uint8Array;
+    f64: Float64Array;
+    f64_u8: Uint8Array;
+    textEncoder: TextEncoder;
+    textDecoder: TextDecoder;
+    utf8Length: (s: string) => number;
+};
+
+function variable(depth: number, str: string): string {
+    return str + depth;
 }
 
 function utf8Length(s: string) {
@@ -353,6 +372,48 @@ function utf8Length(s: string) {
         }
     }
     return l;
+}
+
+function fixedSize(s: Schema): number | null {
+    switch (s.type) {
+        case 'boolean':
+        case 'int8':
+        case 'uint8':
+            return 1;
+        case 'int16':
+        case 'uint16':
+            return 2;
+        case 'int32':
+        case 'uint32':
+        case 'float32':
+            return 4;
+        case 'number':
+        case 'float64':
+            return 8;
+        case 'string':
+            return null; // string length is dynamic (even though it has a 4-byte prefix)
+        case 'list': {
+            if ('length' in s && typeof s.length === 'number') {
+                const elemFixed = fixedSize(s.of);
+                if (elemFixed !== null) return elemFixed * s.length;
+                return null;
+            }
+            return null;
+        }
+        case 'object': {
+            let total = 0;
+            for (const f of Object.values(s.fields)) {
+                const fs = fixedSize(f);
+                if (fs === null) return null;
+                total += fs;
+            }
+            return total;
+        }
+        case 'record':
+            return null;
+        default:
+            return null;
+    }
 }
 
 function readBool(target: string, offset = 'o'): string {
@@ -459,46 +520,4 @@ function writeString(value: string, offset = 'o'): string {
     code += writeU32('textEncoderResult.written', 'o_size');
 
     return code;
-}
-
-function fixedSize(s: Schema): number | null {
-    switch (s.type) {
-        case 'boolean':
-        case 'int8':
-        case 'uint8':
-            return 1;
-        case 'int16':
-        case 'uint16':
-            return 2;
-        case 'int32':
-        case 'uint32':
-        case 'float32':
-            return 4;
-        case 'number':
-        case 'float64':
-            return 8;
-        case 'string':
-            return null; // string length is dynamic (even though it has a 4-byte prefix)
-        case 'list': {
-            if ('length' in s && typeof s.length === 'number') {
-                const elemFixed = fixedSize(s.of);
-                if (elemFixed !== null) return elemFixed * s.length;
-                return null;
-            }
-            return null;
-        }
-        case 'object': {
-            let total = 0;
-            for (const f of Object.values(s.fields)) {
-                const fs = fixedSize(f);
-                if (fs === null) return null;
-                total += fs;
-            }
-            return total;
-        }
-        case 'record':
-            return null;
-        default:
-            return null;
-    }
 }

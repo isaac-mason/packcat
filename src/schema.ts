@@ -152,9 +152,10 @@ export const any = <T>(): AnySchema<T> =>
         type: 'any',
     }) as AnySchema<T>;
 
-export const list = <T extends Schema>(of: T): { type: 'list'; of: T } => ({
+export const list = <T extends Schema>(of: T, o?: { length: number }): { type: 'list'; of: T; length?: number } => ({
     type: 'list',
     of,
+    ...o,
 });
 
 export const object = <F extends Record<string, Schema>>(fields: F): { type: 'object'; fields: F } => ({

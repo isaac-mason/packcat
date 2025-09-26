@@ -1,24 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { boolean, list, number, object, record, serDes, string, uint32 } from '../src';
+import { boolean, float32, list, number, object, record, serDes, string, uint32 } from '../src';
+import { test } from 'vitest';
 
 describe('serDes', () => {
-    it('should serialize/deserialize fixed-length list (vec3)', () => {
-        const { ser, des } = serDes({
-            type: 'list',
-            of: { type: 'float32' },
-            length: 3,
-        });
-        const vec = [1.1, 2.2, 3.3];
-        const buffer = ser(vec);
-        const result = des(buffer);
-        // Use approximate equality for float32
-        expect(result.length).toBe(vec.length);
-        for (let i = 0; i < vec.length; i++) {
-            expect(result[i]).toBeCloseTo(vec[i], 5);
-        }
-    });
-
-    it('should serialize/deserialize boolean', () => {
+    test('ser/des boolean', () => {
         const { ser, des } = serDes(boolean());
         const bufferTrue = ser(true);
         const result = des(bufferTrue);
@@ -28,14 +13,14 @@ describe('serDes', () => {
         expect(result2).toBe(false);
     });
 
-    it('should serialize/deserialize number', () => {
+    test('ser/des number', () => {
         const { ser, des } = serDes(number());
         const buffer = ser(42.5);
         const result = des(buffer);
         expect(result).toBeCloseTo(42.5);
     });
 
-    it('should serialize/deserialize string', () => {
+    test('ser/des string', () => {
         const { ser, des } = serDes(string());
         const testStr = 'hello world';
         const buffer = ser(testStr);
@@ -43,15 +28,42 @@ describe('serDes', () => {
         expect(result).toBe(testStr);
     });
 
-    it('should serialize/deserialize list of numbers', () => {
+    test('ser/des list of numbers', () => {
         const { ser, des } = serDes(list(number()));
         const arr = [1.1, 2.2, 3.3];
         const buffer = ser(arr);
         const result = des(buffer);
         expect(result).toEqual(arr);
     });
+    
+    test('ser/des list of fixed-length lists (vec3)', () => {
+        const { ser, des } = serDes(list(float32(), { length: 3 }));
+        const vec = [1.1, 2.2, 3.3];
+        const buffer = ser(vec);
+        const result = des(buffer);
 
-    it('should serialize/deserialize object', () => {
+        // use approximate equality for float32
+        expect(result.length).toBe(vec.length);
+        
+        for (let i = 0; i < vec.length; i++) {
+            expect(result[i]).toBeCloseTo(vec[i], 5);
+        }
+    });
+
+    test('ser/des nested list of numbers', () => {
+        const { ser, des } = serDes(list(list(number())));
+        const arr = [
+            [1, 2, 3],
+            [4, 5, 6],
+            [6, 7, 8],
+        ];
+        const buffer = ser(arr);
+        const result = des(buffer);
+        expect(result).toEqual(arr);
+
+    });
+
+    test('ser/des object', () => {
         const { ser, des } = serDes(
             object({
                 a: number(),
@@ -65,7 +77,7 @@ describe('serDes', () => {
         expect(result).toEqual(obj);
     });
 
-    it('should serialize/deserialize record (empty, simple, unicode keys)', () => {
+    test('ser/des record (empty, simple, unicode keys)', () => {
         const { ser, des } = serDes(record(uint32()));
 
         // empty

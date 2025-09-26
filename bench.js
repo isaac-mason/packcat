@@ -44,7 +44,9 @@ bench('ser player', () => playerSerDes.ser(playerVal), 10000);
 const serPlayer = playerSerDes.ser(playerVal);
 bench('des player', () => playerSerDes.des(serPlayer), 10000);
 
+console.log('serPlayer:', serPlayer);
 console.log('serPlayer byteLength:', serPlayer.byteLength);
+console.log('desPlayer:', playerSerDes.des(serPlayer));
 
 bench('JSON.stringify player', () => JSON.stringify(playerVal), 10000);
 const serJsonPlayer = JSON.stringify(playerVal);
@@ -65,11 +67,11 @@ const positionsSchema = list(
 
 /** @type {import('./dist').SchemaType<typeof positionsSchema>} */
 const positionsVal = [
-    { id: 4, pos: [1, 2, 4] },
     { id: 0, pos: [12, 24, 48] },
     { id: 1, pos: [120, 240, 480] },
     { id: 2, pos: [1200, 2400, 4800] },
     { id: 3, pos: [1.2, 2.4, 4.8] },
+    { id: 4, pos: [1, 2, 4] },
 ];
 
 const positionsSerDes = serDes(positionsSchema);
@@ -79,6 +81,12 @@ const serPositions = positionsSerDes.ser(positionsVal);
 bench('des positions', () => positionsSerDes.des(serPositions), 10000);
 
 console.log('serPositions byteLength:', serPositions.byteLength);
+console.log('serPositions:', serPositions);
+console.log('serPositions byteLength:', serPositions.byteLength);
+console.log('positions:', positionsVal);
+console.log('desPositions:', positionsSerDes.des(serPositions));
+console.log('positionsSerDes ser', positionsSerDes.source.ser);
+console.log('positionsSerDes des', positionsSerDes.source.des);
 
 // JSON comparison
 bench('JSON.stringify positions', () => JSON.stringify(positionsVal), 10000);
