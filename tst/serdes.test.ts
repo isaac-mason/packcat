@@ -1,6 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { boolean, float32, list, number, object, record, serDes, string, uint32 } from '../src';
-import { test } from 'vitest';
 
 describe('serDes', () => {
     test('ser/des boolean', () => {
@@ -35,7 +34,7 @@ describe('serDes', () => {
         const result = des(buffer);
         expect(result).toEqual(arr);
     });
-    
+
     test('ser/des list of fixed-length lists (vec3)', () => {
         const { ser, des } = serDes(list(float32(), { length: 3 }));
         const vec = [1.1, 2.2, 3.3];
@@ -44,7 +43,7 @@ describe('serDes', () => {
 
         // use approximate equality for float32
         expect(result.length).toBe(vec.length);
-        
+
         for (let i = 0; i < vec.length; i++) {
             expect(result[i]).toBeCloseTo(vec[i], 5);
         }
@@ -60,7 +59,6 @@ describe('serDes', () => {
         const buffer = ser(arr);
         const result = des(buffer);
         expect(result).toEqual(arr);
-
     });
 
     test('ser/des object', () => {
