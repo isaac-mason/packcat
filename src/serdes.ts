@@ -56,7 +56,6 @@ function buildSer(schema: Schema): string {
     let code = '';
 
     code += 'let len = 0;';
-    code += 'let bytes = 0;';
 
     const schemaFixedSize = fixedSize(schema);
 
@@ -83,7 +82,7 @@ function buildSer(schema: Schema): string {
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
                     // fixed-length list: each element exists at compile time
-                    const i = variable(depth, 'i');
+                    const i = variable('i', depth);
                     const elem = genCalcSize(s.of, `${v}[${i}]`, depth + 1);
                     // if the element is fully fixed-size, we can compute total size at compile time
                     if (elem.code === '' && elem.fixed > 0) {
@@ -94,7 +93,7 @@ function buildSer(schema: Schema): string {
                     return { code: inner, fixed: 0 };
                 } else {
                     // variable-length list: include 4-byte length prefix and per-element dynamic parts
-                    const i = variable(depth, 'i');
+                    const i = variable('i', depth);
                     const elem = genCalcSize(s.of, `${v}[${i}]`, depth + 1);
 
                     let parts = '';
@@ -124,7 +123,7 @@ function buildSer(schema: Schema): string {
                 return { code: parts.join(' '), fixed };
             }
             case 'record': {
-                const i = variable(depth, 'i');
+                const i = variable('i', depth);
 
                 const child = genCalcSize(s.field, `${v}[k]`, depth + 1);
                 let inner = '';
@@ -203,7 +202,7 @@ function buildSer(schema: Schema): string {
                     }
                     return inner;
                 } else {
-                    const i = variable(depth, 'i');
+                    const i = variable('i', depth);
 
                     let inner = '';
                     inner += writeU32(`${v}.length`);
@@ -221,8 +220,8 @@ function buildSer(schema: Schema): string {
                 return out;
             }
             case 'record': {
-                const i = variable(depth, 'i');
-                const keys = variable(depth, 'keys');
+                const i = variable('i', depth);
+                const keys = variable('keys', depth);
 
                 let inner = '';
                 inner += `${keys} = Object.keys(${v});`;
@@ -290,15 +289,16 @@ function buildDes(schema: Schema): string {
                     return inner;
                 } else {
                     // variable-length list: read length then loop
-                    const i = variable(depth, 'i');
-                    const l = variable(depth, 'l');
+                    const i = variable('i', depth);
+                    const l = variable('l', depth);
 
                     let inner = '';
+                    inner += `let ${l};`;
                     inner += readU32(l);
                     inner += `${target} = new Array(${l});`;
-                    inner += `for (let ${i} = 0; ${i} < ${l}; ${i}++) { `;
+                    inner += `for (let ${i} = 0; ${i} < ${l}; ${i}++) {`;
                     inner += read(s.of, `${target}[${i}]`, depth + 1);
-                    inner += ` }`;
+                    inner += `}`;
                     return inner;
                 }
             }
@@ -310,16 +310,18 @@ function buildDes(schema: Schema): string {
                 return inner;
             }
             case 'record': {
-                const i = variable(depth, 'i');
-                const k = variable(depth, 'k');
-                const count = variable(depth, 'count');
+                const i = variable('i', depth);
+                const k = variable('k', depth);
+                const klen = variable('klen', depth);
+                const count = variable('count', depth);
 
                 let inner = '';
+                inner += `let ${k}, ${klen}, ${count};`;
                 inner += readU32(count);
                 inner += `${target} = {};`;
                 inner += `for (let ${i} = 0; ${i} < ${count}; ${i}++) { `;
-                inner += readU32('klen');
-                inner += `const ${k} = klen === 0 ? '' : textDecoder.decode(u8.subarray(o, o + klen)); o += klen;`;
+                inner += readU32(klen);
+                inner += `const ${k} = ${klen} === 0 ? '' : textDecoder.decode(u8.subarray(o, o + ${klen})); o += ${klen};`;
                 inner += read(s.field, `${target}[${k}]`, depth + 1);
                 inner += `}`;
                 return inner;
@@ -347,7 +349,7 @@ type Ctx = {
     utf8Length: (s: string) => number;
 };
 
-function variable(depth: number, str: string): string {
+function variable(str: string, depth: number): string {
     return str + depth;
 }
 
