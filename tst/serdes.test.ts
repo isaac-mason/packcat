@@ -1,5 +1,23 @@
+/** biome-ignore-all lint/suspicious/noApproximativeNumericConstant: test data */
+
 import { describe, expect, test } from 'vitest';
-import { boolean, float32, list, number, object, record, serDes, string, uint32 } from '../src';
+import {
+    boolean,
+    float32,
+    float64,
+    int8,
+    int16,
+    int32,
+    list,
+    number,
+    object,
+    record,
+    serDes,
+    string,
+    uint8,
+    uint16,
+    uint32,
+} from '../src';
 
 describe('serDes', () => {
     test('ser/des boolean', () => {
@@ -12,11 +30,54 @@ describe('serDes', () => {
         expect(result2).toBe(false);
     });
 
-    test('ser/des number', () => {
-        const { ser, des } = serDes(number());
-        const buffer = ser(42.5);
-        const result = des(buffer);
-        expect(result).toBeCloseTo(42.5);
+    test('ser/des numbers', () => {
+        // number (float64)
+        const { ser: serNum, des: desNum } = serDes(number());
+        const bufNum = serNum(12345.6789);
+        const outNum = desNum(bufNum);
+        expect(outNum).toBeCloseTo(12345.6789);
+
+        // int8
+        const { ser: serI8, des: desI8 } = serDes(int8());
+        const bufI8 = serI8(-12);
+        expect(desI8(bufI8)).toBe(-12);
+
+        // uint8
+        const { ser: serU8, des: desU8 } = serDes(uint8());
+        const bufU8 = serU8(250);
+        expect(desU8(bufU8)).toBe(250);
+
+        // int16
+        const { ser: serI16, des: desI16 } = serDes(int16());
+        const bufI16 = serI16(-1234);
+        expect(desI16(bufI16)).toBe(-1234);
+
+        // uint16
+        const { ser: serU16, des: desU16 } = serDes(uint16());
+        const bufU16 = serU16(60000);
+        expect(desU16(bufU16)).toBe(60000);
+
+        // int32
+        const { ser: serI32, des: desI32 } = serDes(int32());
+        const bufI32 = serI32(-123456789);
+        expect(desI32(bufI32)).toBe(-123456789);
+
+        // uint32
+        const { ser: serU32, des: desU32 } = serDes(uint32());
+        const bufU32 = serU32(4000000000);
+        expect(desU32(bufU32)).toBe(4000000000);
+
+        // float32
+        const { ser: serF32, des: desF32 } = serDes(float32());
+        const bufF32 = serF32(3.14159);
+        const outF32 = desF32(bufF32);
+        expect(outF32).toBeCloseTo(3.14159, 5);
+
+        // float64
+        const { ser: serF64, des: desF64 } = serDes(float64());
+        const bufF64 = serF64(2.718281828459045);
+        const outF64 = desF64(bufF64);
+        expect(outF64).toBeCloseTo(2.718281828459045, 12);
     });
 
     test('ser/des string', () => {
@@ -271,5 +332,71 @@ describe('validate', () => {
 
         // @ts-expect-error expected failure
         expect(schemaSerDes.validate({ foo: 123 })).toBe(false);
+    });
+
+    test('validate int8/uint8/int16/uint16/int32/uint32', () => {
+        const i8 = serDes(int8());
+        expect(i8.validate(0)).toBe(true);
+        expect(i8.validate(-128)).toBe(true);
+        expect(i8.validate(127)).toBe(true);
+        // out of range
+        expect(i8.validate(128)).toBe(false);
+
+        const u8 = serDes(uint8());
+        expect(u8.validate(0)).toBe(true);
+        expect(u8.validate(255)).toBe(true);
+        // negative
+        expect(u8.validate(-1)).toBe(false);
+
+        const i16 = serDes(int16());
+        expect(i16.validate(-32768)).toBe(true);
+        expect(i16.validate(32767)).toBe(true);
+        // out of range
+        expect(i16.validate(40000)).toBe(false);
+
+        const u16 = serDes(uint16());
+        expect(u16.validate(0)).toBe(true);
+        expect(u16.validate(65535)).toBe(true);
+        // out of range
+        expect(u16.validate(70000)).toBe(false);
+
+        const i32 = serDes(int32());
+        expect(i32.validate(-2147483648)).toBe(true);
+        expect(i32.validate(2147483647)).toBe(true);
+        // out of range
+        expect(i32.validate(2147483648)).toBe(false);
+
+        const u32 = serDes(uint32());
+        expect(u32.validate(0)).toBe(true);
+        expect(u32.validate(4294967295)).toBe(true);
+        // negative
+        expect(u32.validate(-1)).toBe(false);
+    });
+
+    test('validate float32/float64 and ser/des roundtrip', () => {
+        const f32 = serDes(float32());
+        expect(f32.validate(0)).toBe(true);
+        expect(f32.validate(1.5)).toBe(true);
+        // @ts-expect-error expected failure
+        expect(f32.validate('1.5')).toBe(false);
+
+        // roundtrip for float32 should be approximate
+        const { ser: serF32, des: desF32 } = f32;
+        const buf = serF32(123.456);
+        const out = desF32(buf);
+        expect(out).toBeDefined();
+        expect(out).toBeCloseTo(123.456, 5);
+
+        const f64 = serDes(float64());
+        expect(f64.validate(0)).toBe(true);
+        expect(f64.validate(1.5)).toBe(true);
+        // @ts-expect-error expected failure
+        expect(f64.validate('1.5')).toBe(false);
+
+        const { ser: serF64, des: desF64 } = f64;
+        const buf64 = serF64(123.4567890123);
+        const out64 = desF64(buf64);
+        expect(out64).toBeDefined();
+        expect(out64).toBeCloseTo(123.4567890123, 10);
     });
 });
