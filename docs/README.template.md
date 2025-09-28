@@ -1,8 +1,10 @@
-# packcat
+![./docs/cover.png](./docs/cover.png)
 
 ```sh
 > npm install packcat
 ```
+
+# packcat
 
 packcat is a small library for serializing and deserializing objects to and from ArrayBuffers.
 
