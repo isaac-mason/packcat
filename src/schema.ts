@@ -133,7 +133,6 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
     S extends Uint32Schema ? number :
     S extends Float32Schema ? number :
     S extends Float64Schema ? number :
-    // S extends ListSchema ? SchemaType<S['of'], DecrementDepth<Depth>>[] :
     S extends ListSchema ? (
         S['length'] extends number
             ? RepeatType<SchemaType<S['of'], DecrementDepth<Depth>>, S['length']>
