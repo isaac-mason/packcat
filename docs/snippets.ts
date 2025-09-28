@@ -38,3 +38,10 @@ const deserialized = playerSerdes.des(buffer);
 
 console.log(deserialized); // { name: 'Hero', health: 100, level: 5, inventory: { sword: [Object], potion: [Object] }, buffs: [ 1, 2, 3 ] }
 /* SNIPPET_END: serdes */
+
+/* SNIPPET_START: validate */
+console.log(playerSerdes.validate(player)); // true
+
+// @ts-expect-error this doesn't conform to the schema type!
+console.log(playerSerdes.validate({ foo: 'bar' })); // false
+/* SNIPPET_END: validate */

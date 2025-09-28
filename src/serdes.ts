@@ -5,7 +5,8 @@ export function serDes<S extends Schema>(
 ): {
     ser: (value: SchemaType<S>) => ArrayBuffer;
     des: (buffer: ArrayBuffer) => SchemaType<S>;
-    source: { ser: string; des: string };
+    validate: (value: SchemaType<S>) => boolean;
+    source: { ser: string; des: string; validate: string };
 } {
     const f32_buffer = new ArrayBuffer(4);
     const f32 = new Float32Array(f32_buffer);
@@ -29,27 +30,36 @@ export function serDes<S extends Schema>(
     };
 
     const serSource = buildSer(schema);
-    const desSource = buildDes(schema);
 
     const serFn = new Function('value', '{ textEncoder, f32, f32_u8, f64, f64_u8, utf8Length }', serSource) as (
         value: SchemaType<S>,
         tmps: Ctx,
     ) => ArrayBuffer;
 
+    const ser = (value: SchemaType<S>): ArrayBuffer => {
+        return serFn(value, ctx);
+    };
+
+    const desSource = buildDes(schema);
+
     const desFn = new Function('buffer', '{ textDecoder, f32, f32_u8, f64, f64_u8 }', desSource) as (
         buffer: ArrayBuffer,
         tmps: Ctx,
     ) => SchemaType<S>;
 
-    const ser = (value: SchemaType<S>): ArrayBuffer => {
-        return serFn(value, ctx);
-    };
-
-    const des = (buffer: ArrayBuffer) => {
+    const des = (buffer: ArrayBuffer): SchemaType<S> => {
         return desFn(buffer, ctx);
     };
 
-    return { ser, des, source: { ser: serSource, des: desSource } };
+    const validateSource = buildValidate(schema);
+
+    const validateFn = new Function('value', validateSource) as (value: SchemaType<S>) => boolean;
+
+    const validate = (value: SchemaType<S>): boolean => {
+        return validateFn(value);
+    };
+
+    return { ser, des, validate, source: { ser: serSource, des: desSource, validate: validateSource } };
 }
 
 function buildSer(schema: Schema): string {
@@ -335,6 +345,95 @@ function buildDes(schema: Schema): string {
     code += rootAssign;
     code += read(schema, 'value', 1);
     code += 'return value;';
+
+    return code;
+}
+
+function buildValidate(schema: Schema): string {
+    let code = '';
+
+    function validate(s: Schema, v: string, depth: number): string {
+        switch (s.type) {
+            case 'boolean':
+                return `if (typeof ${v} !== 'boolean') return false;`;
+            case 'number':
+                return `if (typeof ${v} !== 'number') return false;`;
+            case 'int8':
+                return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < -128 || ${v} > 127) return false;`;
+            case 'uint8':
+                return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < 0 || ${v} > 255) return false;`;
+            case 'int16':
+                return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < -32768 || ${v} > 32767) return false;`;
+            case 'uint16':
+                return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < 0 || ${v} > 65535) return false;`;
+            case 'int32':
+                return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < -2147483648 || ${v} > 2147483647) return false;`;
+            case 'uint32':
+                return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < 0 || ${v} > 4294967295) return false;`;
+            case 'float32':
+                return `if (typeof ${v} !== 'number') return false;`;
+            case 'float64':
+                return `if (typeof ${v} !== 'number') return false;`;
+            case 'string': {
+                return `if (typeof ${v} !== 'string') return false;`;
+            }
+            case 'list': {
+                if (s.length !== undefined) {
+                    let inner = '';
+                    inner += `if (!Array.isArray(${v})) return false;`;
+                    inner += `if (${v}.length !== ${s.length}) return false;`;
+
+                    for (let i = 0; i < s.length; i++) {
+                        inner += validate(s.of, `${v}[${i}]`, depth + 1);
+                    }
+
+                    return inner;
+                } else {
+                    const i = variable('i', depth);
+
+                    let inner = '';
+                    inner += `if (!Array.isArray(${v})) return false;`;
+                    inner += `for (let ${i} = 0; ${i} < ${v}.length; ${i}++) {`;
+                    inner += validate(s.of, `${v}[${i}]`, depth + 1);
+                    inner += '}';
+                    return inner;
+                }
+            }
+            case 'object': {
+                let inner = '';
+
+                inner += `if (typeof (${v}) !== "object") return false;`;
+
+                for (const [k, f] of Object.entries(s.fields)) {
+                    const key = JSON.stringify(k);
+
+                    inner += `console.log(${v}[${key}]);`;
+                    inner += `if (!(${key} in ${v})) return false;`;
+                    inner += validate(f, `${v}[${key}]`, depth + 1);
+                }
+
+                return inner;
+            }
+            case 'record': {
+                const i = variable('i', depth);
+                const keys = variable('keys', depth);
+
+                let inner = '';
+                inner += `if (typeof (${v}) !== "object") return false;`;
+                inner += `${keys} = Object.keys(${v});`;
+                inner += `for (let ${i} = 0; ${i} < ${keys}.length; ${i}++) {`;
+                inner += validate(s.field, `${v}[${keys}[${i}]]`, depth + 1);
+                inner += `}`;
+                return inner;
+            }
+            default:
+                return `throw new Error('Unsupported schema type: ${s.type}');`;
+        }
+    }
+
+    code += validate(schema, 'value', 1);
+
+    code += 'return true;';
 
     return code;
 }

@@ -143,4 +143,133 @@ describe('serDes', () => {
         const result = des(buffer);
         expect(result).toEqual(data);
     });
+
+    test('ser/des complex structure', () => {});
+});
+
+describe('validate', () => {
+    test('validate bool', () => {
+        const schema = boolean();
+        const schemaSerDes = serDes(schema);
+
+        expect(schemaSerDes.validate(true)).toBe(true);
+
+        // @ts-expect-error expected failure
+        expect(schemaSerDes.validate(123)).toBe(false);
+    });
+
+    test('validate string', () => {
+        const schema = string();
+        const schemaSerDes = serDes(schema);
+
+        expect(schemaSerDes.validate('string')).toBe(true);
+
+        // @ts-expect-error expected failure
+        expect(schemaSerDes.validate(123)).toBe(false);
+    });
+
+    test('validate number', () => {
+        const schema = number();
+        const schemaSerDes = serDes(schema);
+
+        expect(schemaSerDes.validate(123)).toBe(true);
+
+        // @ts-expect-error expected failure
+        expect(schemaSerDes.validate('string')).toBe(false);
+    });
+
+    test('validate list', () => {
+        const schema = list(string());
+        const schemaSerDes = serDes(schema);
+
+        expect(schemaSerDes.validate(['string'])).toBe(true);
+
+        // @ts-expect-error expected failure
+        expect(schemaSerDes.validate('string')).toBe(false);
+    });
+
+    test('validate fixed size list', () => {
+        const schema = list(string(), { length: 3 });
+        const schemaSerDes = serDes(schema);
+
+        expect(schemaSerDes.validate(['string', 'string', 'string'])).toBe(true);
+
+        // @ts-expect-error expected failure
+        expect(schemaSerDes.validate('string')).toBe(false);
+    });
+
+    test('validate list of lists', () => {
+        const schema = list(list(string()));
+        const schemaSerDes = serDes(schema);
+
+        expect(schemaSerDes.validate([['string']])).toBe(true);
+
+        // @ts-expect-error expected failure
+        expect(schemaSerDes.validate('string')).toBe(false);
+        // @ts-expect-error expected failure
+        expect(schemaSerDes.validate(['string'])).toBe(false);
+    });
+
+    test('validate object', () => {
+        const schema = object({
+            key: string(),
+            value: number(),
+        });
+        const schemaSerDes = serDes(schema);
+
+        expect(schemaSerDes.validate({ key: 'hello', value: 123 })).toBe(true);
+
+        // @ts-expect-error expected failure
+        expect(schemaSerDes.validate('string')).toBe(false);
+    });
+
+    test('validate nested objects', () => {
+        const schema = object({
+            foo: object({
+                key: string(),
+                value: number(),
+            }),
+        });
+        const schemaSerDes = serDes(schema);
+
+        expect(schemaSerDes.validate({ foo: { key: 'hello', value: 123 } })).toBe(true);
+
+        // @ts-expect-error expected failure
+        expect(schemaSerDes.validate({ bar: { key: 'hello', value: 123 } })).toBe(false);
+    });
+
+    test('validate list of objects', () => {
+        const schema = list(
+            object({
+                key: string(),
+                value: number(),
+            }),
+        );
+        const schemaSerDes = serDes(schema);
+
+        expect(schemaSerDes.validate([{ key: 'hello', value: 123 }])).toBe(true);
+
+        // @ts-expect-error expected failure
+        expect(schemaSerDes.validate({ key: 'hello', value: 123 })).toBe(false);
+    });
+
+    test('validate record', () => {
+        const schema = record(string());
+        const schemaSerDes = serDes(schema);
+
+        expect(schemaSerDes.validate({ foo: 'bar' })).toBe(true);
+
+        // @ts-expect-error expected failure
+        expect(schemaSerDes.validate({ foo: 123 })).toBe(false);
+    });
+
+    test('validate nested records', () => {
+        const schema = record(record(string()));
+        const schemaSerDes = serDes(schema);
+
+        expect(schemaSerDes.validate({ foo: { bar: 'car' } })).toBe(true);
+
+        // @ts-expect-error expected failure
+        expect(schemaSerDes.validate({ foo: 123 })).toBe(false);
+    });
 });

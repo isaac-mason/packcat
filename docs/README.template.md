@@ -20,6 +20,10 @@ Next, you can create a serializer/deserializer for that schema, and use `SchemaT
 
 <Snippet source="./snippets.ts" select="serdes" />
 
+You can also use `validate` if you don't trust whether the input data confirms to the schema type:
+
+<Snippet source="./snippets.ts" select="validate" />
+
 ## API Documentation
 
 ### Ser/Des

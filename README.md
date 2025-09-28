@@ -59,6 +59,15 @@ const deserialized = playerSerdes.des(buffer);
 console.log(deserialized); // { name: 'Hero', health: 100, level: 5, inventory: { sword: [Object], potion: [Object] }, buffs: [ 1, 2, 3 ] }
 ```
 
+You can also use `validate` if you don't trust whether the input data confirms to the schema type:
+
+```ts
+console.log(playerSerdes.validate(player)); // true
+
+// @ts-expect-error this doesn't conform to the schema type!
+console.log(playerSerdes.validate({ foo: 'bar' })); // false
+```
+
 ## API Documentation
 
 ### Ser/Des
@@ -67,6 +76,12 @@ console.log(deserialized); // { name: 'Hero', health: 100, level: 5, inventory: 
 export function serDes<S extends Schema>(schema: S): {
     ser: (value: SchemaType<S>) => ArrayBuffer;
     des: (buffer: ArrayBuffer) => SchemaType<S>;
+    validate: (value: SchemaType<S>) => boolean;
+    source: {
+        ser: string;
+        des: string;
+        validate: string;
+    };
 };
 ```
 
@@ -143,9 +158,12 @@ export function any<T>(): AnySchema<T>;
 ```
 
 ```ts
-export function list<T extends Schema>(of: T): {
+export function list<T extends Schema>(of: T, o?: {
+    length: number;
+}): {
     type: 'list';
     of: T;
+    length?: number;
 };
 ```
 
