@@ -160,16 +160,15 @@ export function float64(): {
 ```
 
 ```ts
-export function any<T>(): AnySchema<T>;
+export function list<T extends Schema, L extends number>(of: T, length?: L);
 ```
 
 ```ts
-export function list<T extends Schema>(of: T, o?: {
-    length: number;
-}): {
-    type: 'list';
-    of: T;
-    length?: number;
+export function tuple<T extends Schema[]>(of: T): {
+    type: 'tuple';
+    of: [
+        ...T
+    ];
 };
 ```
 
@@ -190,7 +189,7 @@ export function record<F extends Schema>(field: F): {
 #### Schema Types
 
 ```ts
-export type Schema = BooleanSchema | NumberSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Float32Schema | Float64Schema | StringSchema | ListSchema | ObjectSchema | RecordSchema | AnySchema;
+export type Schema = BooleanSchema | NumberSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Float32Schema | Float64Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema;
 ```
 
 ```ts
@@ -268,6 +267,13 @@ export type ListSchema = {
 ```
 
 ```ts
+export type TupleSchema = {
+    type: 'tuple';
+    of: Schema[];
+};
+```
+
+```ts
 export type ObjectSchema = {
     type: 'object';
     fields: Record<string, Schema>;
@@ -281,9 +287,3 @@ export type RecordSchema = {
 };
 ```
 
-```ts
-export type AnySchema<T = any> = {
-    type: 'any';
-    __tsType?: T;
-};
-```

@@ -17,6 +17,7 @@ import {
     uint8,
     uint16,
     uint32,
+    tuple,
 } from '../src';
 
 describe('serDes', () => {
@@ -175,6 +176,35 @@ describe('serDes', () => {
         expect(result).toEqual(obj);
     });
 
+    test('ser/des tuple', () => {
+        const { ser, des } = serDes(tuple([number(), string(), boolean()] as const));
+
+        const data: [number, string, boolean] = [42.5, 'hello', true];
+        const buffer = ser(data);
+        const out = des(buffer) as [number, string, boolean];
+
+        // approximate for number
+        expect(out[0]).toBeCloseTo(data[0]);
+        expect(out[1]).toBe(data[1]);
+        expect(out[2]).toBe(data[2]);
+    });
+
+    test('ser/des tuple of tuples', () => {
+        const inner = tuple([number(), string()] as const);
+        const schema = tuple([inner, inner] as const);
+        const { ser, des } = serDes(schema);
+
+        const data: [[number, string], [number, string]] = [[1.5, 'a'], [2.5, 'b']];
+        const buf = ser(data as any);
+        const out = des(buf) as [[number, string], [number, string]];
+
+        expect(out.length).toBe(2);
+        expect(out[0][0]).toBeCloseTo(data[0][0]);
+        expect(out[0][1]).toBe(data[0][1]);
+        expect(out[1][0]).toBeCloseTo(data[1][0]);
+        expect(out[1][1]).toBe(data[1][1]);
+    });
+
     test('ser/des list of objects', () => {
         const { ser, des } = serDes(
             list(
@@ -236,7 +266,7 @@ describe('serDes', () => {
         expect(result).toEqual(data);
     });
 
-    test('ser/des complex structure', () => { });
+    test('ser/des complex structure', () => {});
 });
 
 describe('validate', () => {
@@ -429,5 +459,34 @@ describe('validate', () => {
         const out64 = desF64(buf64);
         expect(out64).toBeDefined();
         expect(out64).toBeCloseTo(123.4567890123, 10);
+    });
+
+    test('validate mixed types tuple', () => {
+        const schema = tuple([number(), string(), boolean()] as const);
+        const s = serDes(schema);
+
+        expect(s.validate([1.5, 'x', true])).toBe(true);
+
+        // @ts-expect-error wrong types
+        expect(s.validate([1.5, 2, true])).toBe(false);
+
+        // @ts-expect-error wrong length
+        expect(s.validate([1.5, 'x'])).toBe(false);
+    });
+
+    test('validate tuple of tuples', () => {
+        const inner = tuple([number(), string()] as const);
+        const schema = tuple([inner, inner] as const);
+        const s = serDes(schema);
+
+        expect(s.validate([[1.5, 'a'], [2.5, 'b']])).toBe(true);
+
+        // wrong inner types
+        // @ts-expect-error
+        expect(s.validate([[1.5, 2], [2.5, 'b']])).toBe(false);
+
+        // wrong outer length
+        // @ts-expect-error
+        expect(s.validate([[1.5, 'a']])).toBe(false);
     });
 });

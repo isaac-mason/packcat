@@ -48,6 +48,11 @@ export type ListSchema = {
     length?: number;
 };
 
+export type TupleSchema = {
+    type: 'tuple';
+    of: Schema[];
+};
+
 export type ObjectSchema = {
     type: 'object';
     fields: Record<string, Schema>;
@@ -71,6 +76,7 @@ export type Schema =
     | Float64Schema
     | StringSchema
     | ListSchema
+    | TupleSchema
     | ObjectSchema
     | RecordSchema;
 
@@ -138,6 +144,11 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
             ? RepeatType<SchemaType<S['of'], DecrementDepth<Depth>>, S['length']>
             : SchemaType<S['of'], DecrementDepth<Depth>>[]
     ) :
+    S extends TupleSchema ? (
+        S['of'] extends [...infer El]
+            ? { [K in keyof El]: El[K] extends Schema ? SchemaType<El[K], DecrementDepth<Depth>> : never }
+            : never 
+    ) :
     S extends ObjectSchema ? Simplify<{ [K in keyof S['fields']]: SchemaType<S['fields'][K], DecrementDepth<Depth>> }> :
     S extends RecordSchema ? Record<string, SchemaType<S['field'], DecrementDepth<Depth>>> :
     never;
@@ -171,6 +182,11 @@ export function list<T extends Schema, L extends number>(of: T, length: L): { ty
 export function list<T extends Schema, L extends number>(of: T, length?: L) {
     return (length === undefined ? { type: 'list', of } : { type: 'list', of, length }) as any;
 }
+
+export const tuple = <T extends Schema[]>(of: T): { type: 'tuple'; of: [...T] } => ({
+    type: 'tuple',
+    of,
+});
 
 export const object = <F extends Record<string, Schema>>(fields: F): { type: 'object'; fields: F } => ({
     type: 'object',

@@ -58,9 +58,9 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <RenderType type="import('packcat').float64" />
 
-<RenderType type="import('packcat').any" />
-
 <RenderType type="import('packcat').list" />
+
+<RenderType type="import('packcat').tuple" />
 
 <RenderType type="import('packcat').object" />
 
@@ -94,8 +94,9 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <RenderType type="import('packcat').ListSchema" />
 
+<RenderType type="import('packcat').TupleSchema" />
+
 <RenderType type="import('packcat').ObjectSchema" />
 
 <RenderType type="import('packcat').RecordSchema" />
 
-<RenderType type="import('packcat').AnySchema" />
