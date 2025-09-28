@@ -14,6 +14,8 @@ packcat is a small library for serializing and deserializing objects to and from
 - [API Documentation](#api-documentation)
   - [Ser/Des](#serdes)
   - [Schema](#schema)
+    - [Schema Utilities](#schema-utilities)
+    - [Schema Types](#schema-types)
 
 ## Usage
 
@@ -88,6 +90,8 @@ export function serDes<S extends Schema>(schema: S): {
 ```
 
 ### Schema
+
+#### Schema Utilities
 
 ```ts
 export function boolean(): {
@@ -180,5 +184,106 @@ export function object<F extends Record<string, Schema>>(fields: F): {
 export function record<F extends Schema>(field: F): {
     type: 'record';
     field: F;
+};
+```
+
+#### Schema Types
+
+```ts
+export type Schema = BooleanSchema | NumberSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Float32Schema | Float64Schema | StringSchema | ListSchema | ObjectSchema | RecordSchema | AnySchema;
+```
+
+```ts
+export type BooleanSchema = {
+    type: 'boolean';
+};
+```
+
+```ts
+export type StringSchema = {
+    type: 'string';
+};
+```
+
+```ts
+export type NumberSchema = {
+    type: 'number';
+};
+```
+
+```ts
+export type Int8Schema = {
+    type: 'int8';
+};
+```
+
+```ts
+export type Uint8Schema = {
+    type: 'uint8';
+};
+```
+
+```ts
+export type Int16Schema = {
+    type: 'int16';
+};
+```
+
+```ts
+export type Uint16Schema = {
+    type: 'uint16';
+};
+```
+
+```ts
+export type Int32Schema = {
+    type: 'int32';
+};
+```
+
+```ts
+export type Uint32Schema = {
+    type: 'uint32';
+};
+```
+
+```ts
+export type Float32Schema = {
+    type: 'float32';
+};
+```
+
+```ts
+export type Float64Schema = {
+    type: 'float64';
+};
+```
+
+```ts
+export type ListSchema = {
+    type: 'list';
+    of: Schema;
+    length?: number;
+};
+```
+
+```ts
+export type ObjectSchema = {
+    type: 'object';
+    fields: Record<string, Schema>;
+};
+```
+
+```ts
+export type RecordSchema = {
+    type: 'record';
+    field: Schema;
+};
+```
+
+```ts
+export type AnySchema<T = any> = {
+    type: 'any';
+    __tsType?: T;
 };
 ```

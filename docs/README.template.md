@@ -34,6 +34,8 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 ### Schema
 
+#### Schema Utilities
+
 <RenderType type="import('packcat').boolean" />
 
 <RenderType type="import('packcat').string" />
@@ -63,3 +65,37 @@ You can also use `validate` if you don't trust whether the input data confirms t
 <RenderType type="import('packcat').object" />
 
 <RenderType type="import('packcat').record" />
+
+#### Schema Types
+
+<RenderType type="import('packcat').Schema" />
+
+<RenderType type="import('packcat').BooleanSchema" />
+
+<RenderType type="import('packcat').StringSchema" />
+
+<RenderType type="import('packcat').NumberSchema" />
+
+<RenderType type="import('packcat').Int8Schema" />
+
+<RenderType type="import('packcat').Uint8Schema" />
+
+<RenderType type="import('packcat').Int16Schema" />
+
+<RenderType type="import('packcat').Uint16Schema" />
+
+<RenderType type="import('packcat').Int32Schema" />
+
+<RenderType type="import('packcat').Uint32Schema" />
+
+<RenderType type="import('packcat').Float32Schema" />
+
+<RenderType type="import('packcat').Float64Schema" />
+
+<RenderType type="import('packcat').ListSchema" />
+
+<RenderType type="import('packcat').ObjectSchema" />
+
+<RenderType type="import('packcat').RecordSchema" />
+
+<RenderType type="import('packcat').AnySchema" />
