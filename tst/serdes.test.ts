@@ -97,16 +97,29 @@ describe('serDes', () => {
     });
 
     test('ser/des list of fixed-length lists (vec3)', () => {
-        const { ser, des } = serDes(list(float32(), { length: 3 }));
-        const vec = [1.1, 2.2, 3.3];
-        const buffer = ser(vec);
+        const vec3Schema = list(float32(), 3);
+        const { ser, des } = serDes(list(vec3Schema));
+
+        const data: [number, number, number][] = [
+            [1.1, 2.2, 3.3],
+            [4.4, 5.5, 6.6],
+        ];
+
+        const buffer = ser(data);
         const result = des(buffer);
 
-        // use approximate equality for float32
-        expect(result.length).toBe(vec.length);
+        expect(result.length).toBe(data.length);
 
-        for (let i = 0; i < vec.length; i++) {
-            expect(result[i]).toBeCloseTo(vec[i], 5);
+        // use approximate equality for float32
+        for (let i = 0; i < data.length; i++) {
+            const inVec = data[i];
+            const outVec = result[i];
+
+            expect(inVec.length).toBe(outVec.length);
+
+            for (let j = 0; j < inVec.length; j++) {
+                expect(inVec[j]).toBeCloseTo(outVec[j], 5);
+            }
         }
     });
 
@@ -194,6 +207,24 @@ describe('serDes', () => {
         expect(des(ser(unicode))).toEqual(unicode);
     });
 
+    test('ser/des object keys with quotes/newlines/emoji', () => {
+        const { ser, des, validate } = serDes(record(uint32()));
+
+        // keys with tricky characters
+        const data: Record<string, number> = {
+            simple: 1,
+            'with"quote': 2,
+            'with\nnewline': 3,
+            'emoji-😊': 4,
+        };
+
+        expect(validate(data)).toBe(true);
+
+        const buf = ser(data);
+        const out = des(buf);
+        expect(out).toEqual(data);
+    });
+
     test('ser/des record of records', () => {
         const { ser, des } = serDes(record(record(uint32())));
         const data = {
@@ -205,7 +236,7 @@ describe('serDes', () => {
         expect(result).toEqual(data);
     });
 
-    test('ser/des complex structure', () => {});
+    test('ser/des complex structure', () => { });
 });
 
 describe('validate', () => {
@@ -250,7 +281,7 @@ describe('validate', () => {
     });
 
     test('validate fixed size list', () => {
-        const schema = list(string(), { length: 3 });
+        const schema = list(string(), 3);
         const schemaSerDes = serDes(schema);
 
         expect(schemaSerDes.validate(['string', 'string', 'string'])).toBe(true);

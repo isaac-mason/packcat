@@ -58,11 +58,6 @@ export type RecordSchema = {
     field: Schema;
 };
 
-export type AnySchema<T = any> = {
-    type: 'any';
-    __tsType?: T;
-};
-
 export type Schema =
     | BooleanSchema
     | NumberSchema
@@ -77,8 +72,29 @@ export type Schema =
     | StringSchema
     | ListSchema
     | ObjectSchema
-    | RecordSchema
-    | AnySchema;
+    | RecordSchema;
+
+type RepeatTypeMap<T> = {
+    0: [];
+    1: [T];
+    2: [T, T];
+    3: [T, T, T];
+    4: [T, T, T, T];
+    5: [T, T, T, T, T];
+    6: [T, T, T, T, T, T];
+    7: [T, T, T, T, T, T, T];
+    8: [T, T, T, T, T, T, T, T];
+    9: [T, T, T, T, T, T, T, T, T];
+    10: [T, T, T, T, T, T, T, T, T, T];
+    11: [T, T, T, T, T, T, T, T, T, T, T];
+    12: [T, T, T, T, T, T, T, T, T, T, T, T];
+    13: [T, T, T, T, T, T, T, T, T, T, T, T, T];
+    14: [T, T, T, T, T, T, T, T, T, T, T, T, T, T];
+    15: [T, T, T, T, T, T, T, T, T, T, T, T, T, T, T];
+    16: [T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T];
+};
+
+type RepeatType<T, N extends number> = N extends keyof RepeatTypeMap<T> ? RepeatTypeMap<T>[N] : T[];
 
 type Simplify<T> = { [K in keyof T]: T[K] } & {};
 
@@ -105,23 +121,27 @@ type DecrementDepth<N extends keyof NextDepth> = N extends keyof NextDepth ? Nex
 
 // biome-ignore format: readability
 export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
-	Depth extends 0 ? any :
-	S extends BooleanSchema ? boolean :
-	S extends StringSchema ? string :
-	S extends NumberSchema ? number :
-	S extends Int8Schema ? number :
-	S extends Uint8Schema ? number :
-	S extends Int16Schema ? number :
-	S extends Uint16Schema ? number :
-	S extends Int32Schema ? number :
-	S extends Uint32Schema ? number :
-	S extends Float32Schema ? number :
-	S extends Float64Schema ? number :
-	S extends AnySchema<infer T> ? T :
-	S extends ListSchema ? SchemaType<S['of'], DecrementDepth<Depth>>[] :
-	S extends ObjectSchema ? Simplify<{ [K in keyof S['fields']]: SchemaType<S['fields'][K], DecrementDepth<Depth>> }> :
-	S extends RecordSchema ? Record<string, SchemaType<S['field'], DecrementDepth<Depth>>> :
-	never;
+    Depth extends 0 ? any :
+    S extends BooleanSchema ? boolean :
+    S extends StringSchema ? string :
+    S extends NumberSchema ? number :
+    S extends Int8Schema ? number :
+    S extends Uint8Schema ? number :
+    S extends Int16Schema ? number :
+    S extends Uint16Schema ? number :
+    S extends Int32Schema ? number :
+    S extends Uint32Schema ? number :
+    S extends Float32Schema ? number :
+    S extends Float64Schema ? number :
+    // S extends ListSchema ? SchemaType<S['of'], DecrementDepth<Depth>>[] :
+    S extends ListSchema ? (
+        S['length'] extends number
+            ? RepeatType<SchemaType<S['of'], DecrementDepth<Depth>>, S['length']>
+            : SchemaType<S['of'], DecrementDepth<Depth>>[]
+    ) :
+    S extends ObjectSchema ? Simplify<{ [K in keyof S['fields']]: SchemaType<S['fields'][K], DecrementDepth<Depth>> }> :
+    S extends RecordSchema ? Record<string, SchemaType<S['field'], DecrementDepth<Depth>>> :
+    never;
 
 /* lightweight helpers that just return objects */
 
@@ -147,16 +167,11 @@ export const float32 = (): { type: 'float32' } => ({ type: 'float32' });
 
 export const float64 = (): { type: 'float64' } => ({ type: 'float64' });
 
-export const any = <T>(): AnySchema<T> =>
-    ({
-        type: 'any',
-    }) as AnySchema<T>;
-
-export const list = <T extends Schema>(of: T, o?: { length: number }): { type: 'list'; of: T; length?: number } => ({
-    type: 'list',
-    of,
-    ...o,
-});
+export function list<T extends Schema>(of: T): { type: 'list'; of: T };
+export function list<T extends Schema, L extends number>(of: T, length: L): { type: 'list'; of: T; length: L };
+export function list<T extends Schema, L extends number>(of: T, length?: L) {
+    return (length === undefined ? { type: 'list', of } : { type: 'list', of, length }) as any;
+}
 
 export const object = <F extends Record<string, Schema>>(fields: F): { type: 'object'; fields: F } => ({
     type: 'object',

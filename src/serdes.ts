@@ -150,7 +150,7 @@ function buildSer(schema: Schema): string {
             }
             default:
                 return {
-                    code: `throw new Error('Unsupported schema type: ${s.type}');`,
+                    code: `throw new Error('Unsupported schema: ${s}');`,
                     fixed: 0,
                 };
         }
@@ -212,6 +212,7 @@ function buildSer(schema: Schema): string {
                     }
                     return inner;
                 } else {
+                    // generate dynamic list serialization
                     const i = variable('i', depth);
 
                     let inner = '';
@@ -243,7 +244,7 @@ function buildSer(schema: Schema): string {
                 return inner;
             }
             default:
-                return `throw new Error('Unsupported schema type: ${s.type}');`;
+                return `throw new Error('Unsupported schema: ${s}');`;
         }
     }
 
@@ -337,7 +338,7 @@ function buildDes(schema: Schema): string {
                 return inner;
             }
             default:
-                return `throw new Error('Unsupported schema type: ${s.type}');`;
+                return `throw new Error('Unsupported schema: ${s}');`;
         }
     }
 
@@ -426,7 +427,7 @@ function buildValidate(schema: Schema): string {
                 return inner;
             }
             default:
-                return `throw new Error('Unsupported schema type: ${s.type}');`;
+                return `throw new Error('Unsupported schema: ${s}');`;
         }
     }
 
