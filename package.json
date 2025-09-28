@@ -1,5 +1,5 @@
 {
-    "name": "buffcat",
+    "name": "packcat",
     "version": "0.0.1",
     "author": "Isaac Mason <isaac@isaacmason.com>",
     "description": "",
@@ -15,7 +15,7 @@
     ],
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/isaac-mason/buffcat.git"
+        "url": "git+https://github.com/isaac-mason/packcat.git"
     },
     "scripts": {
         "build": "rm -rf ./dist && rollup --config rollup.config.mjs",

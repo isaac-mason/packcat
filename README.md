@@ -1,10 +1,10 @@
-# buffcat
+# packcat
 
 ```sh
-> npm install buffcat
+> npm install packcat
 ```
 
-buffcat is a small library for serializing and deserializing objects to and from ArrayBuffers.
+packcat is a small library for serializing and deserializing objects to and from ArrayBuffers.
 
 ## Table Of Contents
 
@@ -18,8 +18,8 @@ buffcat is a small library for serializing and deserializing objects to and from
 First, define your data format with the schema utils:
 
 ```ts
-import type { SchemaType } from 'buffcat';
-import { list, number, object, record, string, uint8 } from 'buffcat';
+import type { SchemaType } from 'packcat';
+import { list, number, object, record, string, uint8 } from 'packcat';
 
 const playerSchema = object({
     name: string(),
@@ -35,7 +35,7 @@ type PlayerType = SchemaType<typeof playerSchema>;
 Next, you can create a serializer/deserializer for that schema, and use `SchemaType` to infer the TypeScript type of the schema:
 
 ```ts
-import { serDes } from 'buffcat';
+import { serDes } from 'packcat';
 
 const playerSerdes = serDes(playerSchema);
 

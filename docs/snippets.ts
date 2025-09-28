@@ -1,6 +1,6 @@
 /* SNIPPET_START: schema */
-import type { SchemaType } from 'buffcat';
-import { list, number, object, record, string, uint8 } from 'buffcat';
+import type { SchemaType } from 'packcat';
+import { list, number, object, record, string, uint8 } from 'packcat';
 
 const playerSchema = object({
     name: string(),
@@ -15,7 +15,7 @@ type PlayerType = SchemaType<typeof playerSchema>;
 /* SNIPPET_END: schema */
 
 /* SNIPPET_START: serdes */
-import { serDes } from 'buffcat';
+import { serDes } from 'packcat';
 
 const playerSerdes = serDes(playerSchema);
 

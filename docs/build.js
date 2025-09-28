@@ -37,8 +37,8 @@ const readmeOutPath = path.join(path.dirname(new URL(import.meta.url).pathname),
 
 let readmeText = fs.readFileSync(readmeTemplatePath, 'utf-8');
 
-/* <RenderType type="import('buffcat').TypeName" /> */
-const renderTypeRegex = /<RenderType\s+type=["']import\(['"]buffcat['"]\)\.(\w+)["']\s*\/>/g;
+/* <RenderType type="import('packcat').TypeName" /> */
+const renderTypeRegex = /<RenderType\s+type=["']import\(['"]packcat['"]\)\.(\w+)["']\s*\/>/g;
 readmeText = readmeText.replace(renderTypeRegex, (fullMatch, typeName) => {
     const typeDef = getType(typeName);
     if (!typeDef) {
@@ -48,8 +48,8 @@ readmeText = readmeText.replace(renderTypeRegex, (fullMatch, typeName) => {
     return `\`\`\`ts\n${typeDef}\n\`\`\``;
 });
 
-/* <RenderSource type="import('buffcat').TypeName" /> */
-const renderSourceRegex = /<RenderSource\s+type=["']import\(['"]buffcat['"]\)\.(\w+)["']\s*\/>/g;
+/* <RenderSource type="import('packcat').TypeName" /> */
+const renderSourceRegex = /<RenderSource\s+type=["']import\(['"]packcat['"]\)\.(\w+)["']\s*\/>/g;
 readmeText = readmeText.replace(renderSourceRegex, (fullMatch, typeName) => {
     const typeDef = getSource(typeName);
     if (!typeDef) {

@@ -1,10 +1,10 @@
-# buffcat
+# packcat
 
 ```sh
-> npm install buffcat
+> npm install packcat
 ```
 
-buffcat is a small library for serializing and deserializing objects to and from ArrayBuffers.
+packcat is a small library for serializing and deserializing objects to and from ArrayBuffers.
 
 ## Table Of Contents
 
@@ -28,36 +28,36 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 ### Ser/Des
 
-<RenderType type="import('buffcat').serDes" />
+<RenderType type="import('packcat').serDes" />
 
 ### Schema
 
-<RenderType type="import('buffcat').boolean" />
+<RenderType type="import('packcat').boolean" />
 
-<RenderType type="import('buffcat').string" />
+<RenderType type="import('packcat').string" />
 
-<RenderType type="import('buffcat').number" />
+<RenderType type="import('packcat').number" />
 
-<RenderType type="import('buffcat').int8" />
+<RenderType type="import('packcat').int8" />
 
-<RenderType type="import('buffcat').uint8" />
+<RenderType type="import('packcat').uint8" />
 
-<RenderType type="import('buffcat').int16" />
+<RenderType type="import('packcat').int16" />
 
-<RenderType type="import('buffcat').uint16" />
+<RenderType type="import('packcat').uint16" />
 
-<RenderType type="import('buffcat').int32" />
+<RenderType type="import('packcat').int32" />
 
-<RenderType type="import('buffcat').uint32" />
+<RenderType type="import('packcat').uint32" />
 
-<RenderType type="import('buffcat').float32" />
+<RenderType type="import('packcat').float32" />
 
-<RenderType type="import('buffcat').float64" />
+<RenderType type="import('packcat').float64" />
 
-<RenderType type="import('buffcat').any" />
+<RenderType type="import('packcat').any" />
 
-<RenderType type="import('buffcat').list" />
+<RenderType type="import('packcat').list" />
 
-<RenderType type="import('buffcat').object" />
+<RenderType type="import('packcat').object" />
 
-<RenderType type="import('buffcat').record" />
+<RenderType type="import('packcat').record" />
