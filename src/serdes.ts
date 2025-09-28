@@ -407,7 +407,6 @@ function buildValidate(schema: Schema): string {
                 for (const [k, f] of Object.entries(s.fields)) {
                     const key = JSON.stringify(k);
 
-                    inner += `console.log(${v}[${key}]);`;
                     inner += `if (!(${key} in ${v})) return false;`;
                     inner += validate(f, `${v}[${key}]`, depth + 1);
                 }
