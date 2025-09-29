@@ -160,6 +160,14 @@ export function float64(): {
 ```
 
 ```ts
+export function literal<S extends PrimitiveSchema>(value: SchemaType<S>, schema: S): {
+    type: 'literal';
+    of: S;
+    value: SchemaType<S>;
+};
+```
+
+```ts
 export function list<T extends Schema, L extends number>(of: T, length?: L);
 ```
 
@@ -215,6 +223,22 @@ export function nullable<S extends Schema>(of: S): {
 export function nullish<S extends Schema>(of: S): {
     type: 'nullish';
     of: S;
+};
+```
+
+```ts
+export function union<K extends string, V extends (ObjectSchema & {
+    fields: {
+        [k in K]: LiteralSchema;
+    };
+})[]>(key: K, variants: [
+    ...V
+]): {
+    type: 'union';
+    key: K;
+    variants: [
+        ...V
+    ];
 };
 ```
 
@@ -291,6 +315,14 @@ export type Float64Schema = {
 ```
 
 ```ts
+export type LiteralSchema = {
+    type: 'literal';
+    of: PrimitiveSchema;
+    value: SchemaType<PrimitiveSchema>;
+};
+```
+
+```ts
 export type ListSchema = {
     type: 'list';
     of: Schema;
@@ -344,5 +376,13 @@ export type NullableSchema = {
 export type NullishSchema = {
     type: 'nullish';
     of: Schema;
+};
+```
+
+```ts
+export type UnionSchema = {
+    type: 'union';
+    key: string;
+    variants: Array<ObjectSchema>;
 };
 ```

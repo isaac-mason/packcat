@@ -14,6 +14,7 @@ import {
     list,
     number,
     object,
+    union,
     record,
     nullable,
     optional,
@@ -300,7 +301,7 @@ describe('serDes', () => {
     });
 
     test('ser/des literal', () => {
-        const schema = literal(string(), 'hello');
+        const schema = literal('hello', string());
         const { ser, des, validate } = serDes(schema);
 
         const v = 'hello';
@@ -425,6 +426,29 @@ describe('serDes', () => {
 
         // map of maps
         expect(out.mapOfMaps).toEqual(data.mapOfMaps);
+    });
+
+    test('ser/des union', () => {
+        const pet = union('type', [
+            object({ type: literal('dog', string()), name: string(), bark: uint8() }),
+            object({ type: literal('cat', string()), name: string(), lives: uint8() }),
+        ] as const);
+
+        const { ser, des, validate } = serDes(pet as any);
+
+        const dog = { type: 'dog', name: 'Rex', bark: 5 };
+        const cat = { type: 'cat', name: 'Mittens', lives: 9 };
+
+        expect(validate(dog)).toBe(true);
+        expect(validate(cat)).toBe(true);
+
+        const bufDog = ser(dog as any);
+        const outDog = des(bufDog as ArrayBuffer) as any;
+        expect(outDog).toEqual(dog);
+
+        const bufCat = ser(cat as any);
+        const outCat = des(bufCat as ArrayBuffer) as any;
+        expect(outCat).toEqual(cat);
     });
 });
 

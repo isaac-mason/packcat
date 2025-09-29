@@ -179,7 +179,7 @@ function buildSer(schema: Schema): string {
                 let inner = '';
                 inner += `if (${v} !== null) {`;
                 inner += child.code;
-                inner += `size += ${child.fixed};`
+                inner += `size += ${child.fixed};`;
                 inner += `}`;
 
                 return { code: inner, fixed: 1 };
@@ -190,7 +190,7 @@ function buildSer(schema: Schema): string {
                 let inner = '';
                 inner += `if (${v} !== undefined) {`;
                 inner += child.code;
-                inner += `size += ${child.fixed};`
+                inner += `size += ${child.fixed};`;
                 inner += `}`;
 
                 return { code: inner, fixed: 1 };
@@ -201,16 +201,56 @@ function buildSer(schema: Schema): string {
                 let inner = '';
                 inner += `if (${v} !== null && ${v} !== undefined) {`;
                 inner += child.code;
-                inner += `size += ${child.fixed};`
+                inner += `size += ${child.fixed};`;
                 inner += `}`;
 
                 return { code: inner, fixed: 1 };
             }
-            default:
+            case 'union': {
+                // Discriminated union: each variant MUST have a literal
+                // discriminant in the field `s.key`. At runtime we compare the
+                // object's discriminant value against those literals and add
+                // the size for the matching variant. We encode a 1-byte tag
+                // (the variant index) followed by the variant data.
+                if (s.variants.length > 255) {
+                    throw new Error('Union has too many variants; max 256 supported for 1-byte tag');
+                }
+                const keyVar = variable('keyVal', variableCounter++);
+
+                let inner = '';
+                inner += `const ${keyVar} = ${v}[${JSON.stringify(s.key)}];`;
+
+                // Build an if/else chain comparing the discriminant to each
+                // variant's literal value. Throw at runtime if no variant
+                // matches.
+                for (let i = 0; i < s.variants.length; i++) {
+                    const variant = s.variants[i];
+                    const disc = variant.fields[s.key];
+
+                    if (disc.type !== 'literal') {
+                        throw new Error('Union discriminant must be a literal in every variant');
+                    }
+
+                    const discriminant = disc.value;
+                    const elem = size(variant, v);
+
+                    if (i === 0) {
+                        inner += `if (${keyVar} === ${JSON.stringify(discriminant)}) { size += 1 + ${elem.fixed}; ${elem.code} }`;
+                    } else {
+                        inner += ` else if (${keyVar} === ${JSON.stringify(discriminant)}) { size += 1 + ${elem.fixed}; ${elem.code} }`;
+                    }
+                }
+
+                inner += ` else { throw new Error('Invalid discriminant for union key: ' + ${keyVar}); }`;
+
+                return { code: inner, fixed: 0 };
+            }
+            default: {
                 return {
                     code: `throw new Error('Unsupported schema: ${s}');`,
                     fixed: 0,
                 };
+            }
         }
     }
 
@@ -226,7 +266,6 @@ function buildSer(schema: Schema): string {
     }
 
     code += 'const arrayBuffer = new ArrayBuffer(size);';
-    code += 'const view = new DataView(arrayBuffer);';
     code += 'let o = 0;';
 
     code += 'const u8 = new Uint8Array(arrayBuffer); ';
@@ -311,6 +350,35 @@ function buildSer(schema: Schema): string {
                 inner += `}`;
                 return inner;
             }
+            case 'union': {
+                // write 1-byte tag followed by variant payload
+                if (s.variants.length > 255) {
+                    throw new Error('Union has too many variants; max 256 supported for 1-byte tag');
+                }
+
+                const discriminant = variable('discriminant', variableCounter++);
+                let inner = '';
+                inner += `const ${discriminant} = ${v}[${JSON.stringify(s.key)}];`;
+
+                for (let i = 0; i < s.variants.length; i++) {
+                    const variant = s.variants[i];
+                    const disc = variant.fields[s.key];
+                    if (!disc || (disc as any).type !== 'literal') {
+                        throw new Error('Union discriminant must be a literal in every variant');
+                    }
+                    const lit = (disc as any).value;
+
+                    if (i === 0) {
+                        inner += `if (${discriminant} === ${JSON.stringify(lit)}) { u8[o++] = ${i}; ${ser(variant, v)} }`;
+                    } else {
+                        inner += ` else if (${discriminant} === ${JSON.stringify(lit)}) { u8[o++] = ${i}; ${ser(variant, v)} }`;
+                    }
+                }
+
+                inner += ` else { throw new Error('Invalid discriminant for union key at serialize: ' + ${discriminant}); }`;
+
+                return inner;
+            }
             case 'bools': {
                 // pack keys into bitset (little-endian within bytes)
                 const keysVar = variable('keys', variableCounter++);
@@ -334,11 +402,11 @@ function buildSer(schema: Schema): string {
 
                 inner += `if (${v} === null) {`;
                 inner += `u8[o++] = 0;`;
-                inner += `} else {`
+                inner += `} else {`;
                 inner += `u8[o++] = 1;`;
                 inner += ser(s.of, v);
-                inner += `}`
-                
+                inner += `}`;
+
                 return inner;
             }
             case 'optional': {
@@ -346,10 +414,10 @@ function buildSer(schema: Schema): string {
 
                 inner += `if (${v} === undefined) {`;
                 inner += `u8[o++] = 0;`;
-                inner += `} else {`
+                inner += `} else {`;
                 inner += `u8[o++] = 1;`;
                 inner += ser(s.of, v);
-                inner += `}`
+                inner += `}`;
 
                 return inner;
             }
@@ -360,11 +428,11 @@ function buildSer(schema: Schema): string {
                 inner += `u8[o++] = 0;`;
                 inner += `} else if (${v} === undefined) {`;
                 inner += `u8[o++] = 1;`;
-                inner += `} else {`
+                inner += `} else {`;
                 inner += `u8[o++] = 2;`;
                 inner += ser(s.of, v);
-                inner += `}`
-                
+                inner += `}`;
+
                 return inner;
             }
             default:
@@ -383,7 +451,6 @@ function buildDes(schema: Schema): string {
     let code = '';
 
     code += 'let o = 0;';
-    code += 'const view = new DataView(buffer);';
     code += 'const u8 = new Uint8Array(buffer);';
     code += 'let len = 0;';
     code += 'let val = 0;';
@@ -523,6 +590,25 @@ function buildDes(schema: Schema): string {
 
                 return inner;
             }
+            case 'union': {
+                if (s.variants.length > 255) {
+                    throw new Error('Union has too many variants; max 256 supported for 1-byte tag');
+                }
+                const tag = variable('tag', variableCounter++);
+                let out = '';
+                out += `const ${tag} = u8[o++];`;
+                out += `${target} = {};`;
+                out += `switch (${tag}) {`;
+                for (let i = 0; i < s.variants.length; i++) {
+                    const variant = s.variants[i];
+                    out += `case ${i}: `;
+                    out += des(variant, target);
+                    out += ` break;`;
+                }
+                out += `default: throw new Error('Invalid union tag: ' + ${tag});`;
+                out += `}`;
+                return out;
+            }
             default:
                 return `throw new Error('Unsupported schema: ${s}');`;
         }
@@ -635,6 +721,40 @@ function buildValidate(schema: Schema): string {
             }
             case 'literal': {
                 return `if (${JSON.stringify(s.value)} !== ${v}) return false;`;
+            }
+            case 'union': {
+                if (s.variants.length > 255) {
+                    throw new Error('Union has too many variants; max 256 supported for 1-byte tag');
+                }
+                // ensure value is an object and its discriminant matches one of the
+                // variant literals, then validate against that variant.
+                let inner = '';
+                inner += `if (typeof (${v}) !== "object") return false;`;
+                const keyVar = variable('key', variableCounter++);
+                inner += `const ${keyVar} = ${v}[${JSON.stringify(s.key)}];`;
+
+                // validate against matching literal
+                let first = true;
+                for (let i = 0; i < s.variants.length; i++) {
+                    const variant = s.variants[i];
+                    const disc = variant.fields[s.key];
+                    if (!disc || (disc as any).type !== 'literal') {
+                        throw new Error('Union discriminant must be a literal in every variant');
+                    }
+                    const lit = (disc as any).value;
+                    if (first) {
+                        inner += `if (${keyVar} === ${JSON.stringify(lit)}) {`;
+                        first = false;
+                    } else {
+                        inner += ` else if (${keyVar} === ${JSON.stringify(lit)}) {`;
+                    }
+
+                    inner += validate(variant, v);
+                    inner += ` }`;
+                }
+
+                inner += ` else { return false; }`;
+                return inner;
             }
             default:
                 return `throw new Error('Unsupported schema: ${s}');`;

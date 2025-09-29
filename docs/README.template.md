@@ -4,6 +4,8 @@
 > npm install packcat
 ```
 
+> 🚧 packcat is undergoing heavy development ahead of a v1 release. if you want to try it out early, go ahead! but prepare for breaking changes :)
+
 # packcat
 
 packcat is a small library for serializing and deserializing objects to and from ArrayBuffers.
@@ -58,6 +60,8 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <RenderType type="import('packcat').float64" />
 
+<RenderType type="import('packcat').literal" />
+
 <RenderType type="import('packcat').list" />
 
 <RenderType type="import('packcat').tuple" />
@@ -73,6 +77,8 @@ You can also use `validate` if you don't trust whether the input data confirms t
 <RenderType type="import('packcat').nullable" />
 
 <RenderType type="import('packcat').nullish" />
+
+<RenderType type="import('packcat').union" />
 
 #### Schema Types
 
@@ -100,6 +106,8 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <RenderType type="import('packcat').Float64Schema" />
 
+<RenderType type="import('packcat').LiteralSchema" />
+
 <RenderType type="import('packcat').ListSchema" />
 
 <RenderType type="import('packcat').TupleSchema" />
@@ -115,3 +123,5 @@ You can also use `validate` if you don't trust whether the input data confirms t
 <RenderType type="import('packcat').NullableSchema" />
 
 <RenderType type="import('packcat').NullishSchema" />
+
+<RenderType type="import('packcat').UnionSchema" />
