@@ -4,6 +4,8 @@
 > npm install packcat
 ```
 
+> 🚧 packcat is undergoing heavy development ahead of a v1 release. if you want to try it out early, go ahead! but prepare for breaking changes :)
+
 # packcat
 
 packcat is a small library for serializing and deserializing objects to and from ArrayBuffers.
