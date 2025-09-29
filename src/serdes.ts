@@ -173,6 +173,39 @@ function buildSer(schema: Schema): string {
                 const bytes = Math.ceil(s.keys.length / 8);
                 return { code: '', fixed: bytes };
             }
+            case 'nullable': {
+                const child = size(s.of, v);
+
+                let inner = '';
+                inner += `if (${v} !== null) {`;
+                inner += child.code;
+                inner += `size += ${child.fixed};`
+                inner += `}`;
+
+                return { code: inner, fixed: 1 };
+            }
+            case 'optional': {
+                const child = size(s.of, v);
+
+                let inner = '';
+                inner += `if (${v} !== undefined) {`;
+                inner += child.code;
+                inner += `size += ${child.fixed};`
+                inner += `}`;
+
+                return { code: inner, fixed: 1 };
+            }
+            case 'nullish': {
+                const child = size(s.of, v);
+
+                let inner = '';
+                inner += `if (${v} !== null && ${v} !== undefined) {`;
+                inner += child.code;
+                inner += `size += ${child.fixed};`
+                inner += `}`;
+
+                return { code: inner, fixed: 1 };
+            }
             default:
                 return {
                     code: `throw new Error('Unsupported schema: ${s}');`,
@@ -285,18 +318,54 @@ function buildSer(schema: Schema): string {
                 const bitsVar = variable('bits', variableCounter++);
                 const kVar = variable('k', variableCounter++);
 
-                let out = '';
-                out += `{ `;
-                out += `const ${keysVar} = ${JSON.stringify(s.keys)};`;
-                out += `let ${bitsVar} = 0;`;
-                out += `for (let ${iVar} = 0; ${iVar} < ${keysVar}.length; ${iVar}++) { `;
-                out += `const ${kVar} = ${keysVar}[${iVar}];`;
-                out += `if (${v}[${kVar}]) ${bitsVar} |= (1 << (${iVar} % 8));`;
-                out += `if ((${iVar} % 8) === 7) { u8[o++] = ${bitsVar}; ${bitsVar} = 0; }`;
-                out += `}`;
-                out += `if (${keysVar}.length % 8 !== 0) { u8[o++] = ${bitsVar}; }`;
-                out += `}`;
-                return out;
+                let inner = '';
+                inner += `const ${keysVar} = ${JSON.stringify(s.keys)};`;
+                inner += `let ${bitsVar} = 0;`;
+                inner += `for (let ${iVar} = 0; ${iVar} < ${keysVar}.length; ${iVar}++) { `;
+                inner += `const ${kVar} = ${keysVar}[${iVar}];`;
+                inner += `if (${v}[${kVar}]) ${bitsVar} |= (1 << (${iVar} % 8));`;
+                inner += `if ((${iVar} % 8) === 7) { u8[o++] = ${bitsVar}; ${bitsVar} = 0; }`;
+                inner += `}`;
+                inner += `if (${keysVar}.length % 8 !== 0) { u8[o++] = ${bitsVar}; }`;
+                return inner;
+            }
+            case 'nullable': {
+                let inner = '';
+
+                inner += `if (${v} === null) {`;
+                inner += `u8[o++] = 0;`;
+                inner += `} else {`
+                inner += `u8[o++] = 1;`;
+                inner += ser(s.of, v);
+                inner += `}`
+                
+                return inner;
+            }
+            case 'optional': {
+                let inner = '';
+
+                inner += `if (${v} === undefined) {`;
+                inner += `u8[o++] = 0;`;
+                inner += `} else {`
+                inner += `u8[o++] = 1;`;
+                inner += ser(s.of, v);
+                inner += `}`
+
+                return inner;
+            }
+            case 'nullish': {
+                let inner = '';
+
+                inner += `if (${v} === null) {`;
+                inner += `u8[o++] = 0;`;
+                inner += `} else if (${v} === undefined) {`;
+                inner += `u8[o++] = 1;`;
+                inner += `} else {`
+                inner += `u8[o++] = 2;`;
+                inner += ser(s.of, v);
+                inner += `}`
+                
+                return inner;
             }
             default:
                 return `throw new Error('Unsupported schema: ${s}');`;
@@ -419,6 +488,40 @@ function buildDes(schema: Schema): string {
             }
             case 'literal': {
                 return `${target} = ${JSON.stringify(s.value)};`;
+            }
+            case 'nullable': {
+                let inner = '';
+
+                inner += `const flag = u8[o++];`;
+                inner += `if (flag === 0) {`;
+                inner += `${target} = null;`;
+                inner += `} else {`;
+                inner += des(s.of, target);
+                inner += `}`;
+
+                return inner;
+            }
+            case 'optional': {
+                let inner = '';
+
+                inner += `const flag = u8[o++];`;
+                inner += `if (flag === 1) {`;
+                inner += des(s.of, target);
+                inner += `}`;
+
+                return inner;
+            }
+            case 'nullish': {
+                let inner = '';
+
+                inner += `const flag = u8[o++];`;
+                inner += `if (flag === 0) {`;
+                inner += `${target} = null;`;
+                inner += `} else if (flag === 2) {`;
+                inner += des(s.of, target);
+                inner += `}`;
+
+                return inner;
             }
             default:
                 return `throw new Error('Unsupported schema: ${s}');`;
@@ -631,6 +734,18 @@ function fixedSize(s: Schema): number | null {
             return null;
         case 'bools': {
             return Math.ceil(s.keys.length / 8);
+        }
+        case 'literal': {
+            return 0;
+        }
+        case 'nullable': {
+            return null;
+        }
+        case 'optional': {
+            return null;
+        }
+        case 'nullish': {
+            return null;
         }
         default:
             return null;

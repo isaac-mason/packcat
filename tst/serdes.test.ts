@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'vitest';
 import type { SchemaType } from '../src';
 import {
+    serDes,
     boolean,
     bools,
     float32,
@@ -14,7 +15,9 @@ import {
     number,
     object,
     record,
-    serDes,
+    nullable,
+    optional,
+    nullish,
     string,
     tuple,
     uint8,
@@ -306,6 +309,43 @@ describe('serDes', () => {
         const buf = ser(v);
         const out = des(buf);
         expect(out).toEqual(v);
+    });
+
+    test('ser/des optional', () => {
+        const schema = optional(string());
+        const { ser, des } = serDes(schema as any);
+
+        const present = 'hi';
+        const bufPresent = ser(present as any);
+        expect(des(bufPresent)).toBe(present);
+
+        const bufAbsent = ser(undefined as any);
+        expect(des(bufAbsent)).toBeUndefined();
+    });
+
+    test('ser/des nullable', () => {
+        const schema = nullable(string());
+        const { ser, des } = serDes(schema as any);
+
+        const bufNull = ser(null as any);
+        expect(des(bufNull)).toBeNull();
+
+        const bufVal = ser('hi' as any);
+        expect(des(bufVal)).toBe('hi');
+    });
+
+    test('ser/des nullish', () => {
+        const schema = nullish(string());
+        const { ser, des } = serDes(schema as any);
+
+        const bufNull = ser(null as any);
+        expect(des(bufNull)).toBeNull();
+
+        const bufUndef = ser(undefined as any);
+        expect(des(bufUndef)).toBeUndefined();
+
+        const bufVal = ser('val' as any);
+        expect(des(bufVal)).toBe('val');
     });
 
     test('ser/des complex structure', () => {

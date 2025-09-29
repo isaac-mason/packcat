@@ -80,6 +80,21 @@ export type LiteralSchema = {
     value: SchemaType<PrimitiveSchema>;
 };
 
+export type NullableSchema = {
+    type: 'nullable';
+    of: Schema;
+};
+
+export type OptionalSchema = {
+    type: 'optional';
+    of: Schema;
+};
+
+export type NullishSchema = {
+    type: 'nullish';
+    of: Schema;
+};
+
 export type PrimitiveSchema =
     | BooleanSchema
     | NumberSchema
@@ -111,7 +126,10 @@ export type Schema =
     | RecordSchema
     | BoolsSchema
     | UnionSchema
-    | LiteralSchema;
+    | LiteralSchema
+    | NullableSchema
+    | OptionalSchema
+    | NullishSchema;
 
 type RepeatTypeMap<T> = {
     0: [];
@@ -186,6 +204,9 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
     S extends RecordSchema ? Record<string, SchemaType<S['field'], DecrementDepth<Depth>>> :
     S extends BoolsSchema ? Record<S['keys'][number], boolean> :
     S extends LiteralSchema ? SchemaType<S['of'], DecrementDepth<Depth>> :
+    S extends NullableSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | null :
+    S extends OptionalSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | undefined :
+    S extends NullishSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | null | undefined :
     never;
 
 /* lightweight helpers that just return objects */
@@ -247,3 +268,9 @@ export const literal = <S extends PrimitiveSchema>(
 } => {
     return { type: 'literal', of: schema, value };
 };
+
+export const nullable = <S extends Schema>(of: S): { type: 'nullable'; of: S } => ({ type: 'nullable', of });
+
+export const optional = <S extends Schema>(of: S): { type: 'optional'; of: S } => ({ type: 'optional', of });
+
+export const nullish = <S extends Schema>(of: S): { type: 'nullish'; of: S } => ({ type: 'nullish', of });

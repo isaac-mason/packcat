@@ -187,16 +187,41 @@ export function record<F extends Schema>(field: F): {
 ```
 
 ```ts
-export function bools(keys: string[]): {
+export function bools<Keys extends string[]>(keys: [
+    ...Keys
+]): {
     type: 'bools';
-    keys: string[];
+    keys: [
+        ...Keys
+    ];
+};
+```
+
+```ts
+export function optional<S extends Schema>(of: S): {
+    type: 'optional';
+    of: S;
+};
+```
+
+```ts
+export function nullable<S extends Schema>(of: S): {
+    type: 'nullable';
+    of: S;
+};
+```
+
+```ts
+export function nullish<S extends Schema>(of: S): {
+    type: 'nullish';
+    of: S;
 };
 ```
 
 #### Schema Types
 
 ```ts
-export type Schema = BooleanSchema | NumberSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Float32Schema | Float64Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | BoolsSchema;
+export type Schema = BooleanSchema | NumberSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Float32Schema | Float64Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | BoolsSchema | UnionSchema | LiteralSchema | NullableSchema | OptionalSchema | NullishSchema;
 ```
 
 ```ts
@@ -298,5 +323,26 @@ export type RecordSchema = {
 export type BoolsSchema = {
     type: 'bools';
     keys: string[];
+};
+```
+
+```ts
+export type OptionalSchema = {
+    type: 'optional';
+    of: Schema;
+};
+```
+
+```ts
+export type NullableSchema = {
+    type: 'nullable';
+    of: Schema;
+};
+```
+
+```ts
+export type NullishSchema = {
+    type: 'nullish';
+    of: Schema;
 };
 ```
