@@ -1,47 +1,49 @@
 /* SNIPPET_START: schema */
 import type { SchemaType } from 'packcat';
-import { list, number, object, record, string, uint8 } from 'packcat';
+import { boolean, bools, float32, list, literal, object, string, uint32, union } from 'packcat';
 
-const playerSchema = object({
-    name: string(),
-    health: number(),
-    level: uint8(),
-    inventory: record(object({ item: string(), qty: number() })),
-    buffs: list(uint8()),
+const playerInputSchema = object({
+    frame: uint32(),
+    nipple: list(float32(), 2),
+    // will be serialised as a bitset
+    buttons: bools(['jump', 'sprint', 'crouch'] as const),
+    cmd: list(
+        union('type', [
+            // literals are not included in the serialised data, only used for discrimination
+            object({ type: literal('interact', string()) }),
+            object({ type: literal('use', string()), primary: boolean(), secondary: boolean() }),
+        ] as const),
+    ),
 });
 
-type PlayerType = SchemaType<typeof playerSchema>;
+type PlayerInputType = SchemaType<typeof playerInputSchema>;
 
 /* SNIPPET_END: schema */
 
 /* SNIPPET_START: serdes */
 import { serDes } from 'packcat';
 
-const playerSerdes = serDes(playerSchema);
+const playerInputSerdes = serDes(playerInputSchema);
 
-const player: PlayerType = {
-    name: 'Hero',
-    health: 100,
-    level: 5,
-    inventory: {
-        sword: { item: 'Sword', qty: 1 },
-        potion: { item: 'Health Potion', qty: 3 },
-    },
-    buffs: [1, 2, 3],
+const playerInput: PlayerInputType = {
+    frame: 1,
+    nipple: [0, 1],
+    buttons: { jump: true, sprint: false, crouch: true },
+    cmd: [{ type: 'interact' }, { type: 'use', primary: true, secondary: false }],
 };
 
-const buffer = playerSerdes.ser(player);
+const buffer = playerInputSerdes.ser(playerInput);
 
 console.log(buffer); // ArrayBuffer
 
-const deserialized = playerSerdes.des(buffer);
+const deserialized = playerInputSerdes.des(buffer);
 
-console.log(deserialized); // { name: 'Hero', health: 100, level: 5, inventory: { sword: [Object], potion: [Object] }, buffs: [ 1, 2, 3 ] }
+console.log(deserialized); // { frame: 1, nipple: [ 0, 1 ], buttons: { jump: true, sprint: false, crouch: true }, cmd: [ { type: 'interact' }, { type: 'use', primary: true, secondary: false } ] }
 /* SNIPPET_END: serdes */
 
 /* SNIPPET_START: validate */
-console.log(playerSerdes.validate(player)); // true
+console.log(playerInputSerdes.validate(playerInput)); // true
 
 // @ts-expect-error this doesn't conform to the schema type!
-console.log(playerSerdes.validate({ foo: 'bar' })); // false
+console.log(playerInputSerdes.validate({ foo: 'bar' })); // false
 /* SNIPPET_END: validate */
