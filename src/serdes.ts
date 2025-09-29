@@ -71,7 +71,9 @@ function buildSer(schema: Schema): string {
 
     type SizeCalc = { code: string; fixed: number };
 
-    function genCalcSize(s: Schema, v: string, depth: number): SizeCalc {
+    let variableCounter = 1;
+
+    function size(s: Schema, v: string): SizeCalc {
         switch (s.type) {
             case 'boolean':
             case 'int8':
@@ -92,8 +94,8 @@ function buildSer(schema: Schema): string {
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
                     // fixed-length list: each element exists at compile time
-                    const i = variable('i', depth);
-                    const elem = genCalcSize(s.of, `${v}[${i}]`, depth + 1);
+                    const i = variable('i', variableCounter++);
+                    const elem = size(s.of, `${v}[${i}]`);
                     // if the element is fully fixed-size, we can compute total size at compile time
                     if (elem.code === '' && elem.fixed > 0) {
                         return { code: '', fixed: elem.fixed * s.length };
@@ -103,8 +105,8 @@ function buildSer(schema: Schema): string {
                     return { code: inner, fixed: 0 };
                 } else {
                     // variable-length list: include 4-byte length prefix and per-element dynamic parts
-                    const i = variable('i', depth);
-                    const elem = genCalcSize(s.of, `${v}[${i}]`, depth + 1);
+                    const i = variable('i', variableCounter++);
+                    const elem = size(s.of, `${v}[${i}]`);
 
                     let parts = '';
                     if (elem.fixed > 0) {
@@ -123,7 +125,7 @@ function buildSer(schema: Schema): string {
                 let fixed = 0;
                 const parts: string[] = [];
                 for (const [k, f] of Object.entries(s.fields)) {
-                    const child = genCalcSize(f, `${v}[${JSON.stringify(k)}]`, depth + 1);
+                    const child = size(f, `${v}[${JSON.stringify(k)}]`);
                     // always accumulate unconditional fixed bytes
                     fixed += child.fixed;
                     if (child.code !== '') {
@@ -136,7 +138,7 @@ function buildSer(schema: Schema): string {
                 let fixed = 0;
                 const parts: string[] = [];
                 for (let i = 0; i < s.of.length; i++) {
-                    const child = genCalcSize(s.of[i], `${v}[${i}]`, depth + 1);
+                    const child = size(s.of[i], `${v}[${i}]`);
                     fixed += child.fixed;
                     if (child.code !== '') {
                         parts.push(child.code);
@@ -145,20 +147,25 @@ function buildSer(schema: Schema): string {
                 return { code: parts.join(' '), fixed };
             }
             case 'record': {
-                const i = variable('i', depth);
+                const i = variable('i', variableCounter++);
 
-                const child = genCalcSize(s.field, `${v}[k]`, depth + 1);
+                const childSize = size(s.field, `${v}[k]`);
+
                 let inner = '';
                 inner += `size += 4; if (${v} && typeof ${v} === 'object') { const keys = Object.keys(${v}); `;
-                if (child.fixed > 0) {
-                    inner += ` size += ${child.fixed} * keys.length; `;
+                if (childSize.fixed > 0) {
+                    inner += ` size += ${childSize.fixed} * keys.length; `;
                 }
                 inner += `for (let ${i} = 0; ${i} < keys.length; ${i}++) { const k = keys[${i}]; size += 4 + utf8Length(k); `;
-                if (child.code !== '') {
-                    inner += child.code;
+                if (childSize.code !== '') {
+                    inner += childSize.code;
                 }
                 inner += `}}`;
                 return { code: inner, fixed: 0 };
+            }
+            case 'bools': {
+                const bytes = Math.ceil(s.keys.length / 8);
+                return { code: '', fixed: bytes };
             }
             default:
                 return {
@@ -173,7 +180,7 @@ function buildSer(schema: Schema): string {
         code += `let size = ${schemaFixedSize};`;
     } else {
         // else, emit code for known size and dynamic parts
-        const calc = genCalcSize(schema, 'value', 1);
+        const calc = size(schema, 'value');
 
         code += `let size = ${calc.fixed};`;
         code += calc.code;
@@ -190,7 +197,7 @@ function buildSer(schema: Schema): string {
     code += 'let o_size = 0;';
     code += 'let textEncoderResult;';
 
-    function ser(s: Schema, v: string, depth: number): string {
+    function ser(s: Schema, v: string): string {
         switch (s.type) {
             case 'boolean':
                 return writeBool(v);
@@ -220,17 +227,17 @@ function buildSer(schema: Schema): string {
                     // generate unrolled fixed-length list serialization
                     let inner = '';
                     for (let i = 0; i < s.length; i++) {
-                        inner += ser(s.of, `${v}[${i}]`, depth + 1);
+                        inner += ser(s.of, `${v}[${i}]`);
                     }
                     return inner;
                 } else {
                     // generate dynamic list serialization
-                    const i = variable('i', depth);
+                    const i = variable('i', variableCounter++);
 
                     let inner = '';
                     inner += writeU32(`${v}.length`);
                     inner += `for (let ${i} = 0; ${i} < ${v}.length; ${i}++) {`;
-                    inner += ser(s.of, `${v}[${i}]`, depth + 1);
+                    inner += ser(s.of, `${v}[${i}]`);
                     inner += '}';
                     return inner;
                 }
@@ -238,36 +245,56 @@ function buildSer(schema: Schema): string {
             case 'object': {
                 let out = '';
                 for (const [k, f] of Object.entries(s.fields)) {
-                    out += ser(f, `${v}[${JSON.stringify(k)}]`, depth + 1);
+                    out += ser(f, `${v}[${JSON.stringify(k)}]`);
                 }
                 return out;
             }
             case 'tuple': {
                 let out = '';
                 for (let i = 0; i < s.of.length; i++) {
-                    out += ser(s.of[i], `${v}[${i}]`, depth + 1);
+                    out += ser(s.of[i], `${v}[${i}]`);
                 }
                 return out;
             }
             case 'record': {
-                const i = variable('i', depth);
-                const keys = variable('keys', depth);
+                const i = variable('i', variableCounter++);
+                const keys = variable('keys', variableCounter++);
 
                 let inner = '';
                 inner += `${keys} = Object.keys(${v});`;
                 inner += writeU32(`${keys}.length`);
                 inner += `for (let ${i} = 0; ${i} < ${keys}.length; ${i}++) {`;
                 inner += writeString(`${keys}[${i}]`);
-                inner += ser(s.field, `${v}[${keys}[${i}]]`, depth + 1);
+                inner += ser(s.field, `${v}[${keys}[${i}]]`);
                 inner += `}`;
                 return inner;
+            }
+            case 'bools': {
+                // pack keys into bitset (little-endian within bytes)
+                const keysVar = variable('keys', variableCounter++);
+                const iVar = variable('i', variableCounter++);
+                const bitsVar = variable('bits', variableCounter++);
+                const kVar = variable('k', variableCounter++);
+
+                let out = '';
+                out += `{ `;
+                out += `const ${keysVar} = ${JSON.stringify(s.keys)};`;
+                out += `let ${bitsVar} = 0;`;
+                out += `for (let ${iVar} = 0; ${iVar} < ${keysVar}.length; ${iVar}++) { `;
+                out += `const ${kVar} = ${keysVar}[${iVar}];`;
+                out += `if (${v}[${kVar}]) ${bitsVar} |= (1 << (${iVar} % 8));`;
+                out += `if ((${iVar} % 8) === 7) { u8[o++] = ${bitsVar}; ${bitsVar} = 0; }`;
+                out += `}`;
+                out += `if (${keysVar}.length % 8 !== 0) { u8[o++] = ${bitsVar}; }`;
+                out += `}`;
+                return out;
             }
             default:
                 return `throw new Error('Unsupported schema: ${s}');`;
         }
     }
 
-    code += ser(schema, 'value', 1);
+    code += ser(schema, 'value');
 
     code += 'return arrayBuffer;';
 
@@ -283,7 +310,9 @@ function buildDes(schema: Schema): string {
     code += 'let len = 0;';
     code += 'let val = 0;';
 
-    function des(s: Schema, target: string, depth: number): string {
+    let variableCounter = 1;
+
+    function des(s: Schema, target: string): string {
         switch (s.type) {
             case 'boolean':
                 return readBool(target);
@@ -314,20 +343,20 @@ function buildDes(schema: Schema): string {
                     let inner = '';
                     inner += `${target} = new Array(${s.length});`;
                     for (let i = 0; i < s.length; i++) {
-                        inner += des(s.of, `${target}[${i}]`, depth + 1);
+                        inner += des(s.of, `${target}[${i}]`);
                     }
                     return inner;
                 } else {
                     // variable-length list: read length then loop
-                    const i = variable('i', depth);
-                    const l = variable('l', depth);
+                    const i = variable('i', variableCounter++);
+                    const l = variable('l', variableCounter++);
 
                     let inner = '';
                     inner += `let ${l};`;
                     inner += readU32(l);
                     inner += `${target} = new Array(${l});`;
                     inner += `for (let ${i} = 0; ${i} < ${l}; ${i}++) {`;
-                    inner += des(s.of, `${target}[${i}]`, depth + 1);
+                    inner += des(s.of, `${target}[${i}]`);
                     inner += `}`;
                     return inner;
                 }
@@ -335,22 +364,22 @@ function buildDes(schema: Schema): string {
             case 'object': {
                 let inner = `${target} = {};`;
                 for (const [key, fieldSchema] of Object.entries(s.fields)) {
-                    inner += des(fieldSchema, `${target}[${JSON.stringify(key)}]`, depth + 1);
+                    inner += des(fieldSchema, `${target}[${JSON.stringify(key)}]`);
                 }
                 return inner;
             }
             case 'tuple': {
                 let inner = `${target} = new Array(${s.of.length});`;
                 for (let i = 0; i < s.of.length; i++) {
-                    inner += des(s.of[i], `${target}[${i}]`, depth + 1);
+                    inner += des(s.of[i], `${target}[${i}]`);
                 }
                 return inner;
             }
             case 'record': {
-                const i = variable('i', depth);
-                const k = variable('k', depth);
-                const klen = variable('klen', depth);
-                const count = variable('count', depth);
+                const i = variable('i', variableCounter++);
+                const k = variable('k', variableCounter++);
+                const klen = variable('klen', variableCounter++);
+                const count = variable('count', variableCounter++);
 
                 let inner = '';
                 inner += `let ${k}, ${klen}, ${count};`;
@@ -359,9 +388,25 @@ function buildDes(schema: Schema): string {
                 inner += `for (let ${i} = 0; ${i} < ${count}; ${i}++) { `;
                 inner += readU32(klen);
                 inner += `const ${k} = ${klen} === 0 ? '' : textDecoder.decode(u8.subarray(o, o + ${klen})); o += ${klen};`;
-                inner += des(s.field, `${target}[${k}]`, depth + 1);
+                inner += des(s.field, `${target}[${k}]`);
                 inner += `}`;
                 return inner;
+            }
+            case 'bools': {
+                const keysVar = variable('keys', variableCounter++);
+                const iVar = variable('i', variableCounter++);
+                const kVar = variable('k', variableCounter++);
+
+                // unpack bitset into object
+                let out = '';
+                out += `${target} = {};`;
+                out += `const ${keysVar} = ${JSON.stringify(s.keys)};`;
+                out += `for (let ${iVar} = 0; ${iVar} < ${keysVar}.length; ${iVar}++) {`;
+                out += `if (${iVar} % 8 === 0) { val = u8[o++]; }`;
+                out += `const ${kVar} = ${keysVar}[${iVar}];`;
+                out += `${target}[${kVar}] = (val & (1 << (${iVar} % 8))) !== 0;`;
+                out += `}`;
+                return out;
             }
             default:
                 return `throw new Error('Unsupported schema: ${s}');`;
@@ -370,7 +415,7 @@ function buildDes(schema: Schema): string {
 
     const rootAssign = 'let value;';
     code += rootAssign;
-    code += des(schema, 'value', 1);
+    code += des(schema, 'value');
     code += 'return value;';
 
     return code;
@@ -379,7 +424,9 @@ function buildDes(schema: Schema): string {
 function buildValidate(schema: Schema): string {
     let code = '';
 
-    function validate(s: Schema, v: string, depth: number): string {
+    let variableCounter = 1;
+
+    function validate(s: Schema, v: string): string {
         switch (s.type) {
             case 'boolean':
                 return `if (typeof ${v} !== 'boolean') return false;`;
@@ -411,17 +458,17 @@ function buildValidate(schema: Schema): string {
                     inner += `if (${v}.length !== ${s.length}) return false;`;
 
                     for (let i = 0; i < s.length; i++) {
-                        inner += validate(s.of, `${v}[${i}]`, depth + 1);
+                        inner += validate(s.of, `${v}[${i}]`);
                     }
 
                     return inner;
                 } else {
-                    const i = variable('i', depth);
+                    const i = variable('i', variableCounter++);
 
                     let inner = '';
                     inner += `if (!Array.isArray(${v})) return false;`;
                     inner += `for (let ${i} = 0; ${i} < ${v}.length; ${i}++) {`;
-                    inner += validate(s.of, `${v}[${i}]`, depth + 1);
+                    inner += validate(s.of, `${v}[${i}]`);
                     inner += '}';
                     return inner;
                 }
@@ -435,7 +482,7 @@ function buildValidate(schema: Schema): string {
                     const key = JSON.stringify(k);
 
                     inner += `if (!(${key} in ${v})) return false;`;
-                    inner += validate(f, `${v}[${key}]`, depth + 1);
+                    inner += validate(f, `${v}[${key}]`);
                 }
 
                 return inner;
@@ -445,20 +492,30 @@ function buildValidate(schema: Schema): string {
                 inner += `if (!Array.isArray(${v})) return false;`;
                 inner += `if (${v}.length !== ${s.of.length}) return false;`;
                 for (let i = 0; i < s.of.length; i++) {
-                    inner += validate(s.of[i], `${v}[${i}]`, depth + 1);
+                    inner += validate(s.of[i], `${v}[${i}]`);
                 }
                 return inner;
             }
             case 'record': {
-                const i = variable('i', depth);
-                const keys = variable('keys', depth);
+                const i = variable('i', variableCounter++);
+                const keys = variable('keys', variableCounter++);
 
                 let inner = '';
                 inner += `if (typeof (${v}) !== "object") return false;`;
                 inner += `${keys} = Object.keys(${v});`;
                 inner += `for (let ${i} = 0; ${i} < ${keys}.length; ${i}++) {`;
-                inner += validate(s.field, `${v}[${keys}[${i}]]`, depth + 1);
+                inner += validate(s.field, `${v}[${keys}[${i}]]`);
                 inner += `}`;
+                return inner;
+            }
+            case 'bools': {
+                let inner = '';
+                inner += `if (typeof (${v}) !== "object") return false;`;
+                for (let i = 0; i < s.keys.length; i++) {
+                    const key = JSON.stringify(s.keys[i]);
+                    inner += `if (!(${key} in ${v})) return false;`;
+                    inner += `if (typeof ${v}[${key}] !== 'boolean') return false;`;
+                }
                 return inner;
             }
             default:
@@ -466,7 +523,7 @@ function buildValidate(schema: Schema): string {
         }
     }
 
-    code += validate(schema, 'value', 1);
+    code += validate(schema, 'value');
 
     code += 'return true;';
 
@@ -483,8 +540,8 @@ type Ctx = {
     utf8Length: (s: string) => number;
 };
 
-function variable(str: string, depth: number): string {
-    return str + depth;
+function variable(str: string, idx: number): string {
+    return str + idx;
 }
 
 function utf8Length(s: string) {
@@ -528,7 +585,10 @@ function fixedSize(s: Schema): number | null {
         case 'float64':
             return 8;
         case 'string':
-            return null; // string length is dynamic (even though it has a 4-byte prefix)
+            return null;
+        case 'bools': {
+            return Math.ceil(s.keys.length / 8);
+        }
         case 'list': {
             if ('length' in s && typeof s.length === 'number') {
                 const elemFixed = fixedSize(s.of);

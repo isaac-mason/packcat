@@ -18,6 +18,7 @@ import {
     uint16,
     uint32,
     tuple,
+    bools,
 } from '../src';
 
 describe('serDes', () => {
@@ -194,7 +195,10 @@ describe('serDes', () => {
         const schema = tuple([inner, inner] as const);
         const { ser, des } = serDes(schema);
 
-        const data: [[number, string], [number, string]] = [[1.5, 'a'], [2.5, 'b']];
+        const data: [[number, string], [number, string]] = [
+            [1.5, 'a'],
+            [2.5, 'b'],
+        ];
         const buf = ser(data as any);
         const out = des(buf) as [[number, string], [number, string]];
 
@@ -266,7 +270,105 @@ describe('serDes', () => {
         expect(result).toEqual(data);
     });
 
-    test('ser/des complex structure', () => {});
+    test('ser/des bools simple', () => {
+        const { ser, des, validate } = serDes(bools(['a', 'b', 'c']) as any);
+
+        const v = { a: true, b: false, c: true };
+        expect(validate(v)).toBe(true);
+        const buf = ser(v as any);
+        const out = des(buf);
+        expect(out).toEqual(v);
+    });
+
+    test('ser/des bools many keys (multi-byte)', () => {
+        const keys: string[] = [];
+        for (let i = 0; i < 10; i++) keys.push('k' + i);
+        const s = serDes(bools(keys) as any);
+
+        const obj: Record<string, boolean> = {};
+        for (let i = 0; i < keys.length; i++) obj[keys[i]] = i % 2 === 0;
+
+        const buf = s.ser(obj as any);
+        const out = s.des(buf as ArrayBuffer) as Record<string, boolean>;
+        expect(out).toEqual(obj);
+    });
+
+    test('ser/des complex structure', () => {
+        const complexSchema = object({
+            id: uint32(),
+            name: string(),
+            active: boolean(),
+            flags: bools(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']),
+            stats: object({
+                score: number(),
+                level: uint32(),
+                ratios: list(float32(), 3),
+            }),
+            inventory: list(
+                object({
+                    itemId: uint32(),
+                    qty: uint16(),
+                    attrs: record(string()),
+                }),
+            ),
+            matrix: list(list(int16())),
+            nestedTuple: tuple([number(), object({ x: float64(), y: float64() }), list(boolean())] as const),
+            mapOfMaps: record(record(uint32())),
+        });
+
+        const data = {
+            id: 12345,
+            name: 'ComplexStructure',
+            active: true,
+            flags: { a: true, b: false, c: true, d: false, e: true, f: false, g: true, h: false, i: true, j: false },
+            stats: { score: 9876.54321, level: 99, ratios: [1.1, 2.2, 3.3] },
+            inventory: [
+                { itemId: 1, qty: 2, attrs: { color: 'red' } },
+                { itemId: 2, qty: 5, attrs: { size: 'L', gift: 'yes' } },
+            ],
+            matrix: [
+                [1, 2, 3],
+                [4, 5, 6],
+            ],
+            nestedTuple: [42.42, { x: 1.234567890123, y: -2.345678901234 }, [true, false, true]],
+            mapOfMaps: { group1: { a: 1, b: 2 }, group2: { x: 42 } },
+        } as const;
+
+        const s = serDes(complexSchema as any);
+        expect(s.validate(data as any)).toBe(true);
+
+        const buf = s.ser(data as any);
+        const out = s.des(buf as ArrayBuffer) as any;
+
+        // basic checks
+        expect(out.id).toBe(data.id);
+        expect(out.name).toBe(data.name);
+        expect(out.active).toBe(data.active);
+        expect(out.flags).toEqual(data.flags);
+
+        // floats: use approximate equality
+        expect(out.stats.level).toBe(data.stats.level);
+        expect(out.stats.score).toBeCloseTo(data.stats.score, 6);
+        for (let i = 0; i < data.stats.ratios.length; i++) {
+            expect(out.stats.ratios[i]).toBeCloseTo(data.stats.ratios[i], 5);
+        }
+
+        // inventory
+        expect(out.inventory.length).toBe(data.inventory.length);
+        expect(out.inventory[0].itemId).toBe(data.inventory[0].itemId);
+        expect(out.inventory[1].attrs.size).toBe(data.inventory[1].attrs.size);
+
+        // matrix and nested structures
+        expect(out.matrix).toEqual(data.matrix);
+
+        expect(out.nestedTuple[0]).toBeCloseTo((data.nestedTuple as any)[0], 5);
+        expect(out.nestedTuple[1].x).toBeCloseTo((data.nestedTuple as any)[1].x, 10);
+        expect(out.nestedTuple[1].y).toBeCloseTo((data.nestedTuple as any)[1].y, 10);
+        expect(out.nestedTuple[2]).toEqual((data.nestedTuple as any)[2]);
+
+        // map of maps
+        expect(out.mapOfMaps).toEqual(data.mapOfMaps);
+    });
 });
 
 describe('validate', () => {
@@ -479,14 +581,33 @@ describe('validate', () => {
         const schema = tuple([inner, inner] as const);
         const s = serDes(schema);
 
-        expect(s.validate([[1.5, 'a'], [2.5, 'b']])).toBe(true);
+        expect(
+            s.validate([
+                [1.5, 'a'],
+                [2.5, 'b'],
+            ]),
+        ).toBe(true);
 
         // wrong inner types
-        // @ts-expect-error
-        expect(s.validate([[1.5, 2], [2.5, 'b']])).toBe(false);
+        expect(
+            s.validate([
+                // @ts-expect-error
+                [1.5, 2],
+                [2.5, 'b'],
+            ]),
+        ).toBe(false);
 
         // wrong outer length
         // @ts-expect-error
         expect(s.validate([[1.5, 'a']])).toBe(false);
+    });
+
+    test('validate bools missing key / wrong type', () => {
+        const s = serDes(bools(['x', 'y']) as any);
+        expect(s.validate({ x: true, y: false })).toBe(true);
+        // missing
+        expect(s.validate({ x: true })).toBe(false);
+        // wrong type
+        expect(s.validate({ x: 1, y: false })).toBe(false);
     });
 });
