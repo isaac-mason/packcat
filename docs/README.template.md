@@ -66,6 +66,8 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <RenderType type="import('packcat').record" />
 
+<RenderType type="import('packcat').bools" />
+
 #### Schema Types
 
 <RenderType type="import('packcat').Schema" />
@@ -100,3 +102,4 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <RenderType type="import('packcat').RecordSchema" />
 
+<RenderType type="import('packcat').BoolsSchema" />

@@ -1,8 +1,10 @@
 /** biome-ignore-all lint/suspicious/noApproximativeNumericConstant: test data */
 
 import { describe, expect, test } from 'vitest';
+import type { SchemaType } from '../src';
 import {
     boolean,
+    bools,
     float32,
     float64,
     int8,
@@ -14,11 +16,11 @@ import {
     record,
     serDes,
     string,
+    tuple,
     uint8,
     uint16,
     uint32,
-    tuple,
-    bools,
+    literal,
 } from '../src';
 
 describe('serDes', () => {
@@ -271,18 +273,19 @@ describe('serDes', () => {
     });
 
     test('ser/des bools simple', () => {
-        const { ser, des, validate } = serDes(bools(['a', 'b', 'c']) as any);
+        const { ser, des, validate } = serDes(bools(['a', 'b', 'c'] as const));
 
         const v = { a: true, b: false, c: true };
         expect(validate(v)).toBe(true);
-        const buf = ser(v as any);
+
+        const buf = ser(v);
         const out = des(buf);
         expect(out).toEqual(v);
     });
 
     test('ser/des bools many keys (multi-byte)', () => {
         const keys: string[] = [];
-        for (let i = 0; i < 10; i++) keys.push('k' + i);
+        for (let i = 0; i < 10; i++) keys.push(`k${i}`);
         const s = serDes(bools(keys) as any);
 
         const obj: Record<string, boolean> = {};
@@ -291,6 +294,18 @@ describe('serDes', () => {
         const buf = s.ser(obj as any);
         const out = s.des(buf as ArrayBuffer) as Record<string, boolean>;
         expect(out).toEqual(obj);
+    });
+
+    test('ser/des literal', () => {
+        const schema = literal(string(), 'hello');
+        const { ser, des, validate } = serDes(schema);
+
+        const v = 'hello';
+        expect(validate(v)).toBe(true);
+
+        const buf = ser(v);
+        const out = des(buf);
+        expect(out).toEqual(v);
     });
 
     test('ser/des complex structure', () => {
@@ -316,7 +331,9 @@ describe('serDes', () => {
             mapOfMaps: record(record(uint32())),
         });
 
-        const data = {
+        type ComplexSchemaType = SchemaType<typeof complexSchema>;
+
+        const data: ComplexSchemaType = {
             id: 12345,
             name: 'ComplexStructure',
             active: true,
@@ -332,12 +349,12 @@ describe('serDes', () => {
             ],
             nestedTuple: [42.42, { x: 1.234567890123, y: -2.345678901234 }, [true, false, true]],
             mapOfMaps: { group1: { a: 1, b: 2 }, group2: { x: 42 } },
-        } as const;
+        };
 
-        const s = serDes(complexSchema as any);
-        expect(s.validate(data as any)).toBe(true);
+        const s = serDes(complexSchema);
+        expect(s.validate(data)).toBe(true);
 
-        const buf = s.ser(data as any);
+        const buf = s.ser(data);
         const out = s.des(buf as ArrayBuffer) as any;
 
         // basic checks
@@ -603,11 +620,11 @@ describe('validate', () => {
     });
 
     test('validate bools missing key / wrong type', () => {
-        const s = serDes(bools(['x', 'y']) as any);
+        const s = serDes(bools(['x', 'y'] as const));
         expect(s.validate({ x: true, y: false })).toBe(true);
-        // missing
+        //  @ts-expect-error missing
         expect(s.validate({ x: true })).toBe(false);
-        // wrong type
+        // @ts-expect-error non-boolean value
         expect(s.validate({ x: 1, y: false })).toBe(false);
     });
 });

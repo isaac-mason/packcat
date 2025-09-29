@@ -68,6 +68,31 @@ export type BoolsSchema = {
     keys: string[];
 };
 
+export type UnionSchema = {
+    type: 'union';
+    key: string;
+    variants: Record<string, ObjectSchema>;
+};
+
+export type LiteralSchema = {
+    type: 'literal';
+    of: PrimitiveSchema;
+    value: SchemaType<PrimitiveSchema>;
+};
+
+export type PrimitiveSchema =
+    | BooleanSchema
+    | NumberSchema
+    | Int8Schema
+    | Uint8Schema
+    | Int16Schema
+    | Uint16Schema
+    | Int32Schema
+    | Uint32Schema
+    | Float32Schema
+    | Float64Schema
+    | StringSchema;
+
 export type Schema =
     | BooleanSchema
     | NumberSchema
@@ -84,7 +109,9 @@ export type Schema =
     | TupleSchema
     | ObjectSchema
     | RecordSchema
-    | BoolsSchema;
+    | BoolsSchema
+    | UnionSchema
+    | LiteralSchema;
 
 type RepeatTypeMap<T> = {
     0: [];
@@ -158,6 +185,7 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
     S extends ObjectSchema ? Simplify<{ [K in keyof S['fields']]: SchemaType<S['fields'][K], DecrementDepth<Depth>> }> :
     S extends RecordSchema ? Record<string, SchemaType<S['field'], DecrementDepth<Depth>>> :
     S extends BoolsSchema ? Record<S['keys'][number], boolean> :
+    S extends LiteralSchema ? SchemaType<S['of'], DecrementDepth<Depth>> :
     never;
 
 /* lightweight helpers that just return objects */
@@ -205,6 +233,17 @@ export const record = <F extends Schema>(field: F): { type: 'record'; field: F }
     field,
 });
 
-export const bools = (keys: string[]): { type: 'bools'; keys: string[] } => {
+export const bools = <Keys extends string[]>(keys: [...Keys]): { type: 'bools'; keys: [...Keys] } => {
     return { type: 'bools', keys };
+};
+
+export const literal = <S extends PrimitiveSchema>(
+    schema: S,
+    value: SchemaType<S>,
+): {
+    type: 'literal';
+    of: S;
+    value: SchemaType<S>;
+} => {
+    return { type: 'literal', of: schema, value };
 };

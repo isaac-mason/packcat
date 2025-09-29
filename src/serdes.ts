@@ -120,6 +120,12 @@ function buildSer(schema: Schema): string {
                     return { code: `size += 4; ${parts}`, fixed: 0 };
                 }
             }
+            case 'literal': {
+                // literal values are known ahead-of-time and are not serialized at all.
+                // they contribute zero bytes to the encoded form and when deserialising
+                // we simply inject the known value.
+                return { code: '', fixed: 0 };
+            }
             case 'object': {
                 // sum all unconditional fixed child sizes into fixed; collect dynamic parts separately.
                 let fixed = 0;
@@ -248,6 +254,9 @@ function buildSer(schema: Schema): string {
                     out += ser(f, `${v}[${JSON.stringify(k)}]`);
                 }
                 return out;
+            }
+            case 'literal': {
+                return ''; // do not write anything for literal - it's known
             }
             case 'tuple': {
                 let out = '';
@@ -408,6 +417,9 @@ function buildDes(schema: Schema): string {
                 out += `}`;
                 return out;
             }
+            case 'literal': {
+                return `${target} = ${JSON.stringify(s.value)};`;
+            }
             default:
                 return `throw new Error('Unsupported schema: ${s}');`;
         }
@@ -518,6 +530,9 @@ function buildValidate(schema: Schema): string {
                 }
                 return inner;
             }
+            case 'literal': {
+                return `if (${JSON.stringify(s.value)} !== ${v}) return false;`;
+            }
             default:
                 return `throw new Error('Unsupported schema: ${s}');`;
         }
@@ -586,9 +601,6 @@ function fixedSize(s: Schema): number | null {
             return 8;
         case 'string':
             return null;
-        case 'bools': {
-            return Math.ceil(s.keys.length / 8);
-        }
         case 'list': {
             if ('length' in s && typeof s.length === 'number') {
                 const elemFixed = fixedSize(s.of);
@@ -617,6 +629,9 @@ function fixedSize(s: Schema): number | null {
         }
         case 'record':
             return null;
+        case 'bools': {
+            return Math.ceil(s.keys.length / 8);
+        }
         default:
             return null;
     }

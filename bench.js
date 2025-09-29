@@ -1,4 +1,4 @@
-import { boolean, list, number, object, record, serDes, string, uint8, uint16, uint32, float32 } from './dist/index.js';
+import { boolean, float32, list, number, object, record, serDes, string, uint8, uint16, uint32 } from './dist/index.js';
 
 function now() {
     return performance.now();
@@ -30,8 +30,8 @@ const playerVal = {
     score: 1000,
     isActive: true,
     inventory: {
-        "0": { item: 1, quantity: 10 },
-        "1": { item: 2, quantity: 1 },
+        0: { item: 1, quantity: 10 },
+        1: { item: 2, quantity: 1 },
     },
     friends: [2, 3, 4],
 };

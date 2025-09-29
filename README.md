@@ -186,10 +186,17 @@ export function record<F extends Schema>(field: F): {
 };
 ```
 
+```ts
+export function bools(keys: string[]): {
+    type: 'bools';
+    keys: string[];
+};
+```
+
 #### Schema Types
 
 ```ts
-export type Schema = BooleanSchema | NumberSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Float32Schema | Float64Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema;
+export type Schema = BooleanSchema | NumberSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Float32Schema | Float64Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | BoolsSchema;
 ```
 
 ```ts
@@ -287,3 +294,9 @@ export type RecordSchema = {
 };
 ```
 
+```ts
+export type BoolsSchema = {
+    type: 'bools';
+    keys: string[];
+};
+```
