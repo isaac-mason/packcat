@@ -46,7 +46,7 @@ function benchSchema(name, schema, val) {
 
     console.log('serJsonVal byteLength:', new TextEncoder().encode(serJsonVal).byteLength);
 
-    console.log("source", source);
+    console.log('source', source);
 
     console.log('---');
 }
@@ -98,11 +98,9 @@ benchSchema('positions', positionsSchema, positionsVal);
 const playerInputSchema = object({
     frame: uint32(),
     nipple: list(float32(), 2),
-    // will be serialised as a bitset
     buttons: bools(['jump', 'sprint', 'crouch']),
     cmd: list(
         union('type', [
-            // literals are not included in the serialised data, only used for discrimination
             object({ type: literal('interact') }),
             object({ type: literal('use'), primary: boolean(), secondary: boolean() }),
         ]),
@@ -117,3 +115,25 @@ const playerInput = {
 };
 
 benchSchema('playerInput', playerInputSchema, playerInput);
+
+// A schema similar to the protobuf "Message" used in the legacy benchmark
+const pbPlayerSchema = object({
+    health: number(),
+    jumping: boolean(),
+    position: list(number()), // repeated int32 in the proto
+    attributes: object({
+        str: number(),
+        agi: number(),
+        int: number(),
+    }),
+});
+
+/** @type {import('./dist').SchemaType<typeof pbPlayerSchema>} */
+const pbPlayerVal = {
+    health: 100,
+    jumping: true,
+    position: [10, 20, 30],
+    attributes: { str: 12, agi: 8, int: 15 },
+};
+
+benchSchema('pb_player', pbPlayerSchema, pbPlayerVal);
