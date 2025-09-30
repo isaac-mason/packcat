@@ -56,7 +56,7 @@ console.log('serJsonPlayer byteLength:', new TextEncoder().encode(serJsonPlayer)
 
 console.log('---');
 
-const vec3Schema = list(float32(), { length: 3 });
+const vec3Schema = list(float32(), 3);
 
 const positionsSchema = list(
     object({
