@@ -25,7 +25,7 @@ First, define your data format with the schema utils:
 
 ```ts
 import type { SchemaType } from 'packcat';
-import { boolean, bools, float32, list, literal, object, string, uint32, union } from 'packcat';
+import { boolean, bools, float32, list, literal, object, uint32, union } from 'packcat';
 
 const playerInputSchema = object({
     frame: uint32(),
@@ -35,8 +35,8 @@ const playerInputSchema = object({
     cmd: list(
         union('type', [
             // literals are not included in the serialised data, only used for discrimination
-            object({ type: literal('interact', string()) }),
-            object({ type: literal('use', string()), primary: boolean(), secondary: boolean() }),
+            object({ type: literal('interact') }),
+            object({ type: literal('use'), primary: boolean(), secondary: boolean() }),
         ] as const),
     ),
 });
