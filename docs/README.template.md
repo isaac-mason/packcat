@@ -78,6 +78,8 @@ No guarantees are made about the stability of the format between versions, so it
 
 <RenderType type="import('packcat').record" />
 
+<RenderType type="import('packcat').arrayBuffer" />
+
 <RenderType type="import('packcat').bools" />
 
 <RenderType type="import('packcat').optional" />
@@ -123,6 +125,8 @@ No guarantees are made about the stability of the format between versions, so it
 <RenderType type="import('packcat').ObjectSchema" />
 
 <RenderType type="import('packcat').RecordSchema" />
+
+<RenderType type="import('packcat').ArrayBufferSchema" />
 
 <RenderType type="import('packcat').BoolsSchema" />
 

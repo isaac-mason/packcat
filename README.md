@@ -207,6 +207,12 @@ export function record<F extends Schema>(field: F): {
 ```
 
 ```ts
+export function arrayBuffer(): {
+    type: 'arrayBuffer';
+};
+```
+
+```ts
 export function bools<Keys extends string[]>(keys: [
     ...Keys
 ]): {
@@ -257,7 +263,7 @@ export function union<K extends string, V extends (ObjectSchema & {
 #### Schema Types
 
 ```ts
-export type Schema = BooleanSchema | NumberSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Float32Schema | Float64Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | BoolsSchema | UnionSchema | LiteralSchema | NullableSchema | OptionalSchema | NullishSchema;
+export type Schema = BooleanSchema | NumberSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Float32Schema | Float64Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | ArrayBufferSchema | BoolsSchema | UnionSchema | LiteralSchema | NullableSchema | OptionalSchema | NullishSchema;
 ```
 
 ```ts
@@ -359,6 +365,12 @@ export type ObjectSchema = {
 export type RecordSchema = {
     type: 'record';
     field: Schema;
+};
+```
+
+```ts
+export type ArrayBufferSchema = {
+    type: 'arrayBuffer';
 };
 ```
 
