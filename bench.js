@@ -1,4 +1,19 @@
-import { boolean, float32, list, number, object, record, serDes, string, uint8, uint16, uint32 } from './dist/index.js';
+import {
+    boolean,
+    bools,
+    float32,
+    list,
+    literal,
+    number,
+    object,
+    record,
+    serDes,
+    string,
+    uint8,
+    uint16,
+    uint32,
+    union,
+} from './dist/index.js';
 
 function now() {
     return performance.now();
@@ -12,6 +27,25 @@ function bench(name, fn, iterations = 100_000) {
     const end = now();
     const totalMs = end - start;
     console.log(`${name}: ${iterations} ops in ${totalMs.toFixed(2)}ms — ${(iterations / totalMs).toFixed(2)} ops/ms`);
+}
+
+function benchSchema(name, schema, val) {
+    const { ser, des } = serDes(schema);
+
+    bench(`ser ${name}`, () => ser(val), 10000);
+    const serVal = ser(val);
+    bench(`des ${name}`, () => des(serVal), 10000);
+
+    console.log('serVal:', serVal);
+    console.log('serVal byteLength:', serVal.byteLength);
+    console.log('desVal:', des(serVal));
+
+    bench(`JSON.stringify ${name}`, () => JSON.stringify(val), 10000);
+    const serJsonVal = JSON.stringify(val);
+    bench(`JSON.parse ${name}`, () => JSON.parse(serJsonVal), 10000);
+
+    console.log('serJsonVal byteLength:', new TextEncoder().encode(serJsonVal).byteLength);
+    console.log('---');
 }
 
 const playerSchema = object({
@@ -36,25 +70,7 @@ const playerVal = {
     friends: [2, 3, 4],
 };
 
-const playerSerDes = serDes(playerSchema);
-
-// console.log(playerSerDes.source)
-
-bench('ser player', () => playerSerDes.ser(playerVal), 10000);
-const serPlayer = playerSerDes.ser(playerVal);
-bench('des player', () => playerSerDes.des(serPlayer), 10000);
-
-console.log('serPlayer:', serPlayer);
-console.log('serPlayer byteLength:', serPlayer.byteLength);
-console.log('desPlayer:', playerSerDes.des(serPlayer));
-
-bench('JSON.stringify player', () => JSON.stringify(playerVal), 10000);
-const serJsonPlayer = JSON.stringify(playerVal);
-bench('JSON.parse player', () => JSON.parse(serJsonPlayer), 10000);
-
-console.log('serJsonPlayer byteLength:', new TextEncoder().encode(serJsonPlayer).byteLength);
-
-console.log('---');
+benchSchema('player', playerSchema, playerVal);
 
 const vec3Schema = list(float32(), 3);
 
@@ -74,27 +90,27 @@ const positionsVal = [
     { id: 4, pos: [1, 2, 4] },
 ];
 
-const positionsSerDes = serDes(positionsSchema);
+benchSchema('positions', positionsSchema, positionsVal);
 
-bench('ser positions', () => positionsSerDes.ser(positionsVal), 10000);
-const serPositions = positionsSerDes.ser(positionsVal);
-bench('des positions', () => positionsSerDes.des(serPositions), 10000);
+const playerInputSchema = object({
+    frame: uint32(),
+    nipple: list(float32(), 2),
+    // will be serialised as a bitset
+    buttons: bools(['jump', 'sprint', 'crouch']),
+    cmd: list(
+        union('type', [
+            // literals are not included in the serialised data, only used for discrimination
+            object({ type: literal('interact') }),
+            object({ type: literal('use'), primary: boolean(), secondary: boolean() }),
+        ]),
+    ),
+});
 
-console.log('serPositions byteLength:', serPositions.byteLength);
-console.log('serPositions:', serPositions);
-console.log('serPositions byteLength:', serPositions.byteLength);
-console.log('positions:', positionsVal);
-console.log('desPositions:', positionsSerDes.des(serPositions));
-console.log('positionsSerDes ser', positionsSerDes.source.ser);
-console.log('positionsSerDes des', positionsSerDes.source.des);
+const playerInput = {
+    frame: 1,
+    nipple: [0, 1],
+    buttons: { jump: true, sprint: false, crouch: true },
+    cmd: [{ type: 'interact' }, { type: 'use', primary: true, secondary: false }],
+};
 
-// JSON comparison
-bench('JSON.stringify positions', () => JSON.stringify(positionsVal), 10000);
-const serJsonPositions = JSON.stringify(positionsVal);
-bench('JSON.parse positions', () => JSON.parse(serJsonPositions), 10000);
-
-console.log('serJsonPositions byteLength:', new TextEncoder().encode(serJsonPositions).byteLength);
-
-console.log('---');
-
-console.log('done');
+benchSchema('playerInput', playerInputSchema, playerInput);
