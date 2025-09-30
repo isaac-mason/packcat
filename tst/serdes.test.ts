@@ -3,13 +3,14 @@
 import { describe, expect, test } from 'vitest';
 import type { SchemaType } from '../src';
 import {
+    arrayBuffer,
     boolean,
     bools,
     float32,
     float64,
-    int8,
     int16,
     int32,
+    int8,
     list,
     literal,
     nullable,
@@ -20,11 +21,10 @@ import {
     record,
     serDes,
     string,
-    arrayBuffer,
     tuple,
-    uint8,
     uint16,
     uint32,
+    uint8,
     union,
 } from '../src';
 
