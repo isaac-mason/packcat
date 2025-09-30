@@ -89,9 +89,9 @@ function buildSer(schema: Schema): string {
                 return { code: '', fixed: 8 };
             case 'string':
                 return { code: `len = utf8Length(${v}); size += 4 + len;`, fixed: 0 };
-            case 'arrayBuffer': {
+            case 'uint8Array': {
                 // store a 4-byte length prefix followed by raw bytes
-                return { code: `len = ${v}.byteLength; size += 4 + len;`, fixed: 0 };
+                return { code: `len = ${v}.length; size += 4 + len;`, fixed: 0 };
             }
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
@@ -292,11 +292,11 @@ function buildSer(schema: Schema): string {
             case 'string': {
                 return writeString(v);
             }
-            case 'arrayBuffer': {
+            case 'uint8Array': {
                 // write 4-byte length then copy raw bytes
                 let inner = '';
-                inner += writeU32(`${v}.byteLength`);
-                inner += `u8.set(new Uint8Array(${v}), o); o += ${v}.byteLength;`;
+                inner += writeU32(`${v}.length`);
+                inner += `u8.set(${v}, o); o += ${v}.length;`;
                 return inner;
             }
             case 'list': {
@@ -487,11 +487,11 @@ function buildDes(schema: Schema): string {
             case 'string': {
                 return readString(target);
             }
-            case 'arrayBuffer': {
-                // read length then slice the underlying buffer
+            case 'uint8Array': {
+                // read length then create a view on the main buffer
                 let inner = '';
                 inner += readU32('len');
-                inner += `${target} = len === 0 ? new ArrayBuffer(0) : buffer.slice(o, o + len); o += len;`;
+                inner += `${target} = u8.subarray(o, o + len); o += len;`;
                 return inner;
             }
             case 'list': {
@@ -738,8 +738,8 @@ function buildValidate(schema: Schema): string {
             case 'literal': {
                 return `if (${JSON.stringify(s.value)} !== ${v}) return false;`;
             }
-            case 'arrayBuffer': {
-                return `if (!(${v} instanceof ArrayBuffer)) return false;`;
+            case 'uint8Array': {
+                return `if (!(${v} instanceof Uint8Array)) return false;`;
             }
             case 'union': {
                 if (s.variants.length > 255) {

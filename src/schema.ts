@@ -63,8 +63,8 @@ export type RecordSchema = {
     field: Schema;
 };
 
-export type ArrayBufferSchema = {
-    type: 'arrayBuffer';
+export type Uint8ArraySchema = {
+    type: 'uint8Array';
 };
 
 export type BoolsSchema = {
@@ -127,7 +127,7 @@ export type Schema =
     | TupleSchema
     | ObjectSchema
     | RecordSchema
-    | ArrayBufferSchema
+    | Uint8ArraySchema
     | BoolsSchema
     | UnionSchema
     | LiteralSchema
@@ -206,7 +206,7 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
     ) :
     S extends ObjectSchema ? Simplify<{ [K in keyof S['fields']]: SchemaType<S['fields'][K], DecrementDepth<Depth>> }> :
     S extends RecordSchema ? Record<string, SchemaType<S['field'], DecrementDepth<Depth>>> :
-    S extends ArrayBufferSchema ? ArrayBuffer :
+    S extends Uint8ArraySchema ? Uint8Array :
     S extends BoolsSchema ? Record<S['keys'][number], boolean> :
     S extends LiteralSchema ? S['value'] :
     S extends NullableSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | null :
@@ -260,7 +260,7 @@ export const record = <F extends Schema>(field: F): { type: 'record'; field: F }
     field,
 });
 
-export const arrayBuffer = (): { type: 'arrayBuffer' } => ({ type: 'arrayBuffer' });
+export const uint8Array = (): { type: 'uint8Array' } => ({ type: 'uint8Array' });
 
 export const bools = <Keys extends string[]>(keys: [...Keys]): { type: 'bools'; keys: [...Keys] } => {
     return { type: 'bools', keys };
