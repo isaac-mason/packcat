@@ -164,10 +164,9 @@ export function float64(): {
 ```
 
 ```ts
-export function literal<S extends PrimitiveSchema>(value: SchemaType<S>, schema: S): {
+export function literal<S extends PrimitiveSchema, V extends SchemaType<S>>(value: V): {
     type: 'literal';
-    of: S;
-    value: SchemaType<S>;
+    value: V;
 };
 ```
 
@@ -321,7 +320,6 @@ export type Float64Schema = {
 ```ts
 export type LiteralSchema = {
     type: 'literal';
-    of: PrimitiveSchema;
     value: SchemaType<PrimitiveSchema>;
 };
 ```

@@ -207,7 +207,7 @@ function buildSer(schema: Schema): string {
                 return { code: inner, fixed: 1 };
             }
             case 'union': {
-                // Discriminated union: each variant MUST have a literal
+                // discriminated union: each variant MUST have a literal
                 // discriminant in the field `s.key`. At runtime we compare the
                 // object's discriminant value against those literals and add
                 // the size for the matching variant. We encode a 1-byte tag
@@ -220,7 +220,7 @@ function buildSer(schema: Schema): string {
                 let inner = '';
                 inner += `const ${keyVar} = ${v}[${JSON.stringify(s.key)}];`;
 
-                // Build an if/else chain comparing the discriminant to each
+                // build an if/else chain comparing the discriminant to each
                 // variant's literal value. Throw at runtime if no variant
                 // matches.
                 for (let i = 0; i < s.variants.length; i++) {
@@ -234,11 +234,7 @@ function buildSer(schema: Schema): string {
                     const discriminant = disc.value;
                     const elem = size(variant, v);
 
-                    if (i === 0) {
-                        inner += `if (${keyVar} === ${JSON.stringify(discriminant)}) { size += 1 + ${elem.fixed}; ${elem.code} }`;
-                    } else {
-                        inner += ` else if (${keyVar} === ${JSON.stringify(discriminant)}) { size += 1 + ${elem.fixed}; ${elem.code} }`;
-                    }
+                    inner += ` ${i !== 0 ? 'else' : ''} if (${keyVar} === ${JSON.stringify(discriminant)}) { size += 1 + ${elem.fixed}; ${elem.code} }`;
                 }
 
                 inner += ` else { throw new Error('Invalid discriminant for union key: ' + ${keyVar}); }`;

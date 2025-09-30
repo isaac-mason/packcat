@@ -3,7 +3,6 @@
 import { describe, expect, test } from 'vitest';
 import type { SchemaType } from '../src';
 import {
-    serDes,
     boolean,
     bools,
     float32,
@@ -12,19 +11,20 @@ import {
     int16,
     int32,
     list,
+    literal,
+    nullable,
+    nullish,
     number,
     object,
-    union,
-    record,
-    nullable,
     optional,
-    nullish,
+    record,
+    serDes,
     string,
     tuple,
     uint8,
     uint16,
     uint32,
-    literal,
+    union,
 } from '../src';
 
 describe('serDes', () => {
@@ -301,13 +301,15 @@ describe('serDes', () => {
     });
 
     test('ser/des literal', () => {
-        const schema = literal('hello', string());
+        const schema = literal('hello');
         const { ser, des, validate } = serDes(schema);
 
         const v = 'hello';
         expect(validate(v)).toBe(true);
 
         const buf = ser(v);
+        expect(buf.byteLength).toBe(0);
+
         const out = des(buf);
         expect(out).toEqual(v);
     });
@@ -430,24 +432,24 @@ describe('serDes', () => {
 
     test('ser/des union', () => {
         const pet = union('type', [
-            object({ type: literal('dog', string()), name: string(), bark: uint8() }),
-            object({ type: literal('cat', string()), name: string(), lives: uint8() }),
+            object({ type: literal('dog'), name: string(), bark: uint8() }),
+            object({ type: literal('cat'), name: string(), lives: uint8() }),
         ] as const);
 
-        const { ser, des, validate } = serDes(pet as any);
+        const { ser, des, validate } = serDes(pet);
 
-        const dog = { type: 'dog', name: 'Rex', bark: 5 };
-        const cat = { type: 'cat', name: 'Mittens', lives: 9 };
+        const dog = { type: 'dog', name: 'Rex', bark: 5 } as const;
+        const cat = { type: 'cat', name: 'Mittens', lives: 9 } as const;
 
         expect(validate(dog)).toBe(true);
         expect(validate(cat)).toBe(true);
 
-        const bufDog = ser(dog as any);
-        const outDog = des(bufDog as ArrayBuffer) as any;
+        const bufDog = ser(dog);
+        const outDog = des(bufDog as ArrayBuffer);
         expect(outDog).toEqual(dog);
 
-        const bufCat = ser(cat as any);
-        const outCat = des(bufCat as ArrayBuffer) as any;
+        const bufCat = ser(cat);
+        const outCat = des(bufCat as ArrayBuffer);
         expect(outCat).toEqual(cat);
     });
 });

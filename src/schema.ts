@@ -70,7 +70,6 @@ export type BoolsSchema = {
 
 export type LiteralSchema = {
     type: 'literal';
-    of: PrimitiveSchema;
     value: SchemaType<PrimitiveSchema>;
 };
 
@@ -203,7 +202,7 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
     S extends ObjectSchema ? Simplify<{ [K in keyof S['fields']]: SchemaType<S['fields'][K], DecrementDepth<Depth>> }> :
     S extends RecordSchema ? Record<string, SchemaType<S['field'], DecrementDepth<Depth>>> :
     S extends BoolsSchema ? Record<S['keys'][number], boolean> :
-    S extends LiteralSchema ? SchemaType<S['of'], DecrementDepth<Depth>> :
+    S extends LiteralSchema ? S['value'] :
     S extends NullableSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | null :
     S extends OptionalSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | undefined :
     S extends NullishSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | null | undefined :
@@ -259,15 +258,13 @@ export const bools = <Keys extends string[]>(keys: [...Keys]): { type: 'bools'; 
     return { type: 'bools', keys };
 };
 
-export const literal = <S extends PrimitiveSchema>(
-    value: SchemaType<S>,
-    schema: S,
+export const literal = <S extends PrimitiveSchema, V extends SchemaType<S>>(
+    value: V,
 ): {
     type: 'literal';
-    of: S;
-    value: SchemaType<S>;
+    value: V;
 } => {
-    return { type: 'literal', of: schema, value };
+    return { type: 'literal', value };
 };
 
 export const nullable = <S extends Schema>(of: S): { type: 'nullable'; of: S } => ({ type: 'nullable', of });
