@@ -28,6 +28,8 @@ It is great for use cases like networked games/apps where minimizing bandwidth i
 
 Currently there is no formal specification for the serialized data format, and no guarantees are made about the stability of the format between versions. As such, the same version of packcat should be used on both the serializing and deserializing end, and it is not recommended to persist serialized data.
 
+This library assumes the host machine is little-endian in its use of JavaScript typed arrays. While supporting big-endian is technically possible, it falls outside the practical scope and realistic use cases of this library.
+
 ## Usage
 
 First, define your data format with the schema utils:
