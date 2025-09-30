@@ -20,8 +20,6 @@ function getAllSourceFiles(dir) {
 
 const sourceFiles = getAllSourceFiles(srcDir);
 
-const entrySourceFile = sourceFiles.find((f) => path.basename(f) === `index.ts`);
-
 // create a TypeScript program from all .ts files
 const tsProgram = ts.createProgram(sourceFiles, {
     allowJs: false,
