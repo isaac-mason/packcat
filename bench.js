@@ -30,7 +30,7 @@ function bench(name, fn, iterations = 100_000) {
 }
 
 function benchSchema(name, schema, val) {
-    const { ser, des } = serDes(schema);
+    const { ser, des, source } = serDes(schema);
 
     bench(`ser ${name}`, () => ser(val), 10000);
     const serVal = ser(val);
@@ -45,6 +45,9 @@ function benchSchema(name, schema, val) {
     bench(`JSON.parse ${name}`, () => JSON.parse(serJsonVal), 10000);
 
     console.log('serJsonVal byteLength:', new TextEncoder().encode(serJsonVal).byteLength);
+
+    console.log("source", source);
+
     console.log('---');
 }
 

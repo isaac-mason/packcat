@@ -42,48 +42,57 @@ describe('serDes', () => {
         // number (float64)
         const { ser: serNum, des: desNum } = serDes(number());
         const bufNum = serNum(12345.6789);
+        expect(bufNum.byteLength).toBe(8);
         const outNum = desNum(bufNum);
         expect(outNum).toBeCloseTo(12345.6789);
 
         // int8
         const { ser: serI8, des: desI8 } = serDes(int8());
         const bufI8 = serI8(-12);
+        expect(bufI8.byteLength).toBe(1);
         expect(desI8(bufI8)).toBe(-12);
 
         // uint8
         const { ser: serU8, des: desU8 } = serDes(uint8());
         const bufU8 = serU8(250);
+        expect(bufU8.byteLength).toBe(1);
         expect(desU8(bufU8)).toBe(250);
 
         // int16
         const { ser: serI16, des: desI16 } = serDes(int16());
         const bufI16 = serI16(-1234);
+        expect(bufI16.byteLength).toBe(2);
         expect(desI16(bufI16)).toBe(-1234);
 
         // uint16
         const { ser: serU16, des: desU16 } = serDes(uint16());
         const bufU16 = serU16(60000);
+        expect(bufU16.byteLength).toBe(2);
         expect(desU16(bufU16)).toBe(60000);
 
         // int32
         const { ser: serI32, des: desI32 } = serDes(int32());
         const bufI32 = serI32(-123456789);
+        expect(bufI32.byteLength).toBe(4);
         expect(desI32(bufI32)).toBe(-123456789);
 
         // uint32
         const { ser: serU32, des: desU32 } = serDes(uint32());
         const bufU32 = serU32(4000000000);
+        expect(bufU32.byteLength).toBe(4);
         expect(desU32(bufU32)).toBe(4000000000);
 
         // float32
         const { ser: serF32, des: desF32 } = serDes(float32());
         const bufF32 = serF32(3.14159);
+        expect(bufF32.byteLength).toBe(4);
         const outF32 = desF32(bufF32);
         expect(outF32).toBeCloseTo(3.14159, 5);
 
         // float64
         const { ser: serF64, des: desF64 } = serDes(float64());
         const bufF64 = serF64(2.718281828459045);
+        expect(bufF64.byteLength).toBe(8);
         const outF64 = desF64(bufF64);
         expect(outF64).toBeCloseTo(2.718281828459045, 12);
     });
@@ -92,6 +101,7 @@ describe('serDes', () => {
         const { ser, des } = serDes(string());
         const testStr = 'hello world';
         const buffer = ser(testStr);
+        expect(buffer.byteLength).toBe(4 + testStr.length); // 4 bytes for length prefix
         const result = des(buffer);
         expect(result).toBe(testStr);
     });
@@ -100,6 +110,7 @@ describe('serDes', () => {
         const { ser, des } = serDes(list(number()));
         const arr = [1.1, 2.2, 3.3];
         const buffer = ser(arr);
+        expect(buffer.byteLength).toBe(4 + arr.length * 8); // 4 bytes for length prefix + 8 bytes per number
         const result = des(buffer);
         expect(result).toEqual(arr);
     });
@@ -114,6 +125,8 @@ describe('serDes', () => {
         ];
 
         const buffer = ser(data);
+        expect(buffer.byteLength).toBe(4 + data.length * 12); // 4 bytes for length prefix + 12 bytes per vec3 (3 * 4 bytes per float32)
+
         const result = des(buffer);
 
         expect(result.length).toBe(data.length);
@@ -138,7 +151,10 @@ describe('serDes', () => {
             [4, 5, 6],
             [6, 7, 8],
         ];
+
         const buffer = ser(arr);
+        expect(buffer.byteLength).toBe(4 + arr.length * 4 + arr.reduce((sum, item) => sum + item.length * 8, 0));
+
         const result = des(buffer);
         expect(result).toEqual(arr);
     });
@@ -151,8 +167,12 @@ describe('serDes', () => {
                 c: boolean(),
             }),
         );
+
         const obj = { a: 123.45, b: 'test', c: true };
+
         const buffer = ser(obj);
+        expect(buffer.byteLength).toBe(8 + 4 + obj.b.length + 1); // number (8) + string length prefix (4) + string bytes + boolean (1)
+
         const result = des(buffer);
         expect(result).toEqual(obj);
     });
@@ -169,6 +189,7 @@ describe('serDes', () => {
                 }),
             }),
         );
+
         const obj = {
             id: 1,
             name: 'PlayerOne',
@@ -178,7 +199,10 @@ describe('serDes', () => {
                 level: 42,
             },
         };
+
         const buffer = ser(obj);
+        expect(buffer.byteLength).toBe(4 + 4 + obj.name.length + 1 + 8 + 4); // id (4) + name length prefix (4) + name bytes + active (1) + score (8) + level (4)
+
         const result = des(buffer);
         expect(result).toEqual(obj);
     });
@@ -188,9 +212,9 @@ describe('serDes', () => {
 
         const data: [number, string, boolean] = [42.5, 'hello', true];
         const buffer = ser(data);
-        const out = des(buffer) as [number, string, boolean];
+        expect(buffer.byteLength).toBe(8 + 4 + data[1].length + 1); // number (8) + string length prefix (4) + string bytes + boolean (1)
 
-        // approximate for number
+        const out = des(buffer) as [number, string, boolean];
         expect(out[0]).toBeCloseTo(data[0]);
         expect(out[1]).toBe(data[1]);
         expect(out[2]).toBe(data[2]);
@@ -205,7 +229,9 @@ describe('serDes', () => {
             [1.5, 'a'],
             [2.5, 'b'],
         ];
-        const buf = ser(data as any);
+
+        const buf = ser(data);
+
         const out = des(buf) as [[number, string], [number, string]];
 
         expect(out.length).toBe(2);
@@ -231,6 +257,39 @@ describe('serDes', () => {
         const buffer = ser(arr);
         const result = des(buffer);
         expect(result).toEqual(arr);
+    });
+
+    test('ser/des list of objects with vec3 positions (uint16 id + float32 vec3)', () => {
+        const vec3Schema = list(float32(), 3);
+        const schema = list(
+            object({
+                id: uint16(),
+                pos: vec3Schema,
+            }),
+        );
+
+        const { ser, des } = serDes(schema);
+
+        const data: SchemaType<typeof schema> = [
+            { id: 0, pos: [12, 24, 48] },
+            { id: 1, pos: [120, 240, 480] },
+            { id: 2, pos: [1200, 2400, 4800] },
+            { id: 3, pos: [1.2, 2.4, 4.8] },
+            { id: 4, pos: [1, 2, 4] },
+        ];
+
+        const buf = ser(data);
+        const out = des(buf) as Array<{ id: number; pos: number[] }>;
+
+        expect(out.length).toBe(data.length);
+
+        for (let i = 0; i < data.length; i++) {
+            expect(out[i].id).toBe(data[i].id);
+            // compare floats approximately where relevant
+            for (let j = 0; j < 3; j++) {
+                expect(out[i].pos[j]).toBeCloseTo(data[i].pos[j], 5);
+            }
+        }
     });
 
     test('ser/des record (empty, simple, unicode keys)', () => {
@@ -290,13 +349,13 @@ describe('serDes', () => {
     test('ser/des bools many keys (multi-byte)', () => {
         const keys: string[] = [];
         for (let i = 0; i < 10; i++) keys.push(`k${i}`);
-        const s = serDes(bools(keys) as any);
+        const s = serDes(bools(keys));
 
         const obj: Record<string, boolean> = {};
         for (let i = 0; i < keys.length; i++) obj[keys[i]] = i % 2 === 0;
 
-        const buf = s.ser(obj as any);
-        const out = s.des(buf as ArrayBuffer) as Record<string, boolean>;
+        const buf = s.ser(obj);
+        const out = s.des(buf);
         expect(out).toEqual(obj);
     });
 
@@ -316,38 +375,38 @@ describe('serDes', () => {
 
     test('ser/des optional', () => {
         const schema = optional(string());
-        const { ser, des } = serDes(schema as any);
+        const { ser, des } = serDes(schema);
 
         const present = 'hi';
-        const bufPresent = ser(present as any);
+        const bufPresent = ser(present);
         expect(des(bufPresent)).toBe(present);
 
-        const bufAbsent = ser(undefined as any);
+        const bufAbsent = ser(undefined);
         expect(des(bufAbsent)).toBeUndefined();
     });
 
     test('ser/des nullable', () => {
         const schema = nullable(string());
-        const { ser, des } = serDes(schema as any);
+        const { ser, des } = serDes(schema);
 
-        const bufNull = ser(null as any);
+        const bufNull = ser(null);
         expect(des(bufNull)).toBeNull();
 
-        const bufVal = ser('hi' as any);
+        const bufVal = ser('hi');
         expect(des(bufVal)).toBe('hi');
     });
 
     test('ser/des nullish', () => {
         const schema = nullish(string());
-        const { ser, des } = serDes(schema as any);
+        const { ser, des } = serDes(schema);
 
-        const bufNull = ser(null as any);
+        const bufNull = ser(null);
         expect(des(bufNull)).toBeNull();
 
-        const bufUndef = ser(undefined as any);
+        const bufUndef = ser(undefined);
         expect(des(bufUndef)).toBeUndefined();
 
-        const bufVal = ser('val' as any);
+        const bufVal = ser('val');
         expect(des(bufVal)).toBe('val');
     });
 
@@ -398,7 +457,7 @@ describe('serDes', () => {
         expect(s.validate(data)).toBe(true);
 
         const buf = s.ser(data);
-        const out = s.des(buf as ArrayBuffer) as any;
+        const out = s.des(buf);
 
         // basic checks
         expect(out.id).toBe(data.id);
@@ -421,10 +480,10 @@ describe('serDes', () => {
         // matrix and nested structures
         expect(out.matrix).toEqual(data.matrix);
 
-        expect(out.nestedTuple[0]).toBeCloseTo((data.nestedTuple as any)[0], 5);
-        expect(out.nestedTuple[1].x).toBeCloseTo((data.nestedTuple as any)[1].x, 10);
-        expect(out.nestedTuple[1].y).toBeCloseTo((data.nestedTuple as any)[1].y, 10);
-        expect(out.nestedTuple[2]).toEqual((data.nestedTuple as any)[2]);
+        expect(out.nestedTuple[0]).toBeCloseTo(data.nestedTuple[0], 5);
+        expect(out.nestedTuple[1].x).toBeCloseTo(data.nestedTuple[1].x, 10);
+        expect(out.nestedTuple[1].y).toBeCloseTo(data.nestedTuple[1].y, 10);
+        expect(out.nestedTuple[2]).toEqual(data.nestedTuple[2]);
 
         // map of maps
         expect(out.mapOfMaps).toEqual(data.mapOfMaps);
@@ -445,11 +504,11 @@ describe('serDes', () => {
         expect(validate(cat)).toBe(true);
 
         const bufDog = ser(dog);
-        const outDog = des(bufDog as ArrayBuffer);
+        const outDog = des(bufDog);
         expect(outDog).toEqual(dog);
 
         const bufCat = ser(cat);
-        const outCat = des(bufCat as ArrayBuffer);
+        const outCat = des(bufCat);
         expect(outCat).toEqual(cat);
     });
 });

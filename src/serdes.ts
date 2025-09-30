@@ -368,21 +368,27 @@ function buildSer(schema: Schema): string {
                 return inner;
             }
             case 'bools': {
-                // pack keys into bitset (little-endian within bytes)
-                const keysVar = variable('keys', variableCounter++);
-                const iVar = variable('i', variableCounter++);
-                const bitsVar = variable('bits', variableCounter++);
-                const kVar = variable('k', variableCounter++);
+                // pack keys into bitset, unrolled per-output-byte to avoid per-iteration modulo
+                const byteVar = variable('byte', variableCounter++);
+
+                const total = s.keys.length;
+                const bytes = Math.ceil(total / 8);
 
                 let inner = '';
-                inner += `const ${keysVar} = ${JSON.stringify(s.keys)};`;
-                inner += `let ${bitsVar} = 0;`;
-                inner += `for (let ${iVar} = 0; ${iVar} < ${keysVar}.length; ${iVar}++) { `;
-                inner += `const ${kVar} = ${keysVar}[${iVar}];`;
-                inner += `if (${v}[${kVar}]) ${bitsVar} |= (1 << (${iVar} % 8));`;
-                inner += `if ((${iVar} % 8) === 7) { u8[o++] = ${bitsVar}; ${bitsVar} = 0; }`;
-                inner += `}`;
-                inner += `if (${keysVar}.length % 8 !== 0) { u8[o++] = ${bitsVar}; }`;
+                // declare the byte variable once to avoid redeclaration when unrolling bytes
+                inner += `let ${byteVar};`;
+                // for each output byte, check up to 8 keys and set bits accordingly
+                for (let b = 0; b < bytes; b++) {
+                    inner += `${byteVar} = 0;`;
+                    for (let bit = 0; bit < 8; bit++) {
+                        const idx = b * 8 + bit;
+                        if (idx >= total) break;
+                        // inline the static key name directly instead of referencing a runtime keys array
+                        inner += `if (${v}[${JSON.stringify(s.keys[idx])}]) ${byteVar} |= ${1 << bit};`;
+                    }
+                    inner += `u8[o++] = ${byteVar};`;
+                }
+
                 return inner;
             }
             case 'nullable': {
@@ -526,19 +532,23 @@ function buildDes(schema: Schema): string {
                 return inner;
             }
             case 'bools': {
-                const keysVar = variable('keys', variableCounter++);
-                const iVar = variable('i', variableCounter++);
-                const kVar = variable('k', variableCounter++);
+                // unpack bitset into object, unrolled per-output-byte and inline keys
+                const total = s.keys.length;
+                const bytes = Math.ceil(total / 8);
 
-                // unpack bitset into object
                 let out = '';
                 out += `${target} = {};`;
-                out += `const ${keysVar} = ${JSON.stringify(s.keys)};`;
-                out += `for (let ${iVar} = 0; ${iVar} < ${keysVar}.length; ${iVar}++) {`;
-                out += `if (${iVar} % 8 === 0) { val = u8[o++]; }`;
-                out += `const ${kVar} = ${keysVar}[${iVar}];`;
-                out += `${target}[${kVar}] = (val & (1 << (${iVar} % 8))) !== 0;`;
-                out += `}`;
+
+                // read one byte per output byte and assign up to 8 keys each
+                for (let b = 0; b < bytes; b++) {
+                    const byteIdx = variable('bval', variableCounter++);
+                    out += `const ${byteIdx} = u8[o++];`;
+                    for (let bit = 0; bit < 8; bit++) {
+                        const idx = b * 8 + bit;
+                        if (idx >= total) break;
+                        out += `${target}[${JSON.stringify(s.keys[idx])}] = (${byteIdx} & ${1 << bit}) !== 0;`;
+                    }
+                }
                 return out;
             }
             case 'literal': {
