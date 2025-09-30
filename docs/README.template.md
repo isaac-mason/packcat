@@ -28,6 +28,14 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <Snippet source="./snippets.ts" select="validate" />
 
+## Serialization Format
+
+This library uses a custom binary serialization format. It is intended for network transmission or temporary runtime storage use cases.
+
+The same version of packcat should be used on both the serializing and deserializing end.
+
+No guarantees are made about the stability of the format between versions, so it is not recommended to use it for persistent storage. 
+
 ## API Documentation
 
 ### Ser/Des

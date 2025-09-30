@@ -13,6 +13,7 @@ packcat is a small library for serializing and deserializing objects to and from
 ## Table Of Contents
 
 - [Usage](#usage)
+- [Serialization Format](#serialization-format)
 - [API Documentation](#api-documentation)
   - [Ser/Des](#serdes)
   - [Schema](#schema)
@@ -75,6 +76,14 @@ console.log(playerInputSerdes.validate(playerInput)); // true
 // @ts-expect-error this doesn't conform to the schema type!
 console.log(playerInputSerdes.validate({ foo: 'bar' })); // false
 ```
+
+## Serialization Format
+
+This library uses a custom binary serialization format. It is intended for network transmission or temporary runtime storage use cases.
+
+The same version of packcat should be used on both the serializing and deserializing end.
+
+No guarantees are made about the stability of the format between versions, so it is not recommended to use it for persistent storage. 
 
 ## API Documentation
 
