@@ -67,8 +67,6 @@ function buildSer(schema: Schema): string {
 
     code += 'let len = 0;';
 
-    const schemaFixedSize = fixedSize(schema);
-
     type SizeCalc = { code: string; fixed: number };
 
     let variableCounter = 1;
@@ -250,16 +248,10 @@ function buildSer(schema: Schema): string {
         }
     }
 
-    if (schemaFixedSize !== null) {
-        // initialize size to the compile-time-known total when possible
-        code += `let size = ${schemaFixedSize};`;
-    } else {
-        // else, emit code for known size and dynamic parts
-        const calc = size(schema, 'value');
+    const calc = size(schema, 'value');
 
-        code += `let size = ${calc.fixed};`;
-        code += calc.code;
-    }
+    code += `let size = ${calc.fixed};`;
+    code += calc.code;
 
     code += 'const arrayBuffer = new ArrayBuffer(size);';
     code += 'let o = 0;';
@@ -800,72 +792,6 @@ function utf8Length(s: string) {
         }
     }
     return l;
-}
-
-function fixedSize(s: Schema): number | null {
-    switch (s.type) {
-        case 'boolean':
-        case 'int8':
-        case 'uint8':
-            return 1;
-        case 'int16':
-        case 'uint16':
-            return 2;
-        case 'int32':
-        case 'uint32':
-        case 'float32':
-            return 4;
-        case 'number':
-        case 'float64':
-            return 8;
-        case 'string':
-            return null;
-        case 'list': {
-            if ('length' in s && typeof s.length === 'number') {
-                const elemFixed = fixedSize(s.of);
-                if (elemFixed !== null) return elemFixed * s.length;
-                return null;
-            }
-            return null;
-        }
-        case 'object': {
-            let total = 0;
-            for (const f of Object.values(s.fields)) {
-                const fs = fixedSize(f);
-                if (fs === null) return null;
-                total += fs;
-            }
-            return total;
-        }
-        case 'tuple': {
-            let total = 0;
-            for (let i = 0; i < s.of.length; i++) {
-                const fs = fixedSize(s.of[i]);
-                if (fs === null) return null;
-                total += fs;
-            }
-            return total;
-        }
-        case 'record':
-            return null;
-        case 'bools': {
-            return Math.ceil(s.keys.length / 8);
-        }
-        case 'literal': {
-            return 0;
-        }
-        case 'nullable': {
-            return null;
-        }
-        case 'optional': {
-            return null;
-        }
-        case 'nullish': {
-            return null;
-        }
-        default:
-            return null;
-    }
 }
 
 function readBool(target: string, offset = 'o'): string {
