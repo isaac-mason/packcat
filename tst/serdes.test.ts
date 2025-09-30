@@ -20,6 +20,7 @@ import {
     record,
     serDes,
     string,
+    arrayBuffer,
     tuple,
     uint8,
     uint16,
@@ -104,6 +105,47 @@ describe('serDes', () => {
         expect(buffer.byteLength).toBe(4 + testStr.length); // 4 bytes for length prefix
         const result = des(buffer);
         expect(result).toBe(testStr);
+    });
+
+    test('ser/des arraybuffer empty and non-empty', () => {
+        const { ser, des, validate } = serDes(arrayBuffer());
+
+        const empty = new ArrayBuffer(0);
+        const bufEmpty = ser(empty);
+        // length prefix (4) + 0
+        expect(bufEmpty.byteLength).toBe(4);
+        const outEmpty = des(bufEmpty) as ArrayBuffer;
+        expect(outEmpty.byteLength).toBe(0);
+
+        const src = new Uint8Array([1, 2, 3]);
+        const buf = ser(src.buffer);
+        expect(buf.byteLength).toBe(4 + src.length);
+        const out = des(buf) as ArrayBuffer;
+        expect(new Uint8Array(out)).toEqual(src);
+
+        expect(validate(src.buffer)).toBe(true);
+        // @ts-expect-error wrong type
+        expect(validate(123)).toBe(false);
+    });
+
+    test('ser/des arraybuffer nested in object and list', () => {
+        const nestedSchema = object({ id: uint8(), data: arrayBuffer() });
+        const { ser: s1, des: d1 } = serDes(nestedSchema);
+
+        const payload = new Uint8Array([9, 8, 7]);
+        const obj = { id: 5, data: payload.buffer };
+        const buf = s1(obj as any);
+        const out = d1(buf) as { id: number; data: ArrayBuffer };
+        expect(out.id).toBe(5);
+        expect(new Uint8Array(out.data)).toEqual(payload);
+
+        const listSchema = list(arrayBuffer());
+        const { ser: s2, des: d2 } = serDes(listSchema);
+        const arr = [new Uint8Array([1]).buffer, new Uint8Array([2, 3]).buffer];
+        const buf2 = s2(arr as any);
+        const outArr = d2(buf2) as ArrayBuffer[];
+        expect(new Uint8Array(outArr[0])).toEqual(new Uint8Array([1]));
+        expect(new Uint8Array(outArr[1])).toEqual(new Uint8Array([2, 3]));
     });
 
     test('ser/des list of numbers', () => {

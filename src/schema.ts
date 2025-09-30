@@ -63,6 +63,10 @@ export type RecordSchema = {
     field: Schema;
 };
 
+export type ArrayBufferSchema = {
+    type: 'arrayBuffer';
+};
+
 export type BoolsSchema = {
     type: 'bools';
     keys: string[];
@@ -123,6 +127,7 @@ export type Schema =
     | TupleSchema
     | ObjectSchema
     | RecordSchema
+    | ArrayBufferSchema
     | BoolsSchema
     | UnionSchema
     | LiteralSchema
@@ -201,6 +206,7 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
     ) :
     S extends ObjectSchema ? Simplify<{ [K in keyof S['fields']]: SchemaType<S['fields'][K], DecrementDepth<Depth>> }> :
     S extends RecordSchema ? Record<string, SchemaType<S['field'], DecrementDepth<Depth>>> :
+    S extends ArrayBufferSchema ? ArrayBuffer :
     S extends BoolsSchema ? Record<S['keys'][number], boolean> :
     S extends LiteralSchema ? S['value'] :
     S extends NullableSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | null :
@@ -253,6 +259,8 @@ export const record = <F extends Schema>(field: F): { type: 'record'; field: F }
     type: 'record',
     field,
 });
+
+export const arrayBuffer = (): { type: 'arrayBuffer' } => ({ type: 'arrayBuffer' });
 
 export const bools = <Keys extends string[]>(keys: [...Keys]): { type: 'bools'; keys: [...Keys] } => {
     return { type: 'bools', keys };

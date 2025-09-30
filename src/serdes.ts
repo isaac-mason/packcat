@@ -89,6 +89,10 @@ function buildSer(schema: Schema): string {
                 return { code: '', fixed: 8 };
             case 'string':
                 return { code: `len = utf8Length(${v}); size += 4 + len;`, fixed: 0 };
+            case 'arrayBuffer': {
+                // store a 4-byte length prefix followed by raw bytes
+                return { code: `len = ${v}.byteLength; size += 4 + len;`, fixed: 0 };
+            }
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
                     // fixed-length list: each element exists at compile time
@@ -288,6 +292,13 @@ function buildSer(schema: Schema): string {
             case 'string': {
                 return writeString(v);
             }
+            case 'arrayBuffer': {
+                // write 4-byte length then copy raw bytes
+                let inner = '';
+                inner += writeU32(`${v}.byteLength`);
+                inner += `u8.set(new Uint8Array(${v}), o); o += ${v}.byteLength;`;
+                return inner;
+            }
             case 'list': {
                 if (s.length !== undefined) {
                     // generate unrolled fixed-length list serialization
@@ -475,6 +486,13 @@ function buildDes(schema: Schema): string {
                 return readF64(target);
             case 'string': {
                 return readString(target);
+            }
+            case 'arrayBuffer': {
+                // read length then slice the underlying buffer
+                let inner = '';
+                inner += readU32('len');
+                inner += `${target} = len === 0 ? new ArrayBuffer(0) : buffer.slice(o, o + len); o += len;`;
+                return inner;
             }
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
@@ -719,6 +737,9 @@ function buildValidate(schema: Schema): string {
             }
             case 'literal': {
                 return `if (${JSON.stringify(s.value)} !== ${v}) return false;`;
+            }
+            case 'arrayBuffer': {
+                return `if (!(${v} instanceof ArrayBuffer)) return false;`;
             }
             case 'union': {
                 if (s.variants.length > 255) {
