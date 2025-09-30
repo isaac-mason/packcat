@@ -31,79 +31,79 @@ import {
 describe('serDes', () => {
     test('ser/des boolean', () => {
         const { ser, des } = serDes(boolean());
-        const bufferTrue = ser(true);
-        const result = des(bufferTrue);
+        const serializedTrue = ser(true);
+        const result = des(serializedTrue);
         expect(result).toBe(true);
-        const bufferFalse = ser(false);
-        const result2 = des(bufferFalse);
+        const serializedFalse = ser(false);
+        const result2 = des(serializedFalse);
         expect(result2).toBe(false);
     });
 
     test('ser/des numbers', () => {
         // number (float64)
         const { ser: serNum, des: desNum } = serDes(number());
-        const bufNum = serNum(12345.6789);
-        expect(bufNum.byteLength).toBe(8);
-        const outNum = desNum(bufNum);
+        const serializedNumber = serNum(12345.6789);
+        expect(serializedNumber.byteLength).toBe(8);
+        const outNum = desNum(serializedNumber);
         expect(outNum).toBeCloseTo(12345.6789);
 
         // int8
         const { ser: serI8, des: desI8 } = serDes(int8());
-        const bufI8 = serI8(-12);
-        expect(bufI8.byteLength).toBe(1);
-        expect(desI8(bufI8)).toBe(-12);
+        const serializedI8 = serI8(-12);
+        expect(serializedI8.byteLength).toBe(1);
+        expect(desI8(serializedI8)).toBe(-12);
 
         // uint8
         const { ser: serU8, des: desU8 } = serDes(uint8());
-        const bufU8 = serU8(250);
-        expect(bufU8.byteLength).toBe(1);
-        expect(desU8(bufU8)).toBe(250);
+        const serializedU8 = serU8(250);
+        expect(serializedU8.byteLength).toBe(1);
+        expect(desU8(serializedU8)).toBe(250);
 
         // int16
         const { ser: serI16, des: desI16 } = serDes(int16());
-        const bufI16 = serI16(-1234);
-        expect(bufI16.byteLength).toBe(2);
-        expect(desI16(bufI16)).toBe(-1234);
+        const serializedI16 = serI16(-1234);
+        expect(serializedI16.byteLength).toBe(2);
+        expect(desI16(serializedI16)).toBe(-1234);
 
         // uint16
         const { ser: serU16, des: desU16 } = serDes(uint16());
-        const bufU16 = serU16(60000);
-        expect(bufU16.byteLength).toBe(2);
-        expect(desU16(bufU16)).toBe(60000);
+        const serializedU16 = serU16(60000);
+        expect(serializedU16.byteLength).toBe(2);
+        expect(desU16(serializedU16)).toBe(60000);
 
         // int32
         const { ser: serI32, des: desI32 } = serDes(int32());
-        const bufI32 = serI32(-123456789);
-        expect(bufI32.byteLength).toBe(4);
-        expect(desI32(bufI32)).toBe(-123456789);
+        const serializedI32 = serI32(-123456789);
+        expect(serializedI32.byteLength).toBe(4);
+        expect(desI32(serializedI32)).toBe(-123456789);
 
         // uint32
         const { ser: serU32, des: desU32 } = serDes(uint32());
-        const bufU32 = serU32(4000000000);
-        expect(bufU32.byteLength).toBe(4);
-        expect(desU32(bufU32)).toBe(4000000000);
+        const serializedU32 = serU32(4000000000);
+        expect(serializedU32.byteLength).toBe(4);
+        expect(desU32(serializedU32)).toBe(4000000000);
 
         // float32
         const { ser: serF32, des: desF32 } = serDes(float32());
-        const bufF32 = serF32(3.14159);
-        expect(bufF32.byteLength).toBe(4);
-        const outF32 = desF32(bufF32);
+        const serializedF32 = serF32(3.14159);
+        expect(serializedF32.byteLength).toBe(4);
+        const outF32 = desF32(serializedF32);
         expect(outF32).toBeCloseTo(3.14159, 5);
 
         // float64
         const { ser: serF64, des: desF64 } = serDes(float64());
-        const bufF64 = serF64(2.718281828459045);
-        expect(bufF64.byteLength).toBe(8);
-        const outF64 = desF64(bufF64);
+        const serializedF64 = serF64(2.718281828459045);
+        expect(serializedF64.byteLength).toBe(8);
+        const outF64 = desF64(serializedF64);
         expect(outF64).toBeCloseTo(2.718281828459045, 12);
     });
 
     test('ser/des string', () => {
         const { ser, des } = serDes(string());
         const testStr = 'hello world';
-        const buffer = ser(testStr);
-        expect(buffer.byteLength).toBe(4 + testStr.length); // 4 bytes for length prefix
-        const result = des(buffer);
+        const serialized = ser(testStr);
+        expect(serialized.byteLength).toBe(4 + testStr.length); // 4 bytes for length prefix
+        const result = des(serialized);
         expect(result).toBe(testStr);
     });
 
@@ -111,17 +111,18 @@ describe('serDes', () => {
         const { ser, des, validate } = serDes(uint8Array());
 
         const empty = new Uint8Array(0);
-        const bufEmpty = ser(empty);
-        // length prefix (4) + 0
-        expect(bufEmpty.byteLength).toBe(4);
-        const outEmpty = des(bufEmpty);
+        const serializedEmpty = ser(empty);
+        expect(serializedEmpty.byteLength).toBe(4);
+        const outEmpty = des(serializedEmpty);
         expect(outEmpty.byteLength).toBe(0);
+        expect(outEmpty.buffer).toBe(serializedEmpty.buffer); // should be a view
 
         const src = new Uint8Array([1, 2, 3]);
-        const buf = ser(src);
-        expect(buf.byteLength).toBe(4 + src.length);
-        const out = des(buf);
-        expect(new Uint8Array(out)).toEqual(src);
+        const serialized = ser(src);
+        expect(serialized.byteLength).toBe(4 + src.length);
+        const out = des(serialized);
+        expect(out).toEqual(src);
+        expect(out.buffer).toBe(serialized.buffer); // should be a view
 
         expect(validate(src)).toBe(true);
         // @ts-expect-error wrong type
@@ -134,16 +135,16 @@ describe('serDes', () => {
 
         const payload = new Uint8Array([9, 8, 7]);
         const obj = { id: 5, data: payload };
-        const buf = s1(obj as any);
-        const out = d1(buf);
+        const serialized = s1(obj as any);
+        const out = d1(serialized);
         expect(out.id).toBe(5);
         expect(new Uint8Array(out.data)).toEqual(payload);
 
         const listSchema = list(uint8Array());
         const { ser: s2, des: d2 } = serDes(listSchema);
         const arr = [new Uint8Array([1]), new Uint8Array([2, 3])];
-        const buf2 = s2(arr as any);
-        const outArr = d2(buf2);
+        const serialized2 = s2(arr as any);
+        const outArr = d2(serialized2);
         expect(new Uint8Array(outArr[0])).toEqual(new Uint8Array([1]));
         expect(new Uint8Array(outArr[1])).toEqual(new Uint8Array([2, 3]));
     });
@@ -151,9 +152,9 @@ describe('serDes', () => {
     test('ser/des list of numbers', () => {
         const { ser, des } = serDes(list(number()));
         const arr = [1.1, 2.2, 3.3];
-        const buffer = ser(arr);
-        expect(buffer.byteLength).toBe(4 + arr.length * 8); // 4 bytes for length prefix + 8 bytes per number
-        const result = des(buffer);
+        const serialized = ser(arr);
+        expect(serialized.byteLength).toBe(4 + arr.length * 8); // 4 bytes for length prefix + 8 bytes per number
+        const result = des(serialized);
         expect(result).toEqual(arr);
     });
 
@@ -166,11 +167,10 @@ describe('serDes', () => {
             [4.4, 5.5, 6.6],
         ];
 
-        const buffer = ser(data);
-        expect(buffer.byteLength).toBe(4 + data.length * 12); // 4 bytes for length prefix + 12 bytes per vec3 (3 * 4 bytes per float32)
+        const serialized = ser(data);
+        expect(serialized.byteLength).toBe(4 + data.length * 12); // 4 bytes for length prefix + 12 bytes per vec3 (3 * 4 bytes per float32)
 
-        const result = des(buffer);
-
+        const result = des(serialized);
         expect(result.length).toBe(data.length);
 
         // use approximate equality for float32
@@ -194,10 +194,10 @@ describe('serDes', () => {
             [6, 7, 8],
         ];
 
-        const buffer = ser(arr);
-        expect(buffer.byteLength).toBe(4 + arr.length * 4 + arr.reduce((sum, item) => sum + item.length * 8, 0));
+        const serialized = ser(arr);
+        expect(serialized.byteLength).toBe(4 + arr.length * 4 + arr.reduce((sum, item) => sum + item.length * 8, 0));
 
-        const result = des(buffer);
+        const result = des(serialized);
         expect(result).toEqual(arr);
     });
 
@@ -212,10 +212,10 @@ describe('serDes', () => {
 
         const obj = { a: 123.45, b: 'test', c: true };
 
-        const buffer = ser(obj);
-        expect(buffer.byteLength).toBe(8 + 4 + obj.b.length + 1); // number (8) + string length prefix (4) + string bytes + boolean (1)
+        const serialized = ser(obj);
+        expect(serialized.byteLength).toBe(8 + 4 + obj.b.length + 1); // number (8) + string length prefix (4) + string bytes + boolean (1)
 
-        const result = des(buffer);
+        const result = des(serialized);
         expect(result).toEqual(obj);
     });
 
@@ -242,10 +242,10 @@ describe('serDes', () => {
             },
         };
 
-        const buffer = ser(obj);
-        expect(buffer.byteLength).toBe(4 + 4 + obj.name.length + 1 + 8 + 4); // id (4) + name length prefix (4) + name bytes + active (1) + score (8) + level (4)
+        const serialized = ser(obj);
+        expect(serialized.byteLength).toBe(4 + 4 + obj.name.length + 1 + 8 + 4); // id (4) + name length prefix (4) + name bytes + active (1) + score (8) + level (4)
 
-        const result = des(buffer);
+        const result = des(serialized);
         expect(result).toEqual(obj);
     });
 
@@ -253,10 +253,10 @@ describe('serDes', () => {
         const { ser, des } = serDes(tuple([number(), string(), boolean()] as const));
 
         const data: [number, string, boolean] = [42.5, 'hello', true];
-        const buffer = ser(data);
-        expect(buffer.byteLength).toBe(8 + 4 + data[1].length + 1); // number (8) + string length prefix (4) + string bytes + boolean (1)
+        const serialized = ser(data);
+        expect(serialized.byteLength).toBe(8 + 4 + data[1].length + 1); // number (8) + string length prefix (4) + string bytes + boolean (1)
 
-        const out = des(buffer) as [number, string, boolean];
+        const out = des(serialized) as [number, string, boolean];
         expect(out[0]).toBeCloseTo(data[0]);
         expect(out[1]).toBe(data[1]);
         expect(out[2]).toBe(data[2]);
@@ -296,8 +296,8 @@ describe('serDes', () => {
             { id: 1, name: 'Alice' },
             { id: 2, name: 'Bob' },
         ];
-        const buffer = ser(arr);
-        const result = des(buffer);
+        const serialized = ser(arr);
+        const result = des(serialized);
         expect(result).toEqual(arr);
     });
 
@@ -372,8 +372,8 @@ describe('serDes', () => {
             group1: { a: 1, b: 2 },
             group2: { x: 42, y: 99 },
         };
-        const buffer = ser(data);
-        const result = des(buffer);
+        const serialized = ser(data);
+        const result = des(serialized);
         expect(result).toEqual(data);
     });
 

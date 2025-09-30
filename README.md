@@ -8,7 +8,7 @@
 
 # packcat
 
-packcat is a small library for serializing and deserializing objects to and from ArrayBuffers.
+packcat is a small library for serializing and deserializing objects to and from buffers.
 
 ## Table Of Contents
 
@@ -22,7 +22,7 @@ packcat is a small library for serializing and deserializing objects to and from
 
 ## Overview
 
-This library takes defined schemas, and then generates efficient functions that serialize and deserialize objects fitting the schemas into compact ArrayBuffers.
+This library takes defined schemas, and then generates efficient functions that serialize and deserialize objects fitting the schemas into compact buffers.
 
 It is great for use cases like networked games/apps where minimizing bandwidth is important, and both the client and server use javascript and can share schema definitions.
 
@@ -69,11 +69,11 @@ const playerInput: PlayerInputType = {
     cmd: [{ type: 'interact' }, { type: 'use', primary: true, secondary: false }],
 };
 
-const buffer = playerInputSerdes.ser(playerInput);
+const u8 = playerInputSerdes.ser(playerInput);
 
-console.log(buffer); // ArrayBuffer
+console.log(u8); // Uint8Array
 
-const deserialized = playerInputSerdes.des(buffer);
+const deserialized = playerInputSerdes.des(u8);
 
 console.log(deserialized); // { frame: 1, nipple: [ 0, 1 ], buttons: { jump: true, sprint: false, crouch: true }, cmd: [ { type: 'interact' }, { type: 'use', primary: true, secondary: false } ] }
 ```
@@ -92,9 +92,10 @@ console.log(playerInputSerdes.validate({ foo: 'bar' })); // false
 ### Ser/Des
 
 ```ts
+// TODO: accept Uint8Array as ser return & des input so we can work well with views
 export function serDes<S extends Schema>(schema: S): {
-    ser: (value: SchemaType<S>) => ArrayBuffer;
-    des: (buffer: ArrayBuffer) => SchemaType<S>;
+    ser: (value: SchemaType<S>) => Uint8Array;
+    des: (u8: Uint8Array) => SchemaType<S>;
     validate: (value: SchemaType<S>) => boolean;
     source: {
         ser: string;
@@ -209,8 +210,8 @@ export function record<F extends Schema>(field: F): {
 ```
 
 ```ts
-export function arrayBuffer(): {
-    type: 'arrayBuffer';
+export function uint8Array(): {
+    type: 'uint8Array';
 };
 ```
 
@@ -265,7 +266,7 @@ export function union<K extends string, V extends (ObjectSchema & {
 #### Schema Types
 
 ```ts
-export type Schema = BooleanSchema | NumberSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Float32Schema | Float64Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | ArrayBufferSchema | BoolsSchema | UnionSchema | LiteralSchema | NullableSchema | OptionalSchema | NullishSchema;
+export type Schema = BooleanSchema | NumberSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Float32Schema | Float64Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | BoolsSchema | UnionSchema | LiteralSchema | NullableSchema | OptionalSchema | NullishSchema;
 ```
 
 ```ts
@@ -371,8 +372,8 @@ export type RecordSchema = {
 ```
 
 ```ts
-export type ArrayBufferSchema = {
-    type: 'arrayBuffer';
+export type Uint8ArraySchema = {
+    type: 'uint8Array';
 };
 ```
 

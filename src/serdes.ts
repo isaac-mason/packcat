@@ -1,10 +1,12 @@
 import type { Schema, SchemaType } from './schema';
 
+// TODO: accept Uint8Array as ser return & des input so we can work well with views
+
 export function serDes<S extends Schema>(
     schema: S,
 ): {
-    ser: (value: SchemaType<S>) => ArrayBuffer;
-    des: (buffer: ArrayBuffer) => SchemaType<S>;
+    ser: (value: SchemaType<S>) => Uint8Array;
+    des: (u8: Uint8Array) => SchemaType<S>;
     validate: (value: SchemaType<S>) => boolean;
     source: { ser: string; des: string; validate: string };
 } {
@@ -34,21 +36,21 @@ export function serDes<S extends Schema>(
     const serFn = new Function('value', '{ textEncoder, f32, f32_u8, f64, f64_u8, utf8Length }', serSource) as (
         value: SchemaType<S>,
         tmps: Ctx,
-    ) => ArrayBuffer;
+    ) => Uint8Array;
 
-    const ser = (value: SchemaType<S>): ArrayBuffer => {
+    const ser = (value: SchemaType<S>): Uint8Array => {
         return serFn(value, ctx);
     };
 
     const desSource = buildDes(schema);
 
-    const desFn = new Function('buffer', '{ textDecoder, f32, f32_u8, f64, f64_u8 }', desSource) as (
-        buffer: ArrayBuffer,
+    const desFn = new Function('u8', '{ textDecoder, f32, f32_u8, f64, f64_u8 }', desSource) as (
+        data: Uint8Array,
         tmps: Ctx,
     ) => SchemaType<S>;
 
-    const des = (buffer: ArrayBuffer): SchemaType<S> => {
-        return desFn(buffer, ctx);
+    const des = (u8: Uint8Array): SchemaType<S> => {
+        return desFn(u8, ctx);
     };
 
     const validateSource = buildValidate(schema);
@@ -447,7 +449,7 @@ function buildSer(schema: Schema): string {
 
     code += ser(schema, 'value');
 
-    code += 'return arrayBuffer;';
+    code += 'return u8;';
 
     return code;
 }
@@ -456,7 +458,6 @@ function buildDes(schema: Schema): string {
     let code = '';
 
     code += 'let o = 0;';
-    code += 'const u8 = new Uint8Array(buffer);';
     code += 'let len = 0;';
     code += 'let val = 0;';
 

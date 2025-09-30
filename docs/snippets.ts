@@ -32,11 +32,11 @@ const playerInput: PlayerInputType = {
     cmd: [{ type: 'interact' }, { type: 'use', primary: true, secondary: false }],
 };
 
-const buffer = playerInputSerdes.ser(playerInput);
+const u8 = playerInputSerdes.ser(playerInput);
 
-console.log(buffer); // ArrayBuffer
+console.log(u8); // Uint8Array
 
-const deserialized = playerInputSerdes.des(buffer);
+const deserialized = playerInputSerdes.des(u8);
 
 console.log(deserialized); // { frame: 1, nipple: [ 0, 1 ], buttons: { jump: true, sprint: false, crouch: true }, cmd: [ { type: 'interact' }, { type: 'use', primary: true, secondary: false } ] }
 /* SNIPPET_END: serdes */

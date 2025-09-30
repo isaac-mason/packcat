@@ -8,7 +8,7 @@
 
 # packcat
 
-packcat is a small library for serializing and deserializing objects to and from ArrayBuffers.
+packcat is a small library for serializing and deserializing objects to and from buffers.
 
 ## Table Of Contents
 
@@ -16,7 +16,7 @@ packcat is a small library for serializing and deserializing objects to and from
 
 ## Overview
 
-This library takes defined schemas, and then generates efficient functions that serialize and deserialize objects fitting the schemas into compact ArrayBuffers.
+This library takes defined schemas, and then generates efficient functions that serialize and deserialize objects fitting the schemas into compact buffers.
 
 It is great for use cases like networked games/apps where minimizing bandwidth is important, and both the client and server use javascript and can share schema definitions.
 
@@ -80,7 +80,7 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <RenderType type="import('packcat').record" />
 
-<RenderType type="import('packcat').arrayBuffer" />
+<RenderType type="import('packcat').uint8Array" />
 
 <RenderType type="import('packcat').bools" />
 
@@ -128,7 +128,7 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <RenderType type="import('packcat').RecordSchema" />
 
-<RenderType type="import('packcat').ArrayBufferSchema" />
+<RenderType type="import('packcat').Uint8ArraySchema" />
 
 <RenderType type="import('packcat').BoolsSchema" />
 
