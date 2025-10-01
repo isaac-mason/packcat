@@ -10,13 +10,21 @@ export type NumberSchema = {
     type: 'number';
 };
 
+export type VarIntSchema = {
+    type: 'varint';
+};
+
+export type VarUintSchema = {
+    type: 'varuint';
+};
+
 export type Int8Schema = {
     type: 'int8';
 };
 
 export type Uint8Schema = {
     type: 'uint8';
-};
+};  
 
 export type Int16Schema = {
     type: 'int16';
@@ -114,6 +122,8 @@ export type PrimitiveSchema =
 export type Schema =
     | BooleanSchema
     | NumberSchema
+    | VarIntSchema
+    | VarUintSchema
     | Int8Schema
     | Uint8Schema
     | Int16Schema
@@ -186,6 +196,8 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
     S extends BooleanSchema ? boolean :
     S extends StringSchema ? string :
     S extends NumberSchema ? number :
+    S extends VarIntSchema ? number :
+    S extends VarUintSchema ? number :
     S extends Int8Schema ? number :
     S extends Uint8Schema ? number :
     S extends Int16Schema ? number :
@@ -222,6 +234,10 @@ export const boolean = (): { type: 'boolean' } => ({ type: 'boolean' });
 export const string = (): { type: 'string' } => ({ type: 'string' });
 
 export const number = (): { type: 'number' } => ({ type: 'number' });
+
+export const varint = (): { type: 'varint' } => ({ type: 'varint' });
+
+export const varuint = (): { type: 'varuint' } => ({ type: 'varuint' });
 
 export const int8 = (): { type: 'int8' } => ({ type: 'int8' });
 

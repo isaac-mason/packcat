@@ -26,6 +26,8 @@ import {
     uint32,
     uint8,
     union,
+    varint,
+    varuint,
 } from '../src';
 
 describe('serDes', () => {
@@ -96,6 +98,112 @@ describe('serDes', () => {
         expect(serializedF64.byteLength).toBe(8);
         const outF64 = desF64(serializedF64);
         expect(outF64).toBeCloseTo(2.718281828459045, 12);
+    });
+
+    test('ser/des varint/varuint with expected byte lengths', () => {
+        // varint tests
+        const { ser: serVarInt, des: desVarInt, validate: validateVarInt } = serDes(varint());
+        
+        // Test small positive values (1 byte)
+        const small1 = serVarInt(0);
+        expect(small1.byteLength).toBe(1);
+        expect(desVarInt(small1)).toBe(0);
+        
+        const small2 = serVarInt(63);
+        expect(small2.byteLength).toBe(1);
+        expect(desVarInt(small2)).toBe(63);
+        
+        // Test small negative values (1 byte due to zigzag encoding)
+        const smallNeg1 = serVarInt(-1);
+        expect(smallNeg1.byteLength).toBe(1);
+        expect(desVarInt(smallNeg1)).toBe(-1);
+        
+        const smallNeg2 = serVarInt(-64);
+        expect(smallNeg2.byteLength).toBe(1);
+        expect(desVarInt(smallNeg2)).toBe(-64);
+        
+        // Test medium values (2 bytes)
+        const medium1 = serVarInt(127);
+        expect(medium1.byteLength).toBe(2);
+        expect(desVarInt(medium1)).toBe(127);
+        
+        const medium2 = serVarInt(-128);
+        expect(medium2.byteLength).toBe(2);
+        expect(desVarInt(medium2)).toBe(-128);
+        
+        const medium3 = serVarInt(8191);
+        expect(medium3.byteLength).toBe(2);
+        expect(desVarInt(medium3)).toBe(8191);
+        
+        // Test larger values (3+ bytes)
+        const large1 = serVarInt(16383);
+        expect(large1.byteLength).toBe(3);
+        expect(desVarInt(large1)).toBe(16383);
+        
+        const large2 = serVarInt(-100000);
+        expect(large2.byteLength).toBe(3);
+        expect(desVarInt(large2)).toBe(-100000);
+        
+        // Test very large values
+        const veryLarge = serVarInt(67108863);
+        expect(veryLarge.byteLength).toBe(4);
+        expect(desVarInt(veryLarge)).toBe(67108863);
+        
+        // Validation tests
+        expect(validateVarInt(0)).toBe(true);
+        expect(validateVarInt(-1)).toBe(true);
+        expect(validateVarInt(12345)).toBe(true);
+        expect(validateVarInt(-67890)).toBe(true);
+        // @ts-expect-error testing invalid input
+        expect(validateVarInt(1.5)).toBe(false);
+        // @ts-expect-error testing invalid input
+        expect(validateVarInt('123')).toBe(false);
+
+        // varuint tests
+        const { ser: serVarUInt, des: desVarUInt, validate: validateVarUInt } = serDes(varuint());
+        
+        // Test small values (1 byte)
+        const usmall1 = serVarUInt(0);
+        expect(usmall1.byteLength).toBe(1);
+        expect(desVarUInt(usmall1)).toBe(0);
+        
+        const usmall2 = serVarUInt(127);
+        expect(usmall2.byteLength).toBe(1);
+        expect(desVarUInt(usmall2)).toBe(127);
+        
+        // Test medium values (2 bytes)
+        const umedium1 = serVarUInt(128);
+        expect(umedium1.byteLength).toBe(2);
+        expect(desVarUInt(umedium1)).toBe(128);
+        
+        const umedium2 = serVarUInt(16383);
+        expect(umedium2.byteLength).toBe(2);
+        expect(desVarUInt(umedium2)).toBe(16383);
+        
+        // Test larger values (3 bytes)
+        const ularge1 = serVarUInt(16384);
+        expect(ularge1.byteLength).toBe(3);
+        expect(desVarUInt(ularge1)).toBe(16384);
+        
+        const ularge2 = serVarUInt(2097151);
+        expect(ularge2.byteLength).toBe(3);
+        expect(desVarUInt(ularge2)).toBe(2097151);
+        
+        // Test very large values (4 bytes)
+        const uveryLarge = serVarUInt(268435455);
+        expect(uveryLarge.byteLength).toBe(4);
+        expect(desVarUInt(uveryLarge)).toBe(268435455);
+        
+        // Validation tests
+        expect(validateVarUInt(0)).toBe(true);
+        expect(validateVarUInt(12345)).toBe(true);
+        expect(validateVarUInt(4294967295)).toBe(true);
+        // @ts-expect-error testing invalid input
+        expect(validateVarUInt(-1)).toBe(false);
+        // @ts-expect-error testing invalid input
+        expect(validateVarUInt(1.5)).toBe(false);
+        // @ts-expect-error testing invalid input
+        expect(validateVarUInt('123')).toBe(false);
     });
 
     test('ser/des string', () => {

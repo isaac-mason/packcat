@@ -1,7 +1,5 @@
 import type { Schema, SchemaType } from './schema';
 
-// TODO: accept Uint8Array as ser return & des input so we can work well with views
-
 export function serDes<S extends Schema>(
     schema: S,
 ): {
@@ -64,10 +62,29 @@ export function serDes<S extends Schema>(
     return { ser, des, validate, source: { ser: serSource, des: desSource, validate: validateSource } };
 }
 
+
+// // helpers to compute byte length of varuint/varint at size-time when calculating buffer lengths
+// function getVarUIntByteLength(valVar: string): string {
+//     // assume valVar is a JS expression evaluating to a non-negative integer
+//     return `(() => { let _v = ${valVar} >>> 0; let _len = 1; while (_v > 127) { _len++; _v >>>= 7; } return _len; })()`;
+// }
+
+// function getVarIntByteLength(valVar: string): string {
+//     // zig-zag encode then compute varuint length
+//     return `(() => { let _v = ((${valVar} << 1) ^ (${valVar} >> 31)) >>> 0; let _len = 1; while (_v > 127) { _len++; _v >>>= 7; } return _len; })()`;
+// }
+
+
 function buildSer(schema: Schema): string {
     let code = '';
 
     code += 'let len = 0;';
+    code += 'let vint = 0;';
+    code += 'let vuint = 0;';
+    code += 'let keys;';
+    code += 'let val = 0;';
+    code += 'let o_size = 0;';
+    code += 'let textEncoderResult;';
 
     type SizeCalc = { code: string; fixed: number };
 
@@ -91,6 +108,14 @@ function buildSer(schema: Schema): string {
                 return { code: '', fixed: 8 };
             case 'string':
                 return { code: `len = utf8Length(${v}); size += 4 + len;`, fixed: 0 };
+            case 'varint': {
+                const code = `vint = ((${v} << 1) ^ (${v} >> 31)) >>> 0; while (vint > 127) { size++; vint >>>= 7; } size += 1;`;
+                return { code, fixed: 0 };
+            }
+            case 'varuint': {
+                const code = `vuint = ${v} >>> 0; while (vuint > 127) { size++; vuint >>>= 7; } size += 1;`;
+                return { code, fixed: 0 };
+            }
             case 'uint8Array': {
                 // store a 4-byte length prefix followed by raw bytes
                 return { code: `len = ${v}.length; size += 4 + len;`, fixed: 0 };
@@ -264,11 +289,6 @@ function buildSer(schema: Schema): string {
 
     code += 'const u8 = new Uint8Array(arrayBuffer); ';
 
-    code += 'let keys;';
-    code += 'let val = 0;';
-    code += 'let o_size = 0;';
-    code += 'let textEncoderResult;';
-
     function ser(s: Schema, v: string): string {
         switch (s.type) {
             case 'boolean':
@@ -293,6 +313,14 @@ function buildSer(schema: Schema): string {
                 return writeF64(v);
             case 'string': {
                 return writeString(v);
+            }
+            case 'varint': {
+                // zig-zag encode then write as varuint using shared temp vint
+                return `vint = (${v} << 1) ^ (${v} >> 31); while (vint > 127) { u8[o++] = (vint & 127) | 128; vint >>>= 7; } u8[o++] = vint & 127;`;
+            }
+            case 'varuint': {
+                // write unsigned LEB128 / varuint using shared temp vuint
+                return `vuint = ${v} >>> 0; while (vuint > 127) { u8[o++] = (vuint & 127) | 128; vuint >>>= 7; } u8[o++] = vuint & 127;`;
             }
             case 'uint8Array': {
                 // write 4-byte length then copy raw bytes
@@ -460,6 +488,8 @@ function buildDes(schema: Schema): string {
     code += 'let o = 0;';
     code += 'let len = 0;';
     code += 'let val = 0;';
+    code += 'let shift = 0;'
+    code += 'let byte = 0;'
 
     let variableCounter = 1;
 
@@ -487,6 +517,22 @@ function buildDes(schema: Schema): string {
                 return readF64(target);
             case 'string': {
                 return readString(target);
+            }
+            case 'varint': {
+                let code = '';
+                code += `val = 0; shift = 0; byte = 0;`;
+                code += `do { byte = u8[o++]; val |= (byte & 0x7f) << shift; shift += 7; } while ((byte & 0x80) !== 0);`;
+                // zig-zag decode
+                code += `${target} = (val >>> 1) ^ -(val & 1);`;
+                return code;
+            }
+            case 'varuint': {
+                // read unsigned LEB128 / varuint
+                let code = '';
+                code += `val = 0; shift = 0; byte = 0;`;
+                code += `do { byte = u8[o++]; val |= (byte & 0x7f) << shift; shift += 7; } while ((byte & 0x80) !== 0);`;
+                code += `${target} = val >>> 0;`;
+                return code;
             }
             case 'uint8Array': {
                 // read length then create a view on the main buffer
@@ -650,6 +696,10 @@ function buildValidate(schema: Schema): string {
                 return `if (typeof ${v} !== 'boolean') return false;`;
             case 'number':
                 return `if (typeof ${v} !== 'number') return false;`;
+            case 'varint':
+                return `if (typeof ${v} !== 'number' || !Number.isInteger(${v})) return false;`;
+            case 'varuint':
+                return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < 0) return false;`;
             case 'int8':
                 return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < -128 || ${v} > 127) return false;`;
             case 'uint8':
