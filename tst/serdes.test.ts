@@ -5,7 +5,7 @@ import type { SchemaType } from '../src';
 import {
     uint8Array,
     boolean,
-    bools,
+    bitset,
     float32,
     float64,
     int16,
@@ -154,7 +154,6 @@ describe('serDes', () => {
         expect(validateVarInt(-1)).toBe(true);
         expect(validateVarInt(12345)).toBe(true);
         expect(validateVarInt(-67890)).toBe(true);
-        // @ts-expect-error testing invalid input
         expect(validateVarInt(1.5)).toBe(false);
         // @ts-expect-error testing invalid input
         expect(validateVarInt('123')).toBe(false);
@@ -198,9 +197,7 @@ describe('serDes', () => {
         expect(validateVarUInt(0)).toBe(true);
         expect(validateVarUInt(12345)).toBe(true);
         expect(validateVarUInt(4294967295)).toBe(true);
-        // @ts-expect-error testing invalid input
         expect(validateVarUInt(-1)).toBe(false);
-        // @ts-expect-error testing invalid input
         expect(validateVarUInt(1.5)).toBe(false);
         // @ts-expect-error testing invalid input
         expect(validateVarUInt('123')).toBe(false);
@@ -485,8 +482,8 @@ describe('serDes', () => {
         expect(result).toEqual(data);
     });
 
-    test('ser/des bools simple', () => {
-        const { ser, des, validate } = serDes(bools(['a', 'b', 'c'] as const));
+    test('ser/des bitset simple', () => {
+        const { ser, des, validate } = serDes(bitset(['a', 'b', 'c'] as const));
 
         const v = { a: true, b: false, c: true };
         expect(validate(v)).toBe(true);
@@ -496,10 +493,10 @@ describe('serDes', () => {
         expect(out).toEqual(v);
     });
 
-    test('ser/des bools many keys (multi-byte)', () => {
+    test('ser/des bitset many keys (multi-byte)', () => {
         const keys: string[] = [];
         for (let i = 0; i < 10; i++) keys.push(`k${i}`);
-        const s = serDes(bools(keys));
+        const s = serDes(bitset(keys));
 
         const obj: Record<string, boolean> = {};
         for (let i = 0; i < keys.length; i++) obj[keys[i]] = i % 2 === 0;
@@ -565,7 +562,7 @@ describe('serDes', () => {
             id: uint32(),
             name: string(),
             active: boolean(),
-            flags: bools(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']),
+            flags: bitset(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']),
             stats: object({
                 score: number(),
                 level: uint32(),
@@ -894,8 +891,8 @@ describe('validate', () => {
         expect(s.validate([[1.5, 'a']])).toBe(false);
     });
 
-    test('validate bools missing key / wrong type', () => {
-        const s = serDes(bools(['x', 'y'] as const));
+    test('validate bitset missing key / wrong type', () => {
+        const s = serDes(bitset(['x', 'y'] as const));
         expect(s.validate({ x: true, y: false })).toBe(true);
         //  @ts-expect-error missing
         expect(s.validate({ x: true })).toBe(false);

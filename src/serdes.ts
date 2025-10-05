@@ -198,7 +198,7 @@ function buildSer(schema: Schema): string {
                 inner += `}}`;
                 return { code: inner, fixed: 0 };
             }
-            case 'bools': {
+            case 'bitset': {
                 const bytes = Math.ceil(s.keys.length / 8);
                 return { code: '', fixed: bytes };
             }
@@ -408,7 +408,7 @@ function buildSer(schema: Schema): string {
 
                 return inner;
             }
-            case 'bools': {
+            case 'bitset': {
                 // pack keys into bitset, unrolled per-output-byte to avoid per-iteration modulo
                 const byteVar = variable('byte', variableCounter++);
 
@@ -596,7 +596,7 @@ function buildDes(schema: Schema): string {
                 inner += `}`;
                 return inner;
             }
-            case 'bools': {
+            case 'bitset': {
                 // unpack bitset into object, unrolled per-output-byte and inline keys
                 const total = s.keys.length;
                 const bytes = Math.ceil(total / 8);
@@ -776,7 +776,7 @@ function buildValidate(schema: Schema): string {
                 inner += `}`;
                 return inner;
             }
-            case 'bools': {
+            case 'bitset': {
                 let inner = '';
                 inner += `if (typeof (${v}) !== "object") return false;`;
                 for (let i = 0; i < s.keys.length; i++) {

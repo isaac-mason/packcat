@@ -92,7 +92,6 @@ console.log(playerInputSerdes.validate({ foo: 'bar' })); // false
 ### Ser/Des
 
 ```ts
-// TODO: accept Uint8Array as ser return & des input so we can work well with views
 export function serDes<S extends Schema>(schema: S): {
     ser: (value: SchemaType<S>) => Uint8Array;
     des: (u8: Uint8Array) => SchemaType<S>;
@@ -216,10 +215,10 @@ export function uint8Array(): {
 ```
 
 ```ts
-export function bools<Keys extends string[]>(keys: [
+export function bitset<Keys extends string[]>(keys: [
     ...Keys
 ]): {
-    type: 'bools';
+    type: 'bitset';
     keys: [
         ...Keys
     ];
@@ -266,7 +265,7 @@ export function union<K extends string, V extends (ObjectSchema & {
 #### Schema Types
 
 ```ts
-export type Schema = BooleanSchema | NumberSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Float32Schema | Float64Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | BoolsSchema | UnionSchema | LiteralSchema | NullableSchema | OptionalSchema | NullishSchema;
+export type Schema = BooleanSchema | NumberSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Float32Schema | Float64Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | BitSetSchema | UnionSchema | LiteralSchema | NullableSchema | OptionalSchema | NullishSchema;
 ```
 
 ```ts
@@ -378,8 +377,8 @@ export type Uint8ArraySchema = {
 ```
 
 ```ts
-export type BoolsSchema = {
-    type: 'bools';
+export type BitSetSchema = {
+    type: 'bitset';
     keys: string[];
 };
 ```

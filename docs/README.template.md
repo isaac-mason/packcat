@@ -82,7 +82,7 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <RenderType type="import('packcat').uint8Array" />
 
-<RenderType type="import('packcat').bools" />
+<RenderType type="import('packcat').bitset" />
 
 <RenderType type="import('packcat').optional" />
 
@@ -130,7 +130,7 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <RenderType type="import('packcat').Uint8ArraySchema" />
 
-<RenderType type="import('packcat').BoolsSchema" />
+<RenderType type="import('packcat').BitSetSchema" />
 
 <RenderType type="import('packcat').OptionalSchema" />
 
