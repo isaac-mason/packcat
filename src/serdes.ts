@@ -94,7 +94,7 @@ function buildSer(schema: Schema): string {
             case 'float64':
                 return { code: '', fixed: 8 };
             case 'string':
-                return { code: `len = utf8Length(${v}); size += 4 + len;`, fixed: 0 };
+                return { code: `size += 4 + utf8Length(${v});`, fixed: 0 };
             case 'varint': {
                 const code = `vint = ((${v} << 1) ^ (${v} >> 31)) >>> 0; while (vint > 127) { size++; vint >>>= 7; } size += 1;`;
                 return { code, fixed: 0 };
@@ -105,7 +105,7 @@ function buildSer(schema: Schema): string {
             }
             case 'uint8Array': {
                 // store a 4-byte length prefix followed by raw bytes
-                return { code: `len = ${v}.length; size += 4 + len;`, fixed: 0 };
+                return { code: `size += 4 + ${v}.length;`, fixed: 0 };
             }
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
