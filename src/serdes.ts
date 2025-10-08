@@ -62,19 +62,6 @@ export function serDes<S extends Schema>(
     return { ser, des, validate, source: { ser: serSource, des: desSource, validate: validateSource } };
 }
 
-
-// // helpers to compute byte length of varuint/varint at size-time when calculating buffer lengths
-// function getVarUIntByteLength(valVar: string): string {
-//     // assume valVar is a JS expression evaluating to a non-negative integer
-//     return `(() => { let _v = ${valVar} >>> 0; let _len = 1; while (_v > 127) { _len++; _v >>>= 7; } return _len; })()`;
-// }
-
-// function getVarIntByteLength(valVar: string): string {
-//     // zig-zag encode then compute varuint length
-//     return `(() => { let _v = ((${valVar} << 1) ^ (${valVar} >> 31)) >>> 0; let _len = 1; while (_v > 127) { _len++; _v >>>= 7; } return _len; })()`;
-// }
-
-
 function buildSer(schema: Schema): string {
     let code = '';
 
