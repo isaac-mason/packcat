@@ -1,6 +1,6 @@
 import {
+    bitset,
     boolean,
-    bools,
     float32,
     list,
     literal,
@@ -19,7 +19,7 @@ function now() {
     return performance.now();
 }
 
-function bench(name, fn, iterations = 100_000) {
+function bench(name, fn, iterations) {
     // warm up
     for (let i = 0; i < 1000; i++) fn();
     const start = now();
@@ -32,17 +32,19 @@ function bench(name, fn, iterations = 100_000) {
 function benchSchema(name, schema, val) {
     const { ser, des, source } = serDes(schema);
 
-    bench(`ser ${name}`, () => ser(val), 10000);
+    const N = 100_000;
+
+    bench(`ser ${name}`, () => ser(val), N);
     const serVal = ser(val);
-    bench(`des ${name}`, () => des(serVal), 10000);
+    bench(`des ${name}`, () => des(serVal), N);
 
     console.log('serVal:', serVal);
     console.log('serVal byteLength:', serVal.byteLength);
     console.log('desVal:', des(serVal));
 
-    bench(`JSON.stringify ${name}`, () => JSON.stringify(val), 10000);
+    bench(`JSON.stringify ${name}`, () => JSON.stringify(val), N);
     const serJsonVal = JSON.stringify(val);
-    bench(`JSON.parse ${name}`, () => JSON.parse(serJsonVal), 10000);
+    bench(`JSON.parse ${name}`, () => JSON.parse(serJsonVal), N);
 
     console.log('serJsonVal byteLength:', new TextEncoder().encode(serJsonVal).byteLength);
 
@@ -98,7 +100,7 @@ benchSchema('positions', positionsSchema, positionsVal);
 const playerInputSchema = object({
     frame: uint32(),
     nipple: list(float32(), 2),
-    buttons: bools(['jump', 'sprint', 'crouch']),
+    buttons: bitset(['jump', 'sprint', 'crouch']),
     cmd: list(
         union('type', [
             object({ type: literal('interact') }),
