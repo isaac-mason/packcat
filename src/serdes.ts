@@ -313,15 +313,12 @@ function buildSer(schema: Schema): string {
                 return writeF32(v);
             case 'float64':
                 return writeF64(v);
-            case 'string': {
+            case 'string': 
                 return writeString(v);
-            }
-            case 'varint': {
+            case 'varint': 
                 return writeVarint(v);
-            }
-            case 'varuint': {
+            case 'varuint':
                 return writeVaruint(v);
-            }
             case 'uint8Array': {
                 // write 4-byte length then copy raw bytes
                 let inner = '';
@@ -968,11 +965,14 @@ function readString(target: string, offset = 'o'): string {
 function writeString(value: string, offset = 'o'): string {
     let code = '';
 
-    code += `textEncoderResult = textEncoder.encode(${value});`;
+    const strVar = variable('str');
+    code += `const ${strVar} = ${value};`;
     
-    code += writeVaruint('textEncoderResult.length', offset);
+    code += `len = utf8Length(${strVar});`;
+    code += writeVaruint('len', offset);
     
-    code += `u8.set(textEncoderResult, ${offset}); ${offset} += textEncoderResult.length;`;
+    code += `textEncoder.encodeInto(${strVar}, u8.subarray(${offset}));`;
+    code += `${offset} += len;`;
 
     return code;
 }
