@@ -183,14 +183,16 @@ function buildSer(schema: Schema): string {
                 const i = variable('i', variableCounter++);
 
                 const childSize = size(s.field, `${v}[k]`);
+                const keys = variable('keys', variableCounter++);
 
                 let inner = '';
-                inner += `if (${v} && typeof ${v} === 'object') { const keys = Object.keys(${v}); `;
-                inner += `${varuintSize('keys.length')}`;
+                inner += `if (${v} && typeof ${v} === 'object') {`;
+                inner += `const ${keys} = Object.keys(${v});`;
+                inner += `${varuintSize(`${keys}.length`)}`;
                 if (childSize.fixed > 0) {
-                    inner += ` size += ${childSize.fixed} * keys.length; `;
+                    inner += ` size += ${childSize.fixed} * ${keys}.length; `;
                 }
-                inner += `for (let ${i} = 0; ${i} < keys.length; ${i}++) { const k = keys[${i}]; len = utf8Length(k); ${varuintSize('len')} size += len; `;
+                inner += `for (let ${i} = 0; ${i} < ${keys}.length; ${i}++) { const k = ${keys}[${i}]; len = utf8Length(k); ${varuintSize('len')} size += len; `;
                 if (childSize.code !== '') {
                     inner += childSize.code;
                 }
