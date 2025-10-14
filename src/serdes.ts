@@ -117,8 +117,9 @@ function buildSer(schema: Schema): string {
                 return { code: varuintSize(v), fixed: 0 };
             }
             case 'uint8Array': {
-                // store a 4-byte length prefix followed by raw bytes
-                return { code: `size += 4 + ${v}.length;`, fixed: 0 };
+                // store a varuint length prefix followed by raw bytes
+                const lenVar = variable('len');
+                return { code: `const ${lenVar} = ${v}.length; ${varuintSize(lenVar)} size += ${lenVar};`, fixed: 0 };
             }
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
@@ -324,10 +325,12 @@ function buildSer(schema: Schema): string {
             case 'varuint':
                 return writeVaruint(v);
             case 'uint8Array': {
-                // write 4-byte length then copy raw bytes
+                // write varuint length then copy raw bytes
+                const lenVar = variable('len');
                 let inner = '';
-                inner += writeU32(`${v}.length`);
-                inner += `u8.set(${v}, o); o += ${v}.length;`;
+                inner += `const ${lenVar} = ${v}.length;`;
+                inner += writeVaruint(lenVar);
+                inner += `u8.set(${v}, o); o += ${lenVar};`;
                 return inner;
             }
             case 'list': {
@@ -533,9 +536,9 @@ function buildDes(schema: Schema): string {
                 return readVaruint(target);
             }
             case 'uint8Array': {
-                // read length then create a view on the main buffer
+                // read varuint length then create a view on the main buffer
                 let inner = '';
-                inner += readU32('len');
+                inner += readVaruint('len');
                 inner += `${target} = u8.subarray(o, o + len); o += len;`;
                 return inner;
             }

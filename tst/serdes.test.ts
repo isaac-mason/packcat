@@ -225,19 +225,56 @@ describe('serDes', () => {
     test('ser/des arraybuffer empty and non-empty', () => {
         const { ser, des, validate } = build(uint8Array());
 
+        // Empty array - varuint(0) = 1 byte
         const empty = new Uint8Array(0);
         const serializedEmpty = ser(empty);
-        expect(serializedEmpty.byteLength).toBe(4);
+        expect(serializedEmpty.byteLength).toBe(1); // varuint(0) = 1 byte
         const outEmpty = des(serializedEmpty);
         expect(outEmpty.byteLength).toBe(0);
         expect(outEmpty.buffer).toBe(serializedEmpty.buffer); // should be a view
 
+        // Small array (length < 128) - varuint = 1 byte
         const src = new Uint8Array([1, 2, 3]);
         const serialized = ser(src);
-        expect(serialized.byteLength).toBe(4 + src.length);
+        expect(serialized.byteLength).toBe(1 + src.length); // varuint(3) = 1 byte + 3 bytes data
         const out = des(serialized);
         expect(out).toEqual(src);
         expect(out.buffer).toBe(serialized.buffer); // should be a view
+
+        // Length = 127 (edge case, still 1 byte varuint)
+        const len127 = new Uint8Array(127).fill(42);
+        const ser127 = ser(len127);
+        expect(ser127.byteLength).toBe(1 + 127); // varuint(127) = 1 byte
+        const out127 = des(ser127);
+        expect(out127).toEqual(len127);
+
+        // Length = 128 (crosses threshold, 2 byte varuint)
+        const len128 = new Uint8Array(128).fill(43);
+        const ser128 = ser(len128);
+        expect(ser128.byteLength).toBe(2 + 128); // varuint(128) = 2 bytes
+        const out128 = des(ser128);
+        expect(out128).toEqual(len128);
+
+        // Length = 255 (2 byte varuint)
+        const len255 = new Uint8Array(255).fill(44);
+        const ser255 = ser(len255);
+        expect(ser255.byteLength).toBe(2 + 255); // varuint(255) = 2 bytes
+        const out255 = des(ser255);
+        expect(out255).toEqual(len255);
+
+        // Length = 16383 (edge case, still 2 byte varuint)
+        const len16383 = new Uint8Array(16383).fill(45);
+        const ser16383 = ser(len16383);
+        expect(ser16383.byteLength).toBe(2 + 16383); // varuint(16383) = 2 bytes
+        const out16383 = des(ser16383);
+        expect(out16383.byteLength).toBe(16383);
+
+        // Length = 16384 (crosses threshold, 3 byte varuint)
+        const len16384 = new Uint8Array(16384).fill(46);
+        const ser16384 = ser(len16384);
+        expect(ser16384.byteLength).toBe(3 + 16384); // varuint(16384) = 3 bytes
+        const out16384 = des(ser16384);
+        expect(out16384.byteLength).toBe(16384);
 
         expect(validate(src)).toBe(true);
         // @ts-expect-error wrong type
