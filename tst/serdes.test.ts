@@ -207,7 +207,17 @@ describe('serDes', () => {
         const { ser, des } = build(string());
         const testStr = 'hello world';
         const serialized = ser(testStr);
-        expect(serialized.byteLength).toBe(4 + testStr.length); // 4 bytes for length prefix
+        expect(serialized.byteLength).toBe(1 + testStr.length); // 1 byte varuint length prefix for short strings
+        const result = des(serialized);
+        expect(result).toBe(testStr);
+    });
+
+    test('ser/des string (long - 2 byte varuint)', () => {
+        const { ser, des } = build(string());
+        // String with 150 chars requires 2 bytes for varuint (128-16383 range)
+        const testStr = 'a'.repeat(150);
+        const serialized = ser(testStr);
+        expect(serialized.byteLength).toBe(2 + testStr.length); // 2 byte varuint length prefix
         const result = des(serialized);
         expect(result).toBe(testStr);
     });
@@ -258,7 +268,7 @@ describe('serDes', () => {
         const { ser, des } = build(list(number()));
         const arr = [1.1, 2.2, 3.3];
         const serialized = ser(arr);
-        expect(serialized.byteLength).toBe(4 + arr.length * 8); // 4 bytes for length prefix + 8 bytes per number
+        expect(serialized.byteLength).toBe(1 + arr.length * 8); // 1 byte varuint for length prefix + 8 bytes per number
         const result = des(serialized);
         expect(result).toEqual(arr);
     });
@@ -273,7 +283,7 @@ describe('serDes', () => {
         ];
 
         const serialized = ser(data);
-        expect(serialized.byteLength).toBe(4 + data.length * 12); // 4 bytes for length prefix + 12 bytes per vec3 (3 * 4 bytes per float32)
+        expect(serialized.byteLength).toBe(1 + data.length * 12); // 1 byte varuint for length prefix + 12 bytes per vec3 (3 * 4 bytes per float32)
 
         const result = des(serialized);
         expect(result.length).toBe(data.length);
@@ -300,8 +310,17 @@ describe('serDes', () => {
         ];
 
         const serialized = ser(arr);
-        expect(serialized.byteLength).toBe(4 + arr.length * 4 + arr.reduce((sum, item) => sum + item.length * 8, 0));
+        expect(serialized.byteLength).toBe(1 + arr.length * 1 + arr.reduce((sum, item) => sum + item.length * 8, 0)); // outer varuint + inner varuints
 
+        const result = des(serialized);
+        expect(result).toEqual(arr);
+    });
+
+    test('ser/des large list (>127 elements, 2-byte varuint)', () => {
+        const { ser, des } = build(list(uint8()));
+        const arr = new Array(200).fill(0).map((_, i) => i % 256);
+        const serialized = ser(arr);
+        expect(serialized.byteLength).toBe(2 + arr.length * 1); // 2-byte varuint for length prefix + 1 byte per uint8
         const result = des(serialized);
         expect(result).toEqual(arr);
     });
@@ -318,7 +337,18 @@ describe('serDes', () => {
         const obj = { a: 123.45, b: 'test', c: true };
 
         const serialized = ser(obj);
-        expect(serialized.byteLength).toBe(8 + 4 + obj.b.length + 1); // number (8) + string length prefix (4) + string bytes + boolean (1)
+        expect(serialized.byteLength).toBe(8 + 1 + obj.b.length + 1); // number (8) + string varuint prefix (1) + string bytes + boolean (1)
+
+        const result = des(serialized);
+        expect(result).toEqual(obj);
+    });
+
+    test('ser/des object (long string - 2 byte varuint)', () => {
+        const { ser, des } = build(object({ a: number(), b: string(), c: boolean() }));
+        const obj = { a: 123.45, b: 'x'.repeat(200), c: true };
+
+        const serialized = ser(obj);
+        expect(serialized.byteLength).toBe(8 + 2 + obj.b.length + 1); // number (8) + string 2-byte varuint prefix + string bytes + boolean (1)
 
         const result = des(serialized);
         expect(result).toEqual(obj);
@@ -348,7 +378,34 @@ describe('serDes', () => {
         };
 
         const serialized = ser(obj);
-        expect(serialized.byteLength).toBe(4 + 4 + obj.name.length + 1 + 8 + 4); // id (4) + name length prefix (4) + name bytes + active (1) + score (8) + level (4)
+        expect(serialized.byteLength).toBe(4 + 1 + obj.name.length + 1 + 8 + 4); // id (4) + name varuint prefix (1) + name bytes + active (1) + score (8) + level (4)
+
+        const result = des(serialized);
+        expect(result).toEqual(obj);
+    });
+
+    test('ser/des object in object (long string - 2 byte varuint)', () => {
+        const { ser, des } = build(
+            object({
+                id: uint32(),
+                name: string(),
+                active: boolean(),
+                stats: object({
+                    score: number(),
+                    level: uint32(),
+                }),
+            }),
+        );
+
+        const obj = {
+            id: 42,
+            name: 'y'.repeat(180),
+            active: true,
+            stats: { score: 98.5, level: 10 },
+        };
+
+        const serialized = ser(obj);
+        expect(serialized.byteLength).toBe(4 + 2 + obj.name.length + 1 + 8 + 4); // id (4) + name 2-byte varuint prefix + name bytes + active (1) + score (8) + level (4)
 
         const result = des(serialized);
         expect(result).toEqual(obj);
@@ -359,7 +416,20 @@ describe('serDes', () => {
 
         const data: [number, string, boolean] = [42.5, 'hello', true];
         const serialized = ser(data);
-        expect(serialized.byteLength).toBe(8 + 4 + data[1].length + 1); // number (8) + string length prefix (4) + string bytes + boolean (1)
+        expect(serialized.byteLength).toBe(8 + 1 + data[1].length + 1); // number (8) + string varuint prefix (1) + string bytes + boolean (1)
+
+        const out = des(serialized) as [number, string, boolean];
+        expect(out[0]).toBeCloseTo(data[0]);
+        expect(out[1]).toBe(data[1]);
+        expect(out[2]).toBe(data[2]);
+    });
+
+    test('ser/des tuple (long string - 2 byte varuint)', () => {
+        const { ser, des } = build(tuple([number(), string(), boolean()] as const));
+
+        const data: [number, string, boolean] = [42.5, 'z'.repeat(250), true];
+        const serialized = ser(data);
+        expect(serialized.byteLength).toBe(8 + 2 + data[1].length + 1); // number (8) + string 2-byte varuint prefix + string bytes + boolean (1)
 
         const out = des(serialized) as [number, string, boolean];
         expect(out[0]).toBeCloseTo(data[0]);

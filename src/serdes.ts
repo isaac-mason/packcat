@@ -81,7 +81,6 @@ function buildSer(schema: Schema): string {
     code += 'let vuint = 0;';
     code += 'let keys;';
     code += 'let val = 0;';
-    code += 'let o_size = 0;';
     code += 'let textEncoderResult;';
 
     type SizeCalc = { code: string; fixed: number };
@@ -104,15 +103,15 @@ function buildSer(schema: Schema): string {
             case 'number':
             case 'float64':
                 return { code: '', fixed: 8 };
-            case 'string':
-                return { code: `size += 4 + utf8Length(${v});`, fixed: 0 };
-            case 'varint': {
-                const code = `vint = ((${v} << 1) ^ (${v} >> 31)) >>> 0; while (vint > 127) { size++; vint >>>= 7; } size += 1;`;
+            case 'string': {
+                const code = `len = utf8Length(${v}); ${varuintSize('len')} size += len;`;
                 return { code, fixed: 0 };
             }
+            case 'varint': {
+                return { code: varintSize(v), fixed: 0 };
+            }
             case 'varuint': {
-                const code = `vuint = ${v} >>> 0; while (vuint > 127) { size++; vuint >>>= 7; } size += 1;`;
-                return { code, fixed: 0 };
+                return { code: varuintSize(v), fixed: 0 };
             }
             case 'uint8Array': {
                 // store a 4-byte length prefix followed by raw bytes
@@ -131,11 +130,12 @@ function buildSer(schema: Schema): string {
                     const inner = `for (let ${i} = 0; ${i} < ${s.length}; ${i}++) { ${elem.code} }`;
                     return { code: inner, fixed: 0 };
                 } else {
-                    // variable-length list: include 4-byte length prefix and per-element dynamic parts
+                    // variable-length list: include varuint length prefix and per-element dynamic parts
                     const i = variable('i', variableCounter++);
                     const elem = size(s.of, `${v}[${i}]`);
 
                     let parts = '';
+                    parts += varuintSize(`${v}.length`);
                     if (elem.fixed > 0) {
                         // account for unconditional fixed bytes per element
                         parts += `size += ${elem.fixed} * ${v}.length;`;
@@ -144,7 +144,7 @@ function buildSer(schema: Schema): string {
                         parts += `for (let ${i} = 0; ${i} < ${v}.length; ${i}++) { ${elem.code} }`;
                     }
 
-                    return { code: `size += 4; ${parts}`, fixed: 0 };
+                    return { code: parts, fixed: 0 };
                 }
             }
             case 'literal': {
@@ -185,11 +185,12 @@ function buildSer(schema: Schema): string {
                 const childSize = size(s.field, `${v}[k]`);
 
                 let inner = '';
-                inner += `size += 4; if (${v} && typeof ${v} === 'object') { const keys = Object.keys(${v}); `;
+                inner += `if (${v} && typeof ${v} === 'object') { const keys = Object.keys(${v}); `;
+                inner += `${varuintSize('keys.length')}`;
                 if (childSize.fixed > 0) {
                     inner += ` size += ${childSize.fixed} * keys.length; `;
                 }
-                inner += `for (let ${i} = 0; ${i} < keys.length; ${i}++) { const k = keys[${i}]; size += 4 + utf8Length(k); `;
+                inner += `for (let ${i} = 0; ${i} < keys.length; ${i}++) { const k = keys[${i}]; len = utf8Length(k); ${varuintSize('len')} size += len; `;
                 if (childSize.code !== '') {
                     inner += childSize.code;
                 }
@@ -313,12 +314,10 @@ function buildSer(schema: Schema): string {
                 return writeString(v);
             }
             case 'varint': {
-                // zig-zag encode then write as varuint using shared temp vint
-                return `vint = (${v} << 1) ^ (${v} >> 31); while (vint > 127) { u8[o++] = (vint & 127) | 128; vint >>>= 7; } u8[o++] = vint & 127;`;
+                return writeVarint(v);
             }
             case 'varuint': {
-                // write unsigned LEB128 / varuint using shared temp vuint
-                return `vuint = ${v} >>> 0; while (vuint > 127) { u8[o++] = (vuint & 127) | 128; vuint >>>= 7; } u8[o++] = vuint & 127;`;
+                return writeVaruint(v);
             }
             case 'uint8Array': {
                 // write 4-byte length then copy raw bytes
@@ -340,7 +339,7 @@ function buildSer(schema: Schema): string {
                     const i = variable('i', variableCounter++);
 
                     let inner = '';
-                    inner += writeU32(`${v}.length`);
+                    inner += writeVaruint(`${v}.length`);
                     inner += `for (let ${i} = 0; ${i} < ${v}.length; ${i}++) {`;
                     inner += ser(s.of, `${v}[${i}]`);
                     inner += '}';
@@ -370,7 +369,7 @@ function buildSer(schema: Schema): string {
 
                 let inner = '';
                 inner += `${keys} = Object.keys(${v});`;
-                inner += writeU32(`${keys}.length`);
+                inner += writeVaruint(`${keys}.length`);
                 inner += `for (let ${i} = 0; ${i} < ${keys}.length; ${i}++) {`;
                 inner += writeString(`${keys}[${i}]`);
                 inner += ser(s.field, `${v}[${keys}[${i}]]`);
@@ -517,20 +516,10 @@ function buildDes(schema: Schema): string {
                 return readString(target);
             }
             case 'varint': {
-                let code = '';
-                code += `val = 0; shift = 0; byte = 0;`;
-                code += `do { byte = u8[o++]; val |= (byte & 0x7f) << shift; shift += 7; } while ((byte & 0x80) !== 0);`;
-                // zig-zag decode
-                code += `${target} = (val >>> 1) ^ -(val & 1);`;
-                return code;
+                return readVarint(target);
             }
             case 'varuint': {
-                // read unsigned LEB128 / varuint
-                let code = '';
-                code += `val = 0; shift = 0; byte = 0;`;
-                code += `do { byte = u8[o++]; val |= (byte & 0x7f) << shift; shift += 7; } while ((byte & 0x80) !== 0);`;
-                code += `${target} = val >>> 0;`;
-                return code;
+                return readVaruint(target);
             }
             case 'uint8Array': {
                 // read length then create a view on the main buffer
@@ -555,7 +544,7 @@ function buildDes(schema: Schema): string {
 
                     let inner = '';
                     inner += `let ${l};`;
-                    inner += readU32(l);
+                    inner += readVaruint(l);
                     inner += `${target} = new Array(${l});`;
                     inner += `for (let ${i} = 0; ${i} < ${l}; ${i}++) {`;
                     inner += des(s.of, `${target}[${i}]`);
@@ -580,16 +569,14 @@ function buildDes(schema: Schema): string {
             case 'record': {
                 const i = variable('i', variableCounter++);
                 const k = variable('k', variableCounter++);
-                const klen = variable('klen', variableCounter++);
                 const count = variable('count', variableCounter++);
 
                 let inner = '';
-                inner += `let ${k}, ${klen}, ${count};`;
-                inner += readU32(count);
+                inner += `let ${k}, ${count};`;
+                inner += readVaruint(count);
                 inner += `${target} = {};`;
                 inner += `for (let ${i} = 0; ${i} < ${count}; ${i}++) { `;
-                inner += readU32(klen);
-                inner += `const ${k} = ${klen} === 0 ? '' : textDecoder.decode(u8.subarray(o, o + ${klen})); o += ${klen};`;
+                inner += readString(k);
                 inner += des(s.field, `${target}[${k}]`);
                 inner += `}`;
                 return inner;
@@ -840,6 +827,36 @@ function variable(str: string, idx: number): string {
     return str + idx;
 }
 
+function varuintSize(value: string): string {
+    return `vuint = ${value} >>> 0; while (vuint > 127) { size++; vuint >>>= 7; } size += 1;`;
+}
+
+function writeVaruint(value: string, offset = 'o'): string {
+    return `vuint = ${value} >>> 0; while (vuint > 127) { u8[${offset}++] = (vuint & 127) | 128; vuint >>>= 7; } u8[${offset}++] = vuint & 127;`;
+}
+
+function readVaruint(target: string, offset = 'o'): string {
+    let code = '';
+    code += `val = 0; shift = 0; byte = 0;`;
+    code += `do { byte = u8[${offset}++]; val |= (byte & 0x7f) << shift; shift += 7; } while ((byte & 0x80) !== 0);`;
+    code += `${target} = val >>> 0;`;
+    return code;
+}
+
+function varintSize(value: string): string {
+    return `vint = ((${value} << 1) ^ (${value} >> 31)) >>> 0; ${varuintSize('vint')}`;
+}
+
+function writeVarint(value: string, offset = 'o'): string {
+    return `vint = (${value} << 1) ^ (${value} >> 31); ${writeVaruint('vint', offset)}`;
+}
+
+function readVarint(target: string, offset = 'o'): string {
+    let code = readVaruint('val', offset);
+    code += `${target} = (val >>> 1) ^ -(val & 1);`;
+    return code;
+}
+
 function readBool(target: string, offset = 'o'): string {
     return `${target} = u8[${offset}++] !== 0;`;
 }
@@ -928,7 +945,9 @@ function writeF64(value: string, offset = 'o'): string {
 
 function readString(target: string, offset = 'o'): string {
     let code = '';
-    code += readU32('len', offset);
+    // Read varuint length
+    code += readVaruint('len', offset);
+    // Decode string
     code += `${target} = len === 0 ? '' : textDecoder.decode(u8.subarray(${offset}, ${offset} + len)); ${offset} += len;`;
 
     return code;
@@ -937,11 +956,11 @@ function readString(target: string, offset = 'o'): string {
 function writeString(value: string, offset = 'o'): string {
     let code = '';
 
-    code += `o_size = ${offset};`;
-    code += `${offset} += 4;`;
-    code += `textEncoderResult = textEncoder.encodeInto(${value}, u8.subarray(${offset}));`;
-    code += `o = ${offset} + textEncoderResult.written;`;
-    code += writeU32('textEncoderResult.written', 'o_size');
+    code += `textEncoderResult = textEncoder.encode(${value});`;
+    
+    code += writeVaruint('textEncoderResult.length', offset);
+    
+    code += `u8.set(textEncoderResult, ${offset}); ${offset} += textEncoderResult.length;`;
 
     return code;
 }
