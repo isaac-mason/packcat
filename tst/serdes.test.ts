@@ -31,7 +31,7 @@ import {
 } from '../src';
 
 describe('serDes', () => {
-    test('ser/des boolean', () => {
+    test('boolean', () => {
         const { ser, des } = build(boolean());
         const serializedTrue = ser(true);
         const result = des(serializedTrue);
@@ -41,7 +41,7 @@ describe('serDes', () => {
         expect(result2).toBe(false);
     });
 
-    test('ser/des numbers', () => {
+    test('numbers', () => {
         // number (float64)
         const { ser: serNum, des: desNum } = build(number());
         const serializedNumber = serNum(12345.6789);
@@ -100,7 +100,7 @@ describe('serDes', () => {
         expect(outF64).toBeCloseTo(2.718281828459045, 12);
     });
 
-    test('ser/des varint/varuint with expected byte lengths', () => {
+    test('varint/varuint with expected byte lengths', () => {
         // varint tests
         const { ser: serVarInt, des: desVarInt, validate: validateVarInt } = build(varint());
 
@@ -203,7 +203,7 @@ describe('serDes', () => {
         expect(validateVarUInt('123')).toBe(false);
     });
 
-    test('ser/des string', () => {
+    test('string', () => {
         const { ser, des } = build(string());
         const testStr = 'hello world';
         const serialized = ser(testStr);
@@ -212,7 +212,7 @@ describe('serDes', () => {
         expect(result).toBe(testStr);
     });
 
-    test('ser/des string (long - 2 byte varuint)', () => {
+    test('string (long - 2 byte varuint)', () => {
         const { ser, des } = build(string());
         // String with 150 chars requires 2 bytes for varuint (128-16383 range)
         const testStr = 'a'.repeat(150);
@@ -222,7 +222,7 @@ describe('serDes', () => {
         expect(result).toBe(testStr);
     });
 
-    test('ser/des arraybuffer empty and non-empty', () => {
+    test('arraybuffer empty and non-empty', () => {
         const { ser, des, validate } = build(uint8Array());
 
         // Empty array - varuint(0) = 1 byte
@@ -281,7 +281,7 @@ describe('serDes', () => {
         expect(validate(123)).toBe(false);
     });
 
-    test('ser/des uint8array nested in object and list', () => {
+    test('uint8array nested in object and list', () => {
         const nestedSchema = object({ id: uint8(), data: uint8Array() });
         const { ser: s1, des: d1 } = build(nestedSchema);
 
@@ -301,7 +301,7 @@ describe('serDes', () => {
         expect(new Uint8Array(outArr[1])).toEqual(new Uint8Array([2, 3]));
     });
 
-    test('ser/des list of numbers', () => {
+    test('list of numbers', () => {
         const { ser, des } = build(list(number()));
         const arr = [1.1, 2.2, 3.3];
         const serialized = ser(arr);
@@ -310,7 +310,7 @@ describe('serDes', () => {
         expect(result).toEqual(arr);
     });
 
-    test('ser/des list of fixed-length lists (vec3)', () => {
+    test('list of fixed-length lists (vec3)', () => {
         const vec3Schema = list(float32(), 3);
         const { ser, des } = build(list(vec3Schema));
 
@@ -338,7 +338,7 @@ describe('serDes', () => {
         }
     });
 
-    test('ser/des nested list of numbers', () => {
+    test('nested list of numbers', () => {
         const { ser, des } = build(list(list(number())));
         const arr = [
             [1, 2, 3],
@@ -353,7 +353,7 @@ describe('serDes', () => {
         expect(result).toEqual(arr);
     });
 
-    test('ser/des large list (>127 elements, 2-byte varuint)', () => {
+    test('large list (>127 elements, 2-byte varuint)', () => {
         const { ser, des } = build(list(uint8()));
         const arr = new Array(200).fill(0).map((_, i) => i % 256);
         const serialized = ser(arr);
@@ -362,7 +362,7 @@ describe('serDes', () => {
         expect(result).toEqual(arr);
     });
 
-    test('ser/des object', () => {
+    test('object', () => {
         const { ser, des } = build(
             object({
                 a: number(),
@@ -380,7 +380,7 @@ describe('serDes', () => {
         expect(result).toEqual(obj);
     });
 
-    test('ser/des object (long string - 2 byte varuint)', () => {
+    test('object (long string - 2 byte varuint)', () => {
         const { ser, des } = build(object({ a: number(), b: string(), c: boolean() }));
         const obj = { a: 123.45, b: 'x'.repeat(200), c: true };
 
@@ -391,7 +391,7 @@ describe('serDes', () => {
         expect(result).toEqual(obj);
     });
 
-    test('ser/des object in object', () => {
+    test('object in object', () => {
         const { ser, des } = build(
             object({
                 id: uint32(),
@@ -421,7 +421,7 @@ describe('serDes', () => {
         expect(result).toEqual(obj);
     });
 
-    test('ser/des object in object (long string - 2 byte varuint)', () => {
+    test('object in object (long string - 2 byte varuint)', () => {
         const { ser, des } = build(
             object({
                 id: uint32(),
@@ -448,7 +448,7 @@ describe('serDes', () => {
         expect(result).toEqual(obj);
     });
 
-    test('ser/des tuple', () => {
+    test('tuple', () => {
         const { ser, des } = build(tuple([number(), string(), boolean()] as const));
 
         const data: [number, string, boolean] = [42.5, 'hello', true];
@@ -461,7 +461,7 @@ describe('serDes', () => {
         expect(out[2]).toBe(data[2]);
     });
 
-    test('ser/des tuple (long string - 2 byte varuint)', () => {
+    test('tuple (long string - 2 byte varuint)', () => {
         const { ser, des } = build(tuple([number(), string(), boolean()] as const));
 
         const data: [number, string, boolean] = [42.5, 'z'.repeat(250), true];
@@ -474,7 +474,7 @@ describe('serDes', () => {
         expect(out[2]).toBe(data[2]);
     });
 
-    test('ser/des tuple of tuples', () => {
+    test('tuple of tuples', () => {
         const inner = tuple([number(), string()] as const);
         const schema = tuple([inner, inner] as const);
         const { ser, des } = build(schema);
@@ -495,7 +495,7 @@ describe('serDes', () => {
         expect(out[1][1]).toBe(data[1][1]);
     });
 
-    test('ser/des list of objects', () => {
+    test('list of objects', () => {
         const { ser, des } = build(
             list(
                 object({
@@ -513,7 +513,7 @@ describe('serDes', () => {
         expect(result).toEqual(arr);
     });
 
-    test('ser/des list of objects with vec3 positions (uint16 id + float32 vec3)', () => {
+    test('list of objects with vec3 positions (uint16 id + float32 vec3)', () => {
         const vec3Schema = list(float32(), 3);
         const schema = list(
             object({
@@ -546,7 +546,7 @@ describe('serDes', () => {
         }
     });
 
-    test('ser/des record (empty, simple, unicode keys)', () => {
+    test('record (empty, simple, unicode keys)', () => {
         const { ser, des } = build(record(uint32()));
 
         // empty
@@ -560,7 +560,7 @@ describe('serDes', () => {
         expect(des(ser(unicode))).toEqual(unicode);
     });
 
-    test('ser/des object keys with quotes/newlines/emoji', () => {
+    test('object keys with quotes/newlines/emoji', () => {
         const { ser, des, validate } = build(record(uint32()));
 
         // keys with tricky characters
@@ -578,7 +578,7 @@ describe('serDes', () => {
         expect(out).toEqual(data);
     });
 
-    test('ser/des record of records', () => {
+    test('record of records', () => {
         const { ser, des } = build(record(record(uint32())));
         const data = {
             group1: { a: 1, b: 2 },
@@ -589,7 +589,7 @@ describe('serDes', () => {
         expect(result).toEqual(data);
     });
 
-    test('ser/des bitset simple', () => {
+    test('bitset simple', () => {
         const { ser, des, validate } = build(bitset(['a', 'b', 'c'] as const));
 
         const v = { a: true, b: false, c: true };
@@ -600,7 +600,7 @@ describe('serDes', () => {
         expect(out).toEqual(v);
     });
 
-    test('ser/des bitset many keys (multi-byte)', () => {
+    test('bitset many keys (multi-byte)', () => {
         const keys: string[] = [];
         for (let i = 0; i < 10; i++) keys.push(`k${i}`);
         const s = build(bitset(keys));
@@ -613,7 +613,7 @@ describe('serDes', () => {
         expect(out).toEqual(obj);
     });
 
-    test('ser/des literal', () => {
+    test('literal', () => {
         const schema = literal('hello');
         const { ser, des, validate } = build(schema);
 
@@ -627,7 +627,7 @@ describe('serDes', () => {
         expect(out).toEqual(v);
     });
 
-    test('ser/des optional', () => {
+    test('optional', () => {
         const schema = optional(string());
         const { ser, des } = build(schema);
 
@@ -639,7 +639,7 @@ describe('serDes', () => {
         expect(des(bufAbsent)).toBeUndefined();
     });
 
-    test('ser/des nullable', () => {
+    test('nullable', () => {
         const schema = nullable(string());
         const { ser, des } = build(schema);
 
@@ -650,7 +650,7 @@ describe('serDes', () => {
         expect(des(bufVal)).toBe('hi');
     });
 
-    test('ser/des nullish', () => {
+    test('nullish', () => {
         const schema = nullish(string());
         const { ser, des } = build(schema);
 
@@ -664,7 +664,7 @@ describe('serDes', () => {
         expect(des(bufVal)).toBe('val');
     });
 
-    test('ser/des complex structure', () => {
+    test('complex structure', () => {
         const complexSchema = object({
             id: uint32(),
             name: string(),
@@ -743,7 +743,7 @@ describe('serDes', () => {
         expect(out.mapOfMaps).toEqual(data.mapOfMaps);
     });
 
-    test('ser/des union', () => {
+    test('union', () => {
         const pet = union('type', [
             object({ type: literal('dog'), name: string(), bark: uint8() }),
             object({ type: literal('cat'), name: string(), lives: uint8() }),
@@ -766,7 +766,7 @@ describe('serDes', () => {
         expect(outCat).toEqual(cat);
     });
 
-    test('ser/des union with many variants (>255)', () => {
+    test('union with many variants (>255)', () => {
         // Create 300 variants to test varuint encoding
         const variants = Array.from({ length: 300 }, (_, i) =>
             object({ type: literal(`type${i}`), value: uint8() }),
@@ -809,10 +809,289 @@ describe('serDes', () => {
         expect(bufLast.byteLength).toBe(3); // 2 byte varuint tag + 1 byte value
         expect(des(bufLast)).toEqual(last);
     });
+
+    test('empty string', () => {
+        const { ser, des } = build(string());
+        const empty = '';
+        const serialized = ser(empty);
+        expect(serialized.byteLength).toBe(1); // just the varuint length prefix (0)
+        expect(des(serialized)).toBe(empty);
+    });
+
+    test('string with emoji', () => {
+        const { ser, des } = build(string());
+
+        // Simple emoji (4 bytes in UTF-8)
+        const simple = '😊';
+        expect(des(ser(simple))).toBe(simple);
+
+        // Emoji with zero-width joiner (family emoji)
+        const family = '👨‍👩‍👧‍👦';
+        expect(des(ser(family))).toBe(family);
+
+        // Various emoji
+        const multi = '🌍🔥💧🌊⚡';
+        expect(des(ser(multi))).toBe(multi);
+    });
+
+    test('string with CJK characters', () => {
+        const { ser, des } = build(string());
+
+        const japanese = 'こんにちは世界';
+        expect(des(ser(japanese))).toBe(japanese);
+
+        const chinese = '你好世界';
+        expect(des(ser(chinese))).toBe(chinese);
+
+        const korean = '안녕하세요';
+        expect(des(ser(korean))).toBe(korean);
+    });
+
+    test('string with mixed unicode', () => {
+        const { ser, des } = build(string());
+
+        const mixed = 'Hello 世界 🌍!';
+        expect(des(ser(mixed))).toBe(mixed);
+
+        const complex = 'Test: 测试 🧪 тест';
+        expect(des(ser(complex))).toBe(complex);
+    });
+
+    test('string with surrogate pairs', () => {
+        const { ser, des } = build(string());
+
+        // Mathematical alphanumeric symbols (surrogate pairs)
+        const math = '𝕳𝖊𝖑𝖑𝖔';
+        expect(des(ser(math))).toBe(math);
+
+        // Musical symbols
+        const music = '𝄞𝄢𝄫';
+        expect(des(ser(music))).toBe(music);
+    });
+
+    test('string with combining characters', () => {
+        const { ser, des } = build(string());
+
+        // Combining diacritical marks
+        const accents = 'café'; // é is one codepoint
+        expect(des(ser(accents))).toBe(accents);
+
+        const combining = 'cafe\u0301'; // e + combining acute accent
+        expect(des(ser(combining))).toBe(combining);
+    });
+
+    test('string with special whitespace', () => {
+        const { ser, des } = build(string());
+
+        const withNewline = 'hello\nworld';
+        expect(des(ser(withNewline))).toBe(withNewline);
+
+        const withTab = 'hello\tworld';
+        expect(des(ser(withTab))).toBe(withTab);
+
+        const withCarriageReturn = 'hello\r\nworld';
+        expect(des(ser(withCarriageReturn))).toBe(withCarriageReturn);
+    });
+
+    test('empty list', () => {
+        const { ser, des } = build(list(number()));
+        const empty: number[] = [];
+        const serialized = ser(empty);
+        expect(serialized.byteLength).toBe(1); // just varuint length prefix (0)
+        expect(des(serialized)).toEqual(empty);
+    });
+
+    test('empty nested list', () => {
+        const { ser, des } = build(list(list(string())));
+        const empty: string[][] = [];
+        expect(des(ser(empty))).toEqual(empty);
+
+        const withEmptyInner: string[][] = [[], []];
+        expect(des(ser(withEmptyInner))).toEqual(withEmptyInner);
+    });
+
+    test('empty record', () => {
+        const { ser, des } = build(record(number()));
+        const empty: Record<string, number> = {};
+        const serialized = ser(empty);
+        expect(serialized.byteLength).toBe(1); // just varuint length prefix (0)
+        expect(des(serialized)).toEqual(empty);
+    });
+
+    test('object with empty nested collections', () => {
+        const schema = object({
+            items: list(string()),
+            metadata: record(number()),
+        });
+        const { ser, des } = build(schema);
+
+        const data = {
+            items: [],
+            metadata: {},
+        };
+
+        expect(des(ser(data))).toEqual(data);
+    });
+
+    test('record with empty string key', () => {
+        const { ser, des } = build(record(number()));
+
+        const emptyKey = { '': 42 };
+        expect(des(ser(emptyKey))).toEqual(emptyKey);
+
+        const mixed = { '': 1, 'normal': 2, 'another': 3 };
+        expect(des(ser(mixed))).toEqual(mixed);
+    });
+
+    test('record with very long keys', () => {
+        const { ser, des } = build(record(number()));
+
+        const longKey = 'x'.repeat(1000);
+        const data = { [longKey]: 99 };
+        expect(des(ser(data))).toEqual(data);
+
+        // Multiple long keys
+        const multiLong = {
+            ['a'.repeat(500)]: 1,
+            ['b'.repeat(500)]: 2,
+        };
+        expect(des(ser(multiLong))).toEqual(multiLong);
+    });
+
+    test('record with unicode keys', () => {
+        const { ser, des } = build(record(string()));
+
+        const unicodeKeys = {
+            'ключ': 'Russian',
+            '😊': 'emoji',
+            '你好': 'Chinese',
+            '🌍': 'Earth',
+        };
+        expect(des(ser(unicodeKeys))).toEqual(unicodeKeys);
+    });
+
+    test('record with special character keys', () => {
+        const { ser, des } = build(record(number()));
+
+        const specialKeys = {
+            'with"quote': 1,
+            'with\'apostrophe': 2,
+            'with\nnewline': 3,
+            'with\ttab': 4,
+            'with\\backslash': 5,
+        };
+        expect(des(ser(specialKeys))).toEqual(specialKeys);
+    });
+
+    test('nested record with special keys', () => {
+        const { ser, des } = build(record(record(number())));
+
+        const longKey = 'x'.repeat(100);
+        const data = {
+            '': { 'inner': 1 },
+            '😊': { '': 2, [longKey]: 3 },
+        };
+        expect(des(ser(data))).toEqual(data);
+    });
+
+    test('bitset with all true', () => {
+        const { ser, des } = build(bitset(['a', 'b', 'c', 'd', 'e']));
+
+        const allTrue = { a: true, b: true, c: true, d: true, e: true };
+        expect(des(ser(allTrue))).toEqual(allTrue);
+    });
+
+    test('bitset with all false', () => {
+        const { ser, des } = build(bitset(['a', 'b', 'c', 'd', 'e']));
+
+        const allFalse = { a: false, b: false, c: false, d: false, e: false };
+        expect(des(ser(allFalse))).toEqual(allFalse);
+    });
+
+    test('bitset with exactly 8 keys (1 byte)', () => {
+        const keys8 = Array.from({ length: 8 }, (_, i) => `k${i}`);
+        const { ser, des } = build(bitset(keys8));
+
+        const allTrue = Object.fromEntries(keys8.map((k) => [k, true]));
+        const serialized = ser(allTrue);
+        expect(serialized.byteLength).toBe(1);
+        expect(des(serialized)).toEqual(allTrue);
+
+        const allFalse = Object.fromEntries(keys8.map((k) => [k, false]));
+        expect(des(ser(allFalse))).toEqual(allFalse);
+
+        const alternating = Object.fromEntries(keys8.map((k, i) => [k, i % 2 === 0]));
+        expect(des(ser(alternating))).toEqual(alternating);
+    });
+
+    test('bitset with 9 keys (2 bytes)', () => {
+        const keys9 = Array.from({ length: 9 }, (_, i) => `k${i}`);
+        const { ser, des } = build(bitset(keys9));
+
+        const mixed = Object.fromEntries(keys9.map((k, i) => [k, i % 2 === 0]));
+        const serialized = ser(mixed);
+        expect(serialized.byteLength).toBe(2);
+        expect(des(serialized)).toEqual(mixed);
+    });
+
+    test('bitset with 16 keys (2 bytes)', () => {
+        const keys16 = Array.from({ length: 16 }, (_, i) => `k${i}`);
+        const { ser, des } = build(bitset(keys16));
+
+        const pattern = Object.fromEntries(keys16.map((k, i) => [k, i < 8]));
+        const serialized = ser(pattern);
+        expect(serialized.byteLength).toBe(2);
+        expect(des(serialized)).toEqual(pattern);
+    });
+
+    test('bitset with 17 keys (3 bytes)', () => {
+        const keys17 = Array.from({ length: 17 }, (_, i) => `k${i}`);
+        const { ser, des } = build(bitset(keys17));
+
+        const pattern = Object.fromEntries(keys17.map((k, i) => [k, i === 16]));
+        const serialized = ser(pattern);
+        expect(serialized.byteLength).toBe(3);
+        expect(des(serialized)).toEqual(pattern);
+    });
+
+    test('bitset with 24 keys (3 bytes)', () => {
+        const keys24 = Array.from({ length: 24 }, (_, i) => `k${i}`);
+        const { ser, des } = build(bitset(keys24));
+
+        const checker = Object.fromEntries(keys24.map((k, i) => [k, (Math.floor(i / 8) + i) % 2 === 0]));
+        const serialized = ser(checker);
+        expect(serialized.byteLength).toBe(3);
+        expect(des(serialized)).toEqual(checker);
+    });
+
+    test('bitset nested in object', () => {
+        const schema = object({
+            id: uint32(),
+            flags: bitset(['flag1', 'flag2', 'flag3', 'flag4', 'flag5', 'flag6', 'flag7', 'flag8', 'flag9'] as const),
+        });
+        const { ser, des } = build(schema);
+
+        const data = {
+            id: 123,
+            flags: {
+                flag1: true,
+                flag2: false,
+                flag3: true,
+                flag4: false,
+                flag5: true,
+                flag6: false,
+                flag7: true,
+                flag8: false,
+                flag9: true,
+            },
+        };
+
+        expect(des(ser(data))).toEqual(data);
+    });
 });
 
 describe('validate', () => {
-    test('validate bool', () => {
+    test('bool', () => {
         const schema = boolean();
         const schemaSerDes = build(schema);
 
@@ -822,7 +1101,7 @@ describe('validate', () => {
         expect(schemaSerDes.validate(123)).toBe(false);
     });
 
-    test('validate string', () => {
+    test('string', () => {
         const schema = string();
         const schemaSerDes = build(schema);
 
@@ -832,7 +1111,7 @@ describe('validate', () => {
         expect(schemaSerDes.validate(123)).toBe(false);
     });
 
-    test('validate number', () => {
+    test('number', () => {
         const schema = number();
         const schemaSerDes = build(schema);
 
@@ -842,7 +1121,7 @@ describe('validate', () => {
         expect(schemaSerDes.validate('string')).toBe(false);
     });
 
-    test('validate list', () => {
+    test('list', () => {
         const schema = list(string());
         const schemaSerDes = build(schema);
 
@@ -852,7 +1131,7 @@ describe('validate', () => {
         expect(schemaSerDes.validate('string')).toBe(false);
     });
 
-    test('validate fixed size list', () => {
+    test('fixed size list', () => {
         const schema = list(string(), 3);
         const schemaSerDes = build(schema);
 
@@ -862,7 +1141,7 @@ describe('validate', () => {
         expect(schemaSerDes.validate('string')).toBe(false);
     });
 
-    test('validate list of lists', () => {
+    test('list of lists', () => {
         const schema = list(list(string()));
         const schemaSerDes = build(schema);
 
@@ -874,7 +1153,7 @@ describe('validate', () => {
         expect(schemaSerDes.validate(['string'])).toBe(false);
     });
 
-    test('validate object', () => {
+    test('object', () => {
         const schema = object({
             key: string(),
             value: number(),
@@ -887,7 +1166,7 @@ describe('validate', () => {
         expect(schemaSerDes.validate('string')).toBe(false);
     });
 
-    test('validate nested objects', () => {
+    test('nested objects', () => {
         const schema = object({
             foo: object({
                 key: string(),
@@ -902,7 +1181,7 @@ describe('validate', () => {
         expect(schemaSerDes.validate({ bar: { key: 'hello', value: 123 } })).toBe(false);
     });
 
-    test('validate list of objects', () => {
+    test('list of objects', () => {
         const schema = list(
             object({
                 key: string(),
@@ -917,7 +1196,7 @@ describe('validate', () => {
         expect(schemaSerDes.validate({ key: 'hello', value: 123 })).toBe(false);
     });
 
-    test('validate record', () => {
+    test('record', () => {
         const schema = record(string());
         const schemaSerDes = build(schema);
 
@@ -927,7 +1206,7 @@ describe('validate', () => {
         expect(schemaSerDes.validate({ foo: 123 })).toBe(false);
     });
 
-    test('validate nested records', () => {
+    test('nested records', () => {
         const schema = record(record(string()));
         const schemaSerDes = build(schema);
 
@@ -937,7 +1216,7 @@ describe('validate', () => {
         expect(schemaSerDes.validate({ foo: 123 })).toBe(false);
     });
 
-    test('validate int8/uint8/int16/uint16/int32/uint32', () => {
+    test('int8/uint8/int16/uint16/int32/uint32', () => {
         const i8 = build(int8());
         expect(i8.validate(0)).toBe(true);
         expect(i8.validate(-128)).toBe(true);
@@ -976,7 +1255,7 @@ describe('validate', () => {
         expect(u32.validate(-1)).toBe(false);
     });
 
-    test('validate float32/float64 and ser/des roundtrip', () => {
+    test('float32/float64 and ser/des roundtrip', () => {
         const f32 = build(float32());
         expect(f32.validate(0)).toBe(true);
         expect(f32.validate(1.5)).toBe(true);
@@ -1003,7 +1282,7 @@ describe('validate', () => {
         expect(out64).toBeCloseTo(123.4567890123, 10);
     });
 
-    test('validate mixed types tuple', () => {
+    test('mixed types tuple', () => {
         const schema = tuple([number(), string(), boolean()] as const);
         const s = build(schema);
 
@@ -1016,7 +1295,7 @@ describe('validate', () => {
         expect(s.validate([1.5, 'x'])).toBe(false);
     });
 
-    test('validate tuple of tuples', () => {
+    test('tuple of tuples', () => {
         const inner = tuple([number(), string()] as const);
         const schema = tuple([inner, inner] as const);
         const s = build(schema);
@@ -1042,7 +1321,7 @@ describe('validate', () => {
         expect(s.validate([[1.5, 'a']])).toBe(false);
     });
 
-    test('validate bitset missing key / wrong type', () => {
+    test('bitset missing key / wrong type', () => {
         const s = build(bitset(['x', 'y'] as const));
         expect(s.validate({ x: true, y: false })).toBe(true);
         //  @ts-expect-error missing
@@ -1051,7 +1330,7 @@ describe('validate', () => {
         expect(s.validate({ x: 1, y: false })).toBe(false);
     });
 
-    test('validate nullable/optional/nullish edge cases', () => {
+    test('nullable/optional/nullish edge cases', () => {
         const nullableSchema = build(nullable(number()));
         expect(nullableSchema.validate(null)).toBe(true);
         expect(nullableSchema.validate(42)).toBe(true);
@@ -1076,7 +1355,7 @@ describe('validate', () => {
         expect(nullishSchema.validate('42')).toBe(false);
     });
 
-    test('validate union with invalid discriminant', () => {
+    test('union with invalid discriminant', () => {
         const pet = union('type', [
             object({ type: literal('dog'), name: string() }),
             object({ type: literal('cat'), name: string() }),
@@ -1095,7 +1374,7 @@ describe('validate', () => {
         expect(validate({ name: 'Rex' })).toBe(false);
     });
 
-    test('validate literal with wrong value', () => {
+    test('literal with wrong value', () => {
         const schema = build(literal('hello'));
         expect(schema.validate('hello')).toBe(true);
         // @ts-expect-error wrong value
@@ -1107,292 +1386,5 @@ describe('validate', () => {
         expect(numLiteral.validate(42)).toBe(true);
         // @ts-expect-error wrong value
         expect(numLiteral.validate(43)).toBe(false);
-    });
-});
-
-describe('UTF-8 and Unicode', () => {
-    test('ser/des empty string', () => {
-        const { ser, des } = build(string());
-        const empty = '';
-        const serialized = ser(empty);
-        expect(serialized.byteLength).toBe(1); // just the varuint length prefix (0)
-        expect(des(serialized)).toBe(empty);
-    });
-
-    test('ser/des string with emoji', () => {
-        const { ser, des } = build(string());
-
-        // Simple emoji (4 bytes in UTF-8)
-        const simple = '😊';
-        expect(des(ser(simple))).toBe(simple);
-
-        // Emoji with zero-width joiner (family emoji)
-        const family = '👨‍👩‍👧‍👦';
-        expect(des(ser(family))).toBe(family);
-
-        // Various emoji
-        const multi = '🌍🔥💧🌊⚡';
-        expect(des(ser(multi))).toBe(multi);
-    });
-
-    test('ser/des string with CJK characters', () => {
-        const { ser, des } = build(string());
-
-        const japanese = 'こんにちは世界';
-        expect(des(ser(japanese))).toBe(japanese);
-
-        const chinese = '你好世界';
-        expect(des(ser(chinese))).toBe(chinese);
-
-        const korean = '안녕하세요';
-        expect(des(ser(korean))).toBe(korean);
-    });
-
-    test('ser/des string with mixed unicode', () => {
-        const { ser, des } = build(string());
-
-        const mixed = 'Hello 世界 🌍!';
-        expect(des(ser(mixed))).toBe(mixed);
-
-        const complex = 'Test: 测试 🧪 тест';
-        expect(des(ser(complex))).toBe(complex);
-    });
-
-    test('ser/des string with surrogate pairs', () => {
-        const { ser, des } = build(string());
-
-        // Mathematical alphanumeric symbols (surrogate pairs)
-        const math = '𝕳𝖊𝖑𝖑𝖔';
-        expect(des(ser(math))).toBe(math);
-
-        // Musical symbols
-        const music = '𝄞𝄢𝄫';
-        expect(des(ser(music))).toBe(music);
-    });
-
-    test('ser/des string with combining characters', () => {
-        const { ser, des } = build(string());
-
-        // Combining diacritical marks
-        const accents = 'café'; // é is one codepoint
-        expect(des(ser(accents))).toBe(accents);
-
-        const combining = 'cafe\u0301'; // e + combining acute accent
-        expect(des(ser(combining))).toBe(combining);
-    });
-
-    test('ser/des string with special whitespace', () => {
-        const { ser, des } = build(string());
-
-        const withNewline = 'hello\nworld';
-        expect(des(ser(withNewline))).toBe(withNewline);
-
-        const withTab = 'hello\tworld';
-        expect(des(ser(withTab))).toBe(withTab);
-
-        const withCarriageReturn = 'hello\r\nworld';
-        expect(des(ser(withCarriageReturn))).toBe(withCarriageReturn);
-    });
-});
-
-describe('Empty Collections', () => {
-    test('ser/des empty list', () => {
-        const { ser, des } = build(list(number()));
-        const empty: number[] = [];
-        const serialized = ser(empty);
-        expect(serialized.byteLength).toBe(1); // just varuint length prefix (0)
-        expect(des(serialized)).toEqual(empty);
-    });
-
-    test('ser/des empty nested list', () => {
-        const { ser, des } = build(list(list(string())));
-        const empty: string[][] = [];
-        expect(des(ser(empty))).toEqual(empty);
-
-        const withEmptyInner: string[][] = [[], []];
-        expect(des(ser(withEmptyInner))).toEqual(withEmptyInner);
-    });
-
-    test('ser/des empty record', () => {
-        const { ser, des } = build(record(number()));
-        const empty: Record<string, number> = {};
-        const serialized = ser(empty);
-        expect(serialized.byteLength).toBe(1); // just varuint length prefix (0)
-        expect(des(serialized)).toEqual(empty);
-    });
-
-    test('ser/des object with empty nested collections', () => {
-        const schema = object({
-            items: list(string()),
-            metadata: record(number()),
-        });
-        const { ser, des } = build(schema);
-
-        const data = {
-            items: [],
-            metadata: {},
-        };
-
-        expect(des(ser(data))).toEqual(data);
-    });
-});
-
-describe('Record with Special Keys', () => {
-    test('ser/des record with empty string key', () => {
-        const { ser, des } = build(record(number()));
-
-        const emptyKey = { '': 42 };
-        expect(des(ser(emptyKey))).toEqual(emptyKey);
-
-        const mixed = { '': 1, 'normal': 2, 'another': 3 };
-        expect(des(ser(mixed))).toEqual(mixed);
-    });
-
-    test('ser/des record with very long keys', () => {
-        const { ser, des } = build(record(number()));
-
-        const longKey = 'x'.repeat(1000);
-        const data = { [longKey]: 99 };
-        expect(des(ser(data))).toEqual(data);
-
-        // Multiple long keys
-        const multiLong = {
-            ['a'.repeat(500)]: 1,
-            ['b'.repeat(500)]: 2,
-        };
-        expect(des(ser(multiLong))).toEqual(multiLong);
-    });
-
-    test('ser/des record with unicode keys', () => {
-        const { ser, des } = build(record(string()));
-
-        const unicodeKeys = {
-            'ключ': 'Russian',
-            '😊': 'emoji',
-            '你好': 'Chinese',
-            '🌍': 'Earth',
-        };
-        expect(des(ser(unicodeKeys))).toEqual(unicodeKeys);
-    });
-
-    test('ser/des record with special character keys', () => {
-        const { ser, des } = build(record(number()));
-
-        const specialKeys = {
-            'with"quote': 1,
-            'with\'apostrophe': 2,
-            'with\nnewline': 3,
-            'with\ttab': 4,
-            'with\\backslash': 5,
-        };
-        expect(des(ser(specialKeys))).toEqual(specialKeys);
-    });
-
-    test('ser/des nested record with special keys', () => {
-        const { ser, des } = build(record(record(number())));
-
-        const longKey = 'x'.repeat(100);
-        const data = {
-            '': { 'inner': 1 },
-            '😊': { '': 2, [longKey]: 3 },
-        };
-        expect(des(ser(data))).toEqual(data);
-    });
-});
-
-describe('Bitset Edge Cases', () => {
-    test('ser/des bitset with all true', () => {
-        const { ser, des } = build(bitset(['a', 'b', 'c', 'd', 'e']));
-
-        const allTrue = { a: true, b: true, c: true, d: true, e: true };
-        expect(des(ser(allTrue))).toEqual(allTrue);
-    });
-
-    test('ser/des bitset with all false', () => {
-        const { ser, des } = build(bitset(['a', 'b', 'c', 'd', 'e']));
-
-        const allFalse = { a: false, b: false, c: false, d: false, e: false };
-        expect(des(ser(allFalse))).toEqual(allFalse);
-    });
-
-    test('ser/des bitset with exactly 8 keys (1 byte)', () => {
-        const keys8 = Array.from({ length: 8 }, (_, i) => `k${i}`);
-        const { ser, des } = build(bitset(keys8));
-
-        const allTrue = Object.fromEntries(keys8.map((k) => [k, true]));
-        const serialized = ser(allTrue);
-        expect(serialized.byteLength).toBe(1);
-        expect(des(serialized)).toEqual(allTrue);
-
-        const allFalse = Object.fromEntries(keys8.map((k) => [k, false]));
-        expect(des(ser(allFalse))).toEqual(allFalse);
-
-        const alternating = Object.fromEntries(keys8.map((k, i) => [k, i % 2 === 0]));
-        expect(des(ser(alternating))).toEqual(alternating);
-    });
-
-    test('ser/des bitset with 9 keys (2 bytes)', () => {
-        const keys9 = Array.from({ length: 9 }, (_, i) => `k${i}`);
-        const { ser, des } = build(bitset(keys9));
-
-        const mixed = Object.fromEntries(keys9.map((k, i) => [k, i % 2 === 0]));
-        const serialized = ser(mixed);
-        expect(serialized.byteLength).toBe(2);
-        expect(des(serialized)).toEqual(mixed);
-    });
-
-    test('ser/des bitset with 16 keys (2 bytes)', () => {
-        const keys16 = Array.from({ length: 16 }, (_, i) => `k${i}`);
-        const { ser, des } = build(bitset(keys16));
-
-        const pattern = Object.fromEntries(keys16.map((k, i) => [k, i < 8]));
-        const serialized = ser(pattern);
-        expect(serialized.byteLength).toBe(2);
-        expect(des(serialized)).toEqual(pattern);
-    });
-
-    test('ser/des bitset with 17 keys (3 bytes)', () => {
-        const keys17 = Array.from({ length: 17 }, (_, i) => `k${i}`);
-        const { ser, des } = build(bitset(keys17));
-
-        const pattern = Object.fromEntries(keys17.map((k, i) => [k, i === 16]));
-        const serialized = ser(pattern);
-        expect(serialized.byteLength).toBe(3);
-        expect(des(serialized)).toEqual(pattern);
-    });
-
-    test('ser/des bitset with 24 keys (3 bytes)', () => {
-        const keys24 = Array.from({ length: 24 }, (_, i) => `k${i}`);
-        const { ser, des } = build(bitset(keys24));
-
-        const checker = Object.fromEntries(keys24.map((k, i) => [k, (Math.floor(i / 8) + i) % 2 === 0]));
-        const serialized = ser(checker);
-        expect(serialized.byteLength).toBe(3);
-        expect(des(serialized)).toEqual(checker);
-    });
-
-    test('ser/des bitset nested in object', () => {
-        const schema = object({
-            id: uint32(),
-            flags: bitset(['flag1', 'flag2', 'flag3', 'flag4', 'flag5', 'flag6', 'flag7', 'flag8', 'flag9'] as const),
-        });
-        const { ser, des } = build(schema);
-
-        const data = {
-            id: 123,
-            flags: {
-                flag1: true,
-                flag2: false,
-                flag3: true,
-                flag4: false,
-                flag5: true,
-                flag6: false,
-                flag7: true,
-                flag8: false,
-                flag9: true,
-            },
-        };
-
-        expect(des(ser(data))).toEqual(data);
     });
 });
