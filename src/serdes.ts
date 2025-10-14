@@ -779,6 +779,24 @@ function buildValidate(schema: Schema): string {
             case 'uint8Array': {
                 return `if (!(${v} instanceof Uint8Array)) return false;`;
             }
+            case 'nullable': {
+                let inner = '';
+                inner += `if (${v} === null) return true;`;
+                inner += validate(s.of, v);
+                return inner;
+            }
+            case 'optional': {
+                let inner = '';
+                inner += `if (${v} === undefined) return true;`;
+                inner += validate(s.of, v);
+                return inner;
+            }
+            case 'nullish': {
+                let inner = '';
+                inner += `if (${v} === null || ${v} === undefined) return true;`;
+                inner += validate(s.of, v);
+                return inner;
+            }
             case 'union': {
                 if (s.variants.length > 255) {
                     throw new Error('Union has too many variants; max 256 supported for 1-byte tag');

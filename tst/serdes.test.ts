@@ -969,4 +969,349 @@ describe('validate', () => {
         // @ts-expect-error non-boolean value
         expect(s.validate({ x: 1, y: false })).toBe(false);
     });
+
+    test('validate nullable/optional/nullish edge cases', () => {
+        const nullableSchema = build(nullable(number()));
+        expect(nullableSchema.validate(null)).toBe(true);
+        expect(nullableSchema.validate(42)).toBe(true);
+        // @ts-expect-error wrong type
+        expect(nullableSchema.validate(undefined)).toBe(false);
+        // @ts-expect-error wrong type
+        expect(nullableSchema.validate('42')).toBe(false);
+
+        const optionalSchema = build(optional(number()));
+        expect(optionalSchema.validate(undefined)).toBe(true);
+        expect(optionalSchema.validate(42)).toBe(true);
+        // @ts-expect-error wrong type
+        expect(optionalSchema.validate(null)).toBe(false);
+        // @ts-expect-error wrong type
+        expect(optionalSchema.validate('42')).toBe(false);
+
+        const nullishSchema = build(nullish(number()));
+        expect(nullishSchema.validate(null)).toBe(true);
+        expect(nullishSchema.validate(undefined)).toBe(true);
+        expect(nullishSchema.validate(42)).toBe(true);
+        // @ts-expect-error wrong type
+        expect(nullishSchema.validate('42')).toBe(false);
+    });
+
+    test('validate union with invalid discriminant', () => {
+        const pet = union('type', [
+            object({ type: literal('dog'), name: string() }),
+            object({ type: literal('cat'), name: string() }),
+        ] as const);
+
+        const { validate } = build(pet);
+
+        expect(validate({ type: 'dog', name: 'Rex' })).toBe(true);
+        expect(validate({ type: 'cat', name: 'Mittens' })).toBe(true);
+
+        // @ts-expect-error invalid discriminant
+        expect(validate({ type: 'bird', name: 'Tweety' })).toBe(false);
+        // @ts-expect-error wrong type
+        expect(validate({ type: 'dog', name: 123 })).toBe(false);
+        // @ts-expect-error missing discriminant
+        expect(validate({ name: 'Rex' })).toBe(false);
+    });
+
+    test('validate literal with wrong value', () => {
+        const schema = build(literal('hello'));
+        expect(schema.validate('hello')).toBe(true);
+        // @ts-expect-error wrong value
+        expect(schema.validate('goodbye')).toBe(false);
+        // @ts-expect-error wrong type
+        expect(schema.validate(123)).toBe(false);
+
+        const numLiteral = build(literal(42));
+        expect(numLiteral.validate(42)).toBe(true);
+        // @ts-expect-error wrong value
+        expect(numLiteral.validate(43)).toBe(false);
+    });
+});
+
+describe('UTF-8 and Unicode', () => {
+    test('ser/des empty string', () => {
+        const { ser, des } = build(string());
+        const empty = '';
+        const serialized = ser(empty);
+        expect(serialized.byteLength).toBe(1); // just the varuint length prefix (0)
+        expect(des(serialized)).toBe(empty);
+    });
+
+    test('ser/des string with emoji', () => {
+        const { ser, des } = build(string());
+
+        // Simple emoji (4 bytes in UTF-8)
+        const simple = '😊';
+        expect(des(ser(simple))).toBe(simple);
+
+        // Emoji with zero-width joiner (family emoji)
+        const family = '👨‍👩‍👧‍👦';
+        expect(des(ser(family))).toBe(family);
+
+        // Various emoji
+        const multi = '🌍🔥💧🌊⚡';
+        expect(des(ser(multi))).toBe(multi);
+    });
+
+    test('ser/des string with CJK characters', () => {
+        const { ser, des } = build(string());
+
+        const japanese = 'こんにちは世界';
+        expect(des(ser(japanese))).toBe(japanese);
+
+        const chinese = '你好世界';
+        expect(des(ser(chinese))).toBe(chinese);
+
+        const korean = '안녕하세요';
+        expect(des(ser(korean))).toBe(korean);
+    });
+
+    test('ser/des string with mixed unicode', () => {
+        const { ser, des } = build(string());
+
+        const mixed = 'Hello 世界 🌍!';
+        expect(des(ser(mixed))).toBe(mixed);
+
+        const complex = 'Test: 测试 🧪 тест';
+        expect(des(ser(complex))).toBe(complex);
+    });
+
+    test('ser/des string with surrogate pairs', () => {
+        const { ser, des } = build(string());
+
+        // Mathematical alphanumeric symbols (surrogate pairs)
+        const math = '𝕳𝖊𝖑𝖑𝖔';
+        expect(des(ser(math))).toBe(math);
+
+        // Musical symbols
+        const music = '𝄞𝄢𝄫';
+        expect(des(ser(music))).toBe(music);
+    });
+
+    test('ser/des string with combining characters', () => {
+        const { ser, des } = build(string());
+
+        // Combining diacritical marks
+        const accents = 'café'; // é is one codepoint
+        expect(des(ser(accents))).toBe(accents);
+
+        const combining = 'cafe\u0301'; // e + combining acute accent
+        expect(des(ser(combining))).toBe(combining);
+    });
+
+    test('ser/des string with special whitespace', () => {
+        const { ser, des } = build(string());
+
+        const withNewline = 'hello\nworld';
+        expect(des(ser(withNewline))).toBe(withNewline);
+
+        const withTab = 'hello\tworld';
+        expect(des(ser(withTab))).toBe(withTab);
+
+        const withCarriageReturn = 'hello\r\nworld';
+        expect(des(ser(withCarriageReturn))).toBe(withCarriageReturn);
+    });
+});
+
+describe('Empty Collections', () => {
+    test('ser/des empty list', () => {
+        const { ser, des } = build(list(number()));
+        const empty: number[] = [];
+        const serialized = ser(empty);
+        expect(serialized.byteLength).toBe(1); // just varuint length prefix (0)
+        expect(des(serialized)).toEqual(empty);
+    });
+
+    test('ser/des empty nested list', () => {
+        const { ser, des } = build(list(list(string())));
+        const empty: string[][] = [];
+        expect(des(ser(empty))).toEqual(empty);
+
+        const withEmptyInner: string[][] = [[], []];
+        expect(des(ser(withEmptyInner))).toEqual(withEmptyInner);
+    });
+
+    test('ser/des empty record', () => {
+        const { ser, des } = build(record(number()));
+        const empty: Record<string, number> = {};
+        const serialized = ser(empty);
+        expect(serialized.byteLength).toBe(1); // just varuint length prefix (0)
+        expect(des(serialized)).toEqual(empty);
+    });
+
+    test('ser/des object with empty nested collections', () => {
+        const schema = object({
+            items: list(string()),
+            metadata: record(number()),
+        });
+        const { ser, des } = build(schema);
+
+        const data = {
+            items: [],
+            metadata: {},
+        };
+
+        expect(des(ser(data))).toEqual(data);
+    });
+});
+
+describe('Record with Special Keys', () => {
+    test('ser/des record with empty string key', () => {
+        const { ser, des } = build(record(number()));
+
+        const emptyKey = { '': 42 };
+        expect(des(ser(emptyKey))).toEqual(emptyKey);
+
+        const mixed = { '': 1, 'normal': 2, 'another': 3 };
+        expect(des(ser(mixed))).toEqual(mixed);
+    });
+
+    test('ser/des record with very long keys', () => {
+        const { ser, des } = build(record(number()));
+
+        const longKey = 'x'.repeat(1000);
+        const data = { [longKey]: 99 };
+        expect(des(ser(data))).toEqual(data);
+
+        // Multiple long keys
+        const multiLong = {
+            ['a'.repeat(500)]: 1,
+            ['b'.repeat(500)]: 2,
+        };
+        expect(des(ser(multiLong))).toEqual(multiLong);
+    });
+
+    test('ser/des record with unicode keys', () => {
+        const { ser, des } = build(record(string()));
+
+        const unicodeKeys = {
+            'ключ': 'Russian',
+            '😊': 'emoji',
+            '你好': 'Chinese',
+            '🌍': 'Earth',
+        };
+        expect(des(ser(unicodeKeys))).toEqual(unicodeKeys);
+    });
+
+    test('ser/des record with special character keys', () => {
+        const { ser, des } = build(record(number()));
+
+        const specialKeys = {
+            'with"quote': 1,
+            'with\'apostrophe': 2,
+            'with\nnewline': 3,
+            'with\ttab': 4,
+            'with\\backslash': 5,
+        };
+        expect(des(ser(specialKeys))).toEqual(specialKeys);
+    });
+
+    test('ser/des nested record with special keys', () => {
+        const { ser, des } = build(record(record(number())));
+
+        const longKey = 'x'.repeat(100);
+        const data = {
+            '': { 'inner': 1 },
+            '😊': { '': 2, [longKey]: 3 },
+        };
+        expect(des(ser(data))).toEqual(data);
+    });
+});
+
+describe('Bitset Edge Cases', () => {
+    test('ser/des bitset with all true', () => {
+        const { ser, des } = build(bitset(['a', 'b', 'c', 'd', 'e']));
+
+        const allTrue = { a: true, b: true, c: true, d: true, e: true };
+        expect(des(ser(allTrue))).toEqual(allTrue);
+    });
+
+    test('ser/des bitset with all false', () => {
+        const { ser, des } = build(bitset(['a', 'b', 'c', 'd', 'e']));
+
+        const allFalse = { a: false, b: false, c: false, d: false, e: false };
+        expect(des(ser(allFalse))).toEqual(allFalse);
+    });
+
+    test('ser/des bitset with exactly 8 keys (1 byte)', () => {
+        const keys8 = Array.from({ length: 8 }, (_, i) => `k${i}`);
+        const { ser, des } = build(bitset(keys8));
+
+        const allTrue = Object.fromEntries(keys8.map((k) => [k, true]));
+        const serialized = ser(allTrue);
+        expect(serialized.byteLength).toBe(1);
+        expect(des(serialized)).toEqual(allTrue);
+
+        const allFalse = Object.fromEntries(keys8.map((k) => [k, false]));
+        expect(des(ser(allFalse))).toEqual(allFalse);
+
+        const alternating = Object.fromEntries(keys8.map((k, i) => [k, i % 2 === 0]));
+        expect(des(ser(alternating))).toEqual(alternating);
+    });
+
+    test('ser/des bitset with 9 keys (2 bytes)', () => {
+        const keys9 = Array.from({ length: 9 }, (_, i) => `k${i}`);
+        const { ser, des } = build(bitset(keys9));
+
+        const mixed = Object.fromEntries(keys9.map((k, i) => [k, i % 2 === 0]));
+        const serialized = ser(mixed);
+        expect(serialized.byteLength).toBe(2);
+        expect(des(serialized)).toEqual(mixed);
+    });
+
+    test('ser/des bitset with 16 keys (2 bytes)', () => {
+        const keys16 = Array.from({ length: 16 }, (_, i) => `k${i}`);
+        const { ser, des } = build(bitset(keys16));
+
+        const pattern = Object.fromEntries(keys16.map((k, i) => [k, i < 8]));
+        const serialized = ser(pattern);
+        expect(serialized.byteLength).toBe(2);
+        expect(des(serialized)).toEqual(pattern);
+    });
+
+    test('ser/des bitset with 17 keys (3 bytes)', () => {
+        const keys17 = Array.from({ length: 17 }, (_, i) => `k${i}`);
+        const { ser, des } = build(bitset(keys17));
+
+        const pattern = Object.fromEntries(keys17.map((k, i) => [k, i === 16]));
+        const serialized = ser(pattern);
+        expect(serialized.byteLength).toBe(3);
+        expect(des(serialized)).toEqual(pattern);
+    });
+
+    test('ser/des bitset with 24 keys (3 bytes)', () => {
+        const keys24 = Array.from({ length: 24 }, (_, i) => `k${i}`);
+        const { ser, des } = build(bitset(keys24));
+
+        const checker = Object.fromEntries(keys24.map((k, i) => [k, (Math.floor(i / 8) + i) % 2 === 0]));
+        const serialized = ser(checker);
+        expect(serialized.byteLength).toBe(3);
+        expect(des(serialized)).toEqual(checker);
+    });
+
+    test('ser/des bitset nested in object', () => {
+        const schema = object({
+            id: uint32(),
+            flags: bitset(['flag1', 'flag2', 'flag3', 'flag4', 'flag5', 'flag6', 'flag7', 'flag8', 'flag9'] as const),
+        });
+        const { ser, des } = build(schema);
+
+        const data = {
+            id: 123,
+            flags: {
+                flag1: true,
+                flag2: false,
+                flag3: true,
+                flag4: false,
+                flag5: true,
+                flag6: false,
+                flag7: true,
+                flag8: false,
+                flag9: true,
+            },
+        };
+
+        expect(des(ser(data))).toEqual(data);
+    });
 });
