@@ -1,6 +1,6 @@
 import type { Schema, SchemaType } from './schema';
 
-export function serDes<S extends Schema>(
+export function build<S extends Schema>(
     schema: S,
 ): {
     ser: (value: SchemaType<S>) => Uint8Array;

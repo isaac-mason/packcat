@@ -42,7 +42,7 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 ### Ser/Des
 
-<RenderType type="import('packcat').serDes" />
+<RenderType type="import('packcat').build" />
 
 ### Schema
 

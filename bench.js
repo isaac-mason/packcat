@@ -1,13 +1,13 @@
 import {
     bitset,
     boolean,
+    build,
     float32,
     list,
     literal,
     number,
     object,
     record,
-    serDes,
     string,
     uint8,
     uint16,
@@ -30,7 +30,7 @@ function bench(name, fn, iterations) {
 }
 
 function benchSchema(name, schema, val) {
-    const { ser, des, source } = serDes(schema);
+    const { ser, des, source } = build(schema);
 
     const N = 100_000;
 

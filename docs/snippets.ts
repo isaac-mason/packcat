@@ -1,12 +1,11 @@
 /* SNIPPET_START: schema */
 import type { SchemaType } from 'packcat';
-import { boolean, bools, float32, list, literal, object, uint32, union } from 'packcat';
+import { boolean, bitset, float32, list, literal, object, uint32, union } from 'packcat';
 
 const playerInputSchema = object({
     frame: uint32(),
     nipple: list(float32(), 2),
-    // will be serialised as a bitset
-    buttons: bools(['jump', 'sprint', 'crouch'] as const),
+    buttons: bitset(['jump', 'sprint', 'crouch'] as const),
     cmd: list(
         union('type', [
             // literals are not included in the serialised data, only used for discrimination
@@ -21,9 +20,9 @@ type PlayerInputType = SchemaType<typeof playerInputSchema>;
 /* SNIPPET_END: schema */
 
 /* SNIPPET_START: serdes */
-import { serDes } from 'packcat';
+import { build } from 'packcat';
 
-const playerInputSerdes = serDes(playerInputSchema);
+const { ser, des, validate } = build(playerInputSchema);
 
 const playerInput: PlayerInputType = {
     frame: 1,
@@ -32,18 +31,18 @@ const playerInput: PlayerInputType = {
     cmd: [{ type: 'interact' }, { type: 'use', primary: true, secondary: false }],
 };
 
-const u8 = playerInputSerdes.ser(playerInput);
+const u8 = ser(playerInput);
 
 console.log(u8); // Uint8Array
 
-const deserialized = playerInputSerdes.des(u8);
+const deserialized = des(u8);
 
 console.log(deserialized); // { frame: 1, nipple: [ 0, 1 ], buttons: { jump: true, sprint: false, crouch: true }, cmd: [ { type: 'interact' }, { type: 'use', primary: true, secondary: false } ] }
 /* SNIPPET_END: serdes */
 
 /* SNIPPET_START: validate */
-console.log(playerInputSerdes.validate(playerInput)); // true
+console.log(validate(playerInput)); // true
 
 // @ts-expect-error this doesn't conform to the schema type!
-console.log(playerInputSerdes.validate({ foo: 'bar' })); // false
+console.log(validate({ foo: 'bar' })); // false
 /* SNIPPET_END: validate */

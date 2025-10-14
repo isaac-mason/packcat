@@ -36,13 +36,12 @@ First, define your data format with the schema utils:
 
 ```ts
 import type { SchemaType } from 'packcat';
-import { boolean, bools, float32, list, literal, object, uint32, union } from 'packcat';
+import { boolean, bitset, float32, list, literal, object, uint32, union } from 'packcat';
 
 const playerInputSchema = object({
     frame: uint32(),
     nipple: list(float32(), 2),
-    // will be serialised as a bitset
-    buttons: bools(['jump', 'sprint', 'crouch'] as const),
+    buttons: bitset(['jump', 'sprint', 'crouch'] as const),
     cmd: list(
         union('type', [
             // literals are not included in the serialised data, only used for discrimination
@@ -55,12 +54,12 @@ const playerInputSchema = object({
 type PlayerInputType = SchemaType<typeof playerInputSchema>;
 ```
 
-Next, you can create a serializer/deserializer for that schema, and use `SchemaType` to infer the TypeScript type of the schema:
+Next, you can build the schema, which gives you `ser`, `des`, and `validate` functions, and use `SchemaType` to infer the TypeScript type of the schema:
 
 ```ts
-import { serDes } from 'packcat';
+import { build } from 'packcat';
 
-const playerInputSerdes = serDes(playerInputSchema);
+const { ser, des, validate } = build(playerInputSchema);
 
 const playerInput: PlayerInputType = {
     frame: 1,
@@ -69,11 +68,11 @@ const playerInput: PlayerInputType = {
     cmd: [{ type: 'interact' }, { type: 'use', primary: true, secondary: false }],
 };
 
-const u8 = playerInputSerdes.ser(playerInput);
+const u8 = ser(playerInput);
 
 console.log(u8); // Uint8Array
 
-const deserialized = playerInputSerdes.des(u8);
+const deserialized = des(u8);
 
 console.log(deserialized); // { frame: 1, nipple: [ 0, 1 ], buttons: { jump: true, sprint: false, crouch: true }, cmd: [ { type: 'interact' }, { type: 'use', primary: true, secondary: false } ] }
 ```
@@ -81,10 +80,10 @@ console.log(deserialized); // { frame: 1, nipple: [ 0, 1 ], buttons: { jump: tru
 You can also use `validate` if you don't trust whether the input data confirms to the schema type:
 
 ```ts
-console.log(playerInputSerdes.validate(playerInput)); // true
+console.log(validate(playerInput)); // true
 
 // @ts-expect-error this doesn't conform to the schema type!
-console.log(playerInputSerdes.validate({ foo: 'bar' })); // false
+console.log(validate({ foo: 'bar' })); // false
 ```
 
 ## API Documentation
@@ -92,7 +91,7 @@ console.log(playerInputSerdes.validate({ foo: 'bar' })); // false
 ### Ser/Des
 
 ```ts
-export function serDes<S extends Schema>(schema: S): {
+export function build<S extends Schema>(schema: S): {
     ser: (value: SchemaType<S>) => Uint8Array;
     des: (u8: Uint8Array) => SchemaType<S>;
     validate: (value: SchemaType<S>) => boolean;
