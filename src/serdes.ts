@@ -135,16 +135,18 @@ function buildSer(schema: Schema): string {
                 } else {
                     // variable-length list: include varuint length prefix and per-element dynamic parts
                     const i = variable('i');
+                    const lenVar = variable('len');
                     const elem = size(s.of, `${v}[${i}]`);
 
                     let parts = '';
-                    parts += varuintSize(`${v}.length`);
+                    parts += `const ${lenVar} = ${v}.length;`;
+                    parts += varuintSize(lenVar);
                     if (elem.fixed > 0) {
                         // account for unconditional fixed bytes per element
-                        parts += `size += ${elem.fixed} * ${v}.length;`;
+                        parts += `size += ${elem.fixed} * ${lenVar};`;
                     }
                     if (elem.code && elem.code !== '') {
-                        parts += `for (let ${i} = 0; ${i} < ${v}.length; ${i}++) { ${elem.code} }`;
+                        parts += `for (let ${i} = 0; ${i} < ${lenVar}; ${i}++) { ${elem.code} }`;
                     }
 
                     return { code: parts, fixed: 0 };
@@ -184,19 +186,21 @@ function buildSer(schema: Schema): string {
             }
             case 'record': {
                 const i = variable('i');
+                const keys = variable('keys');
+                const keysLen = variable('keysLen');
 
                 const childSize = size(s.field, `${v}[k]`);
-                const keys = variable('keys');
 
                 let inner = '';
                 inner += `if (${v} && typeof ${v} === 'object') {`;
                 inner += `const ${keys} = Object.keys(${v});`;
-                inner += `${varuintSize(`${keys}.length`)}`;
+                inner += `const ${keysLen} = ${keys}.length;`;
+                inner += `${varuintSize(keysLen)}`;
                 if (childSize.fixed > 0) {
-                    inner += ` size += ${childSize.fixed} * ${keys}.length; `;
+                    inner += ` size += ${childSize.fixed} * ${keysLen}; `;
                 }
                 const strVar = variable('str');
-                inner += `for (let ${i} = 0; ${i} < ${keys}.length; ${i}++) { const k = ${keys}[${i}]; const ${strVar} = k; len = utf8Length(${strVar}); ${varuintSize('len')} size += len; `;
+                inner += `for (let ${i} = 0; ${i} < ${keysLen}; ${i}++) { const k = ${keys}[${i}]; const ${strVar} = k; len = utf8Length(${strVar}); ${varuintSize('len')} size += len; `;
                 if (childSize.code !== '') {
                     inner += childSize.code;
                 }
@@ -337,10 +341,12 @@ function buildSer(schema: Schema): string {
                 } else {
                     // generate dynamic list serialization
                     const i = variable('i');
+                    const lenVar = variable('len');
 
                     let inner = '';
-                    inner += writeVaruint(`${v}.length`);
-                    inner += `for (let ${i} = 0; ${i} < ${v}.length; ${i}++) {`;
+                    inner += `const ${lenVar} = ${v}.length;`;
+                    inner += writeVaruint(lenVar);
+                    inner += `for (let ${i} = 0; ${i} < ${lenVar}; ${i}++) {`;
                     inner += ser(s.of, `${v}[${i}]`);
                     inner += '}';
                     return inner;
@@ -366,13 +372,19 @@ function buildSer(schema: Schema): string {
             case 'record': {
                 const i = variable('i');
                 const keys = variable('keys');
+                const keysLen = variable('keysLen');
+                const keyVar = variable('key');
+                const valVar = variable('val');
 
                 let inner = '';
                 inner += `${keys} = Object.keys(${v});`;
-                inner += writeVaruint(`${keys}.length`);
-                inner += `for (let ${i} = 0; ${i} < ${keys}.length; ${i}++) {`;
-                inner += writeString(`${keys}[${i}]`);
-                inner += ser(s.field, `${v}[${keys}[${i}]]`);
+                inner += `${keysLen} = ${keys}.length;`;
+                inner += writeVaruint(keysLen);
+                inner += `for (let ${i} = 0; ${i} < ${keysLen}; ${i}++) {`;
+                inner += `const ${keyVar} = ${keys}[${i}];`;
+                inner += writeString(keyVar);
+                inner += `const ${valVar} = ${v}[${keyVar}];`;
+                inner += ser(s.field, valVar);
                 inner += `}`;
                 return inner;
             }
@@ -404,11 +416,14 @@ function buildSer(schema: Schema): string {
             case 'bitset': {
                 // pack keys into bitset, unrolled per-output-byte to avoid per-iteration modulo
                 const byteVar = variable('byte');
+                const objVar = variable('obj');
 
                 const total = s.keys.length;
                 const bytes = Math.ceil(total / 8);
 
                 let inner = '';
+                // hoist object reference to avoid repeated property chain lookups
+                inner += `const ${objVar} = ${v};`;
                 // declare the byte variable once to avoid redeclaration when unrolling bytes
                 inner += `let ${byteVar};`;
                 // for each output byte, check up to 8 keys and set bits accordingly
@@ -418,7 +433,7 @@ function buildSer(schema: Schema): string {
                         const idx = b * 8 + bit;
                         if (idx >= total) break;
                         // inline the static key name directly instead of referencing a runtime keys array
-                        inner += `if (${v}[${JSON.stringify(s.keys[idx])}]) ${byteVar} |= ${1 << bit};`;
+                        inner += `if (${objVar}[${JSON.stringify(s.keys[idx])}]) ${byteVar} |= ${1 << bit};`;
                     }
                     inner += `u8[o++] = ${byteVar};`;
                 }
