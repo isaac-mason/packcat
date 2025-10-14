@@ -728,6 +728,50 @@ describe('serDes', () => {
         const outCat = des(bufCat);
         expect(outCat).toEqual(cat);
     });
+
+    test('ser/des union with many variants (>255)', () => {
+        // Create 300 variants to test varuint encoding
+        const variants = Array.from({ length: 300 }, (_, i) =>
+            object({ type: literal(`type${i}`), value: uint8() }),
+        );
+        const schema = union('type', variants as any);
+        const { ser, des, validate } = build(schema);
+
+        // Test first variant (1-byte varuint: 0)
+        const first = { type: 'type0', value: 42 };
+        expect(validate(first)).toBe(true);
+        const bufFirst = ser(first);
+        expect(bufFirst.byteLength).toBe(2); // 1 byte varuint tag + 1 byte value
+        expect(des(bufFirst)).toEqual(first);
+
+        // Test variant at 127 (1-byte varuint boundary)
+        const at127 = { type: 'type127', value: 100 };
+        expect(validate(at127)).toBe(true);
+        const buf127 = ser(at127);
+        expect(buf127.byteLength).toBe(2); // 1 byte varuint tag + 1 byte value
+        expect(des(buf127)).toEqual(at127);
+
+        // Test variant at 128 (2-byte varuint)
+        const at128 = { type: 'type128', value: 50 };
+        expect(validate(at128)).toBe(true);
+        const buf128 = ser(at128);
+        expect(buf128.byteLength).toBe(3); // 2 byte varuint tag + 1 byte value
+        expect(des(buf128)).toEqual(at128);
+
+        // Test variant at 200 (2-byte varuint)
+        const at200 = { type: 'type200', value: 75 };
+        expect(validate(at200)).toBe(true);
+        const buf200 = ser(at200);
+        expect(buf200.byteLength).toBe(3); // 2 byte varuint tag + 1 byte value
+        expect(des(buf200)).toEqual(at200);
+
+        // Test last variant
+        const last = { type: 'type299', value: 99 };
+        expect(validate(last)).toBe(true);
+        const bufLast = ser(last);
+        expect(bufLast.byteLength).toBe(3); // 2 byte varuint tag + 1 byte value
+        expect(des(bufLast)).toEqual(last);
+    });
 });
 
 describe('validate', () => {
