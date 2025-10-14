@@ -11,6 +11,8 @@ const f64_u8 = new Uint8Array(f64_buffer);
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
+let variableCounter = 0;
+
 function utf8Length(s: string) {
     let l = 0;
     for (let i = 0; i < s.length; i++) {
@@ -74,6 +76,8 @@ export function build<S extends Schema>(
 }
 
 function buildSer(schema: Schema): string {
+    variableCounter = 1;
+    
     let code = '';
 
     code += 'let len = 0;';
@@ -84,8 +88,6 @@ function buildSer(schema: Schema): string {
     code += 'let textEncoderResult;';
 
     type SizeCalc = { code: string; fixed: number };
-
-    let variableCounter = 1;
 
     function size(s: Schema, v: string): SizeCalc {
         switch (s.type) {
@@ -104,7 +106,8 @@ function buildSer(schema: Schema): string {
             case 'float64':
                 return { code: '', fixed: 8 };
             case 'string': {
-                const code = `len = utf8Length(${v}); ${varuintSize('len')} size += len;`;
+                const strVar = variable('str');
+                const code = `const ${strVar} = ${v}; len = utf8Length(${strVar}); ${varuintSize('len')} size += len;`;
                 return { code, fixed: 0 };
             }
             case 'varint': {
@@ -120,7 +123,7 @@ function buildSer(schema: Schema): string {
             case 'list': {
                 if ('length' in s && typeof s.length === 'number') {
                     // fixed-length list: each element exists at compile time
-                    const i = variable('i', variableCounter++);
+                    const i = variable('i');
                     const elem = size(s.of, `${v}[${i}]`);
                     // if the element is fully fixed-size, we can compute total size at compile time
                     if (elem.code === '' && elem.fixed > 0) {
@@ -131,7 +134,7 @@ function buildSer(schema: Schema): string {
                     return { code: inner, fixed: 0 };
                 } else {
                     // variable-length list: include varuint length prefix and per-element dynamic parts
-                    const i = variable('i', variableCounter++);
+                    const i = variable('i');
                     const elem = size(s.of, `${v}[${i}]`);
 
                     let parts = '';
@@ -180,10 +183,10 @@ function buildSer(schema: Schema): string {
                 return { code: parts.join(' '), fixed };
             }
             case 'record': {
-                const i = variable('i', variableCounter++);
+                const i = variable('i');
 
                 const childSize = size(s.field, `${v}[k]`);
-                const keys = variable('keys', variableCounter++);
+                const keys = variable('keys');
 
                 let inner = '';
                 inner += `if (${v} && typeof ${v} === 'object') {`;
@@ -192,7 +195,8 @@ function buildSer(schema: Schema): string {
                 if (childSize.fixed > 0) {
                     inner += ` size += ${childSize.fixed} * ${keys}.length; `;
                 }
-                inner += `for (let ${i} = 0; ${i} < ${keys}.length; ${i}++) { const k = ${keys}[${i}]; len = utf8Length(k); ${varuintSize('len')} size += len; `;
+                const strVar = variable('str');
+                inner += `for (let ${i} = 0; ${i} < ${keys}.length; ${i}++) { const k = ${keys}[${i}]; const ${strVar} = k; len = utf8Length(${strVar}); ${varuintSize('len')} size += len; `;
                 if (childSize.code !== '') {
                     inner += childSize.code;
                 }
@@ -242,7 +246,7 @@ function buildSer(schema: Schema): string {
                 // object's discriminant value against those literals and add
                 // the size for the matching variant. We encode a varuint tag
                 // (the variant index) followed by the variant data.
-                const keyVar = variable('keyVal', variableCounter++);
+                const keyVar = variable('keyVal');
 
                 let inner = '';
                 inner += `const ${keyVar} = ${v}[${JSON.stringify(s.key)}];`;
@@ -335,7 +339,7 @@ function buildSer(schema: Schema): string {
                     return inner;
                 } else {
                     // generate dynamic list serialization
-                    const i = variable('i', variableCounter++);
+                    const i = variable('i');
 
                     let inner = '';
                     inner += writeVaruint(`${v}.length`);
@@ -363,8 +367,8 @@ function buildSer(schema: Schema): string {
                 return out;
             }
             case 'record': {
-                const i = variable('i', variableCounter++);
-                const keys = variable('keys', variableCounter++);
+                const i = variable('i');
+                const keys = variable('keys');
 
                 let inner = '';
                 inner += `${keys} = Object.keys(${v});`;
@@ -377,7 +381,7 @@ function buildSer(schema: Schema): string {
             }
             case 'union': {
                 // write varuint tag followed by variant payload
-                const discriminant = variable('discriminant', variableCounter++);
+                const discriminant = variable('discriminant');
                 let inner = '';
                 inner += `const ${discriminant} = ${v}[${JSON.stringify(s.key)}];`;
 
@@ -402,7 +406,7 @@ function buildSer(schema: Schema): string {
             }
             case 'bitset': {
                 // pack keys into bitset, unrolled per-output-byte to avoid per-iteration modulo
-                const byteVar = variable('byte', variableCounter++);
+                const byteVar = variable('byte');
 
                 const total = s.keys.length;
                 const bytes = Math.ceil(total / 8);
@@ -475,6 +479,8 @@ function buildSer(schema: Schema): string {
 }
 
 function buildDes(schema: Schema): string {
+    variableCounter = 1;
+    
     let code = '';
 
     code += 'let o = 0;';
@@ -482,8 +488,6 @@ function buildDes(schema: Schema): string {
     code += 'let val = 0;';
     code += 'let shift = 0;';
     code += 'let byte = 0;';
-
-    let variableCounter = 1;
 
     function des(s: Schema, target: string): string {
         switch (s.type) {
@@ -534,8 +538,8 @@ function buildDes(schema: Schema): string {
                     return inner;
                 } else {
                     // variable-length list: read length then loop
-                    const i = variable('i', variableCounter++);
-                    const l = variable('l', variableCounter++);
+                    const i = variable('i');
+                    const l = variable('l');
 
                     let inner = '';
                     inner += `let ${l};`;
@@ -562,9 +566,9 @@ function buildDes(schema: Schema): string {
                 return inner;
             }
             case 'record': {
-                const i = variable('i', variableCounter++);
-                const k = variable('k', variableCounter++);
-                const count = variable('count', variableCounter++);
+                const i = variable('i');
+                const k = variable('k');
+                const count = variable('count');
 
                 let inner = '';
                 inner += `let ${k}, ${count};`;
@@ -586,7 +590,7 @@ function buildDes(schema: Schema): string {
 
                 // read one byte per output byte and assign up to 8 keys each
                 for (let b = 0; b < bytes; b++) {
-                    const byteIdx = variable('bval', variableCounter++);
+                    const byteIdx = variable('bval');
                     out += `const ${byteIdx} = u8[o++];`;
                     for (let bit = 0; bit < 8; bit++) {
                         const idx = b * 8 + bit;
@@ -634,7 +638,7 @@ function buildDes(schema: Schema): string {
                 return inner;
             }
             case 'union': {
-                const tag = variable('tag', variableCounter++);
+                const tag = variable('tag');
                 let out = '';
                 out += `let ${tag};`;
                 out += readVaruint(tag);
@@ -664,9 +668,9 @@ function buildDes(schema: Schema): string {
 }
 
 function buildValidate(schema: Schema): string {
+    variableCounter = 1;
+    
     let code = '';
-
-    let variableCounter = 1;
 
     function validate(s: Schema, v: string): string {
         switch (s.type) {
@@ -709,7 +713,7 @@ function buildValidate(schema: Schema): string {
 
                     return inner;
                 } else {
-                    const i = variable('i', variableCounter++);
+                    const i = variable('i');
 
                     let inner = '';
                     inner += `if (!Array.isArray(${v})) return false;`;
@@ -743,8 +747,8 @@ function buildValidate(schema: Schema): string {
                 return inner;
             }
             case 'record': {
-                const i = variable('i', variableCounter++);
-                const keys = variable('keys', variableCounter++);
+                const i = variable('i');
+                const keys = variable('keys');
 
                 let inner = '';
                 inner += `if (typeof (${v}) !== "object") return false;`;
@@ -793,7 +797,7 @@ function buildValidate(schema: Schema): string {
                 // variant literals, then validate against that variant.
                 let inner = '';
                 inner += `if (typeof (${v}) !== "object") return false;`;
-                const keyVar = variable('key', variableCounter++);
+                const keyVar = variable('key');
                 inner += `const ${keyVar} = ${v}[${JSON.stringify(s.key)}];`;
 
                 // validate against matching literal
@@ -831,8 +835,8 @@ function buildValidate(schema: Schema): string {
     return code;
 }
 
-function variable(str: string, idx: number): string {
-    return str + idx;
+function variable(str: string): string {
+    return str + variableCounter++;
 }
 
 function varuintSize(value: string): string {
