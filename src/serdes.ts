@@ -1,5 +1,40 @@
 import type { Schema, SchemaType } from './schema';
 
+const f32_buffer = new ArrayBuffer(4);
+const f32 = new Float32Array(f32_buffer);
+const f32_u8 = new Uint8Array(f32_buffer);
+
+const f64_buffer = new ArrayBuffer(8);
+const f64 = new Float64Array(f64_buffer);
+const f64_u8 = new Uint8Array(f64_buffer);
+
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
+function utf8Length(s: string) {
+    let l = 0;
+    for (let i = 0; i < s.length; i++) {
+        const c = s.charCodeAt(i);
+        if (c < 0x80) {
+            l += 1;
+        } else if (c < 0x800) {
+            l += 2;
+        } else if (c >= 0xd800 && c <= 0xdbff) {
+            // high surrogate
+            const c2 = s.charCodeAt(i + 1);
+            if (c2 >= 0xdc00 && c2 <= 0xdfff) {
+                l += 4;
+                i++; // valid surrogate pair
+            } else {
+                l += 3; // unpaired surrogate
+            }
+        } else {
+            l += 3;
+        }
+    }
+    return l;
+}
+
 export function build<S extends Schema>(
     schema: S,
 ): {
@@ -8,56 +43,32 @@ export function build<S extends Schema>(
     validate: (value: SchemaType<S>) => boolean;
     source: { ser: string; des: string; validate: string };
 } {
-    const f32_buffer = new ArrayBuffer(4);
-    const f32 = new Float32Array(f32_buffer);
-    const f32_u8 = new Uint8Array(f32_buffer);
+    const serSource = buildSer(schema);
 
-    const f64_buffer = new ArrayBuffer(8);
-    const f64 = new Float64Array(f64_buffer);
-    const f64_u8 = new Uint8Array(f64_buffer);
-
-    const textEncoder = new TextEncoder();
-    const textDecoder = new TextDecoder();
-
-    const ctx: Ctx = {
+    const ser = new Function('textEncoder', 'f32', 'f32_u8', 'f64', 'f64_u8', 'utf8Length', 'value', serSource).bind(
+        null,
+        textEncoder,
         f32,
         f32_u8,
         f64,
         f64_u8,
-        textEncoder,
-        textDecoder,
         utf8Length,
-    };
-
-    const serSource = buildSer(schema);
-
-    const serFn = new Function('value', '{ textEncoder, f32, f32_u8, f64, f64_u8, utf8Length }', serSource) as (
-        value: SchemaType<S>,
-        tmps: Ctx,
-    ) => Uint8Array;
-
-    const ser = (value: SchemaType<S>): Uint8Array => {
-        return serFn(value, ctx);
-    };
+    ) as (value: SchemaType<S>) => Uint8Array;
 
     const desSource = buildDes(schema);
 
-    const desFn = new Function('u8', '{ textDecoder, f32, f32_u8, f64, f64_u8 }', desSource) as (
-        data: Uint8Array,
-        tmps: Ctx,
-    ) => SchemaType<S>;
-
-    const des = (u8: Uint8Array): SchemaType<S> => {
-        return desFn(u8, ctx);
-    };
+    const des = new Function('textDecoder', 'f32', 'f32_u8', 'f64', 'f64_u8', 'u8', desSource).bind(
+        null,
+        textDecoder,
+        f32,
+        f32_u8,
+        f64,
+        f64_u8,
+    ) as (u8: Uint8Array) => SchemaType<S>;
 
     const validateSource = buildValidate(schema);
 
-    const validateFn = new Function('value', validateSource) as (value: SchemaType<S>) => boolean;
-
-    const validate = (value: SchemaType<S>): boolean => {
-        return validateFn(value);
-    };
+    const validate = new Function('value', validateSource) as (value: SchemaType<S>) => boolean;
 
     return { ser, des, validate, source: { ser: serSource, des: desSource, validate: validateSource } };
 }
@@ -475,8 +486,8 @@ function buildDes(schema: Schema): string {
     code += 'let o = 0;';
     code += 'let len = 0;';
     code += 'let val = 0;';
-    code += 'let shift = 0;'
-    code += 'let byte = 0;'
+    code += 'let shift = 0;';
+    code += 'let byte = 0;';
 
     let variableCounter = 1;
 
@@ -825,42 +836,8 @@ function buildValidate(schema: Schema): string {
     return code;
 }
 
-type Ctx = {
-    f32: Float32Array;
-    f32_u8: Uint8Array;
-    f64: Float64Array;
-    f64_u8: Uint8Array;
-    textEncoder: TextEncoder;
-    textDecoder: TextDecoder;
-    utf8Length: (s: string) => number;
-};
-
 function variable(str: string, idx: number): string {
     return str + idx;
-}
-
-function utf8Length(s: string) {
-    let l = 0;
-    for (let i = 0; i < s.length; i++) {
-        const c = s.charCodeAt(i);
-        if (c < 0x80) {
-            l += 1;
-        } else if (c < 0x800) {
-            l += 2;
-        } else if (c >= 0xd800 && c <= 0xdbff) {
-            // high surrogate
-            const c2 = s.charCodeAt(i + 1);
-            if (c2 >= 0xdc00 && c2 <= 0xdfff) {
-                l += 4;
-                i++; // valid surrogate pair
-            } else {
-                l += 3; // unpaired surrogate
-            }
-        } else {
-            l += 3;
-        }
-    }
-    return l;
 }
 
 function readBool(target: string, offset = 'o'): string {
