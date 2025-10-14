@@ -105,6 +105,36 @@ function buildSer(schema: Schema): string {
             case 'number':
             case 'float64':
                 return { code: '', fixed: 8 };
+            case 'quantized': {
+                // Calculate bits needed, round up to bytes
+                const steps = Math.ceil((s.max - s.min) / s.step);
+                const bits = Math.ceil(Math.log2(steps));
+                const bytes = Math.ceil(bits / 8);
+                return { code: '', fixed: bytes };
+            }
+            case 'quaternion': {
+                // 1 byte metadata + component bytes
+                let bytes = 1; // metadata byte
+                if (s.bits <= 8) {
+                    bytes += 3; // 3 components x 1 byte each
+                } else if (s.bits <= 16) {
+                    bytes += 6; // 3 components x 2 bytes each
+                } else {
+                    bytes += 12; // 3 components x 4 bytes each
+                }
+                return { code: '', fixed: bytes };
+            }
+            case 'unitVec2': {
+                // Just the angle bits
+                const bytes = Math.ceil(s.bits / 8);
+                return { code: '', fixed: bytes };
+            }
+            case 'unitVec3': {
+                // 2 bits for index + 1 bit for sign + (bits * 2) for components
+                const totalBits = 2 + 1 + s.bits * 2;
+                const bytes = Math.ceil(totalBits / 8);
+                return { code: '', fixed: bytes };
+            }
             case 'string': {
                 const strVar = variable('str');
                 const code = `const ${strVar} = ${v}; len = utf8Length(${strVar}); ${varuintSize('len')} size += len;`;
@@ -318,6 +348,165 @@ function buildSer(schema: Schema): string {
                 return writeF32(v);
             case 'float64':
                 return writeF64(v);
+            case 'quantized': {
+                // quantize value to discrete steps
+                const steps = Math.ceil((s.max - s.min) / s.step);
+                const bits = Math.ceil(Math.log2(steps));
+                const bytes = Math.ceil(bits / 8);
+                const maxVal = (1 << bits) - 1;
+                
+                const clampedVar = variable('clamped');
+                const quantVar = variable('quant');
+                
+                // clamp input value to [min, max] range, then quantize to step index
+                let code = `const ${clampedVar} = Math.max(${s.min}, Math.min(${s.max}, ${v}));`;
+                code += `const ${quantVar} = Math.max(0, Math.min(${maxVal}, Math.round((${clampedVar} - ${s.min}) / ${s.step})));`;
+                
+                if (bytes === 1) {
+                    code += writeU8(quantVar);
+                } else if (bytes === 2) {
+                    code += writeU16(quantVar);
+                } else if (bytes <= 4) {
+                    code += writeU32(quantVar);
+                } else {
+                    code += writeVaruint(quantVar);
+                }
+                
+                return code;
+            }
+            case 'quaternion': {
+                // Smallest-three encoding
+                const maxVal = (1 << s.bits) - 1;
+                const scale = maxVal / Math.sqrt(2); // max component value is 1/√2
+                
+                const qx = `${v}[0]`;
+                const qy = `${v}[1]`;
+                const qz = `${v}[2]`;
+                const qw = `${v}[3]`;
+                
+                const ax = variable('ax');
+                const ay = variable('ay');
+                const az = variable('az');
+                const aw = variable('aw');
+                const maxIdx = variable('maxIdx');
+                const c0 = variable('c0');
+                const c1 = variable('c1');
+                const c2 = variable('c2');
+                const sign = variable('sign');
+                
+                let code = '';
+                // Find largest component by absolute value
+                code += `const ${ax} = Math.abs(${qx}), ${ay} = Math.abs(${qy}), ${az} = Math.abs(${qz}), ${aw} = Math.abs(${qw});`;
+                code += `let ${maxIdx} = 0;`;
+                code += `if (${ay} > ${ax}) ${maxIdx} = 1;`;
+                code += `if (${az} > (${maxIdx} === 0 ? ${ax} : ${ay})) ${maxIdx} = 2;`;
+                code += `if (${aw} > (${maxIdx} === 0 ? ${ax} : ${maxIdx} === 1 ? ${ay} : ${az})) ${maxIdx} = 3;`;
+                
+                // Get the three smallest components and the sign of largest
+                code += `let ${c0}, ${c1}, ${c2}, ${sign};`;
+                code += `if (${maxIdx} === 0) { ${c0} = ${qy}; ${c1} = ${qz}; ${c2} = ${qw}; ${sign} = ${qx} < 0 ? 1 : 0; }`;
+                code += `else if (${maxIdx} === 1) { ${c0} = ${qx}; ${c1} = ${qz}; ${c2} = ${qw}; ${sign} = ${qy} < 0 ? 1 : 0; }`;
+                code += `else if (${maxIdx} === 2) { ${c0} = ${qx}; ${c1} = ${qy}; ${c2} = ${qw}; ${sign} = ${qz} < 0 ? 1 : 0; }`;
+                code += `else { ${c0} = ${qx}; ${c1} = ${qy}; ${c2} = ${qz}; ${sign} = ${qw} < 0 ? 1 : 0; }`;
+                
+                // Quantize components
+                code += `${c0} = Math.max(0, Math.min(${maxVal}, Math.round((${c0} + ${1 / Math.sqrt(2)}) * ${scale})));`;
+                code += `${c1} = Math.max(0, Math.min(${maxVal}, Math.round((${c1} + ${1 / Math.sqrt(2)}) * ${scale})));`;
+                code += `${c2} = Math.max(0, Math.min(${maxVal}, Math.round((${c2} + ${1 / Math.sqrt(2)}) * ${scale})));`;
+                
+                // Write metadata byte (2 bits index + 1 bit sign)
+                code += `u8[o++] = (${maxIdx} << 1) | ${sign};`;
+                
+                // Write components based on bit size
+                if (s.bits <= 8) {
+                    // Components fit in 1 byte each
+                    code += `u8[o++] = ${c0};`;
+                    code += `u8[o++] = ${c1};`;
+                    code += `u8[o++] = ${c2};`;
+                } else if (s.bits <= 16) {
+                    // Components need 2 bytes each
+                    code += writeU16(c0);
+                    code += writeU16(c1);
+                    code += writeU16(c2);
+                } else {
+                    // Fallback: write as 32-bit
+                    code += writeU32(c0);
+                    code += writeU32(c1);
+                    code += writeU32(c2);
+                }
+                
+                return code;
+            }
+            case 'unitVec2': {
+                // Encode as angle
+                const maxVal = (1 << s.bits) - 1;
+                const angle = variable('angle');
+                const quantized = variable('quant');
+                
+                let code = '';
+                // atan2 returns [-π, π], normalize to [0, 2π]
+                code += `let ${angle} = Math.atan2(${v}[1], ${v}[0]);`;
+                code += `if (${angle} < 0) ${angle} += ${Math.PI * 2};`;
+                code += `const ${quantized} = Math.round(${angle} / ${Math.PI * 2} * ${maxVal}) & ${maxVal};`;
+                
+                const bytes = Math.ceil(s.bits / 8);
+                if (bytes === 1) {
+                    code += writeU8(quantized);
+                } else if (bytes === 2) {
+                    code += writeU16(quantized);
+                } else {
+                    code += writeU32(quantized);
+                }
+                
+                return code;
+            }
+            case 'unitVec3': {
+                // Smallest-two encoding (similar to quaternion)
+                const maxVal = (1 << s.bits) - 1;
+                const scale = maxVal / Math.sqrt(2);
+                
+                const vx = `${v}[0]`;
+                const vy = `${v}[1]`;
+                const vz = `${v}[2]`;
+                
+                const ax = variable('ax');
+                const ay = variable('ay');
+                const az = variable('az');
+                const maxIdx = variable('maxIdx');
+                const c0 = variable('c0');
+                const c1 = variable('c1');
+                const sign = variable('sign');
+                const packed = variable('packed');
+                
+                let code = '';
+                // Find largest component
+                code += `const ${ax} = Math.abs(${vx}), ${ay} = Math.abs(${vy}), ${az} = Math.abs(${vz});`;
+                code += `let ${maxIdx} = 0;`;
+                code += `if (${ay} > ${ax}) ${maxIdx} = 1;`;
+                code += `if (${az} > (${maxIdx} === 0 ? ${ax} : ${ay})) ${maxIdx} = 2;`;
+                
+                // Get two smallest components and sign of largest
+                code += `let ${c0}, ${c1}, ${sign};`;
+                code += `if (${maxIdx} === 0) { ${c0} = ${vy}; ${c1} = ${vz}; ${sign} = ${vx} < 0 ? 1 : 0; }`;
+                code += `else if (${maxIdx} === 1) { ${c0} = ${vx}; ${c1} = ${vz}; ${sign} = ${vy} < 0 ? 1 : 0; }`;
+                code += `else { ${c0} = ${vx}; ${c1} = ${vy}; ${sign} = ${vz} < 0 ? 1 : 0; }`;
+                
+                // Quantize
+                code += `${c0} = Math.max(0, Math.min(${maxVal}, Math.round((${c0} + ${1 / Math.sqrt(2)}) * ${scale})));`;
+                code += `${c1} = Math.max(0, Math.min(${maxVal}, Math.round((${c1} + ${1 / Math.sqrt(2)}) * ${scale})));`;
+                
+                // Pack
+                const totalBits = 2 + 1 + s.bits * 2;
+                const bytes = Math.ceil(totalBits / 8);
+                code += `let ${packed} = (${maxIdx} << ${totalBits - 2}) | (${sign} << ${totalBits - 3}) | (${c0} << ${s.bits}) | ${c1};`;
+                
+                // Write bytes
+                for (let i = bytes - 1; i >= 0; i--) {
+                    code += `u8[o++] = (${packed} >> ${i * 8}) & 0xFF;`;
+                }
+                
+                return code;
+            }
             case 'string': 
                 return writeString(v);
             case 'varint': 
@@ -526,6 +715,147 @@ function buildDes(schema: Schema): string {
                 return readF32(target);
             case 'float64':
                 return readF64(target);
+            case 'quantized': {
+                // read quantized value and dequantize
+                const steps = Math.ceil((s.max - s.min) / s.step);
+                const bits = Math.ceil(Math.log2(steps));
+                const bytes = Math.ceil(bits / 8);
+                
+                const quantVar = variable('quant');
+                let code = '';
+                
+                // read based on byte size
+                if (bytes === 1) {
+                    code += readU8(quantVar);
+                } else if (bytes === 2) {
+                    code += readU16(quantVar);
+                } else if (bytes <= 4) {
+                    code += readU32(quantVar);
+                } else {
+                    code += readVaruint(quantVar);
+                }
+                
+                // dequantize: convert step index back to value
+                code += `${target} = ${s.min} + ${quantVar} * ${s.step};`;
+                
+                return code;
+            }
+            case 'quaternion': {
+                // Decode smallest-three quaternion
+                const maxVal = (1 << s.bits) - 1;
+                const scale = maxVal / Math.sqrt(2);
+                
+                const metaByte = variable('meta');
+                const maxIdx = variable('maxIdx');
+                const sign = variable('sign');
+                const c0 = variable('c0');
+                const c1 = variable('c1');
+                const c2 = variable('c2');
+                const c3 = variable('c3');
+                
+                let code = '';
+                // Read metadata byte (2 bits index + 1 bit sign)
+                code += `const ${metaByte} = u8[o++];`;
+                code += `const ${maxIdx} = ${metaByte} >> 1;`;
+                code += `const ${sign} = ${metaByte} & 0x1;`;
+                
+                // Read components based on bit size
+                if (s.bits <= 8) {
+                    code += `let ${c0} = u8[o++];`;
+                    code += `let ${c1} = u8[o++];`;
+                    code += `let ${c2} = u8[o++];`;
+                } else if (s.bits <= 16) {
+                    code += readU16(c0);
+                    code += readU16(c1);
+                    code += readU16(c2);
+                } else {
+                    code += readU32(c0);
+                    code += readU32(c1);
+                    code += readU32(c2);
+                }
+                
+                // Dequantize
+                code += `${c0} = ${c0} / ${scale} - ${1 / Math.sqrt(2)};`;
+                code += `${c1} = ${c1} / ${scale} - ${1 / Math.sqrt(2)};`;
+                code += `${c2} = ${c2} / ${scale} - ${1 / Math.sqrt(2)};`;
+                
+                // Reconstruct largest component
+                code += `let ${c3} = Math.sqrt(Math.max(0, 1 - ${c0}*${c0} - ${c1}*${c1} - ${c2}*${c2}));`;
+                code += `if (${sign}) ${c3} = -${c3};`;
+                
+                // Assign based on which was dropped (as tuple [x, y, z, w])
+                code += `if (${maxIdx} === 0) ${target} = [${c3}, ${c0}, ${c1}, ${c2}];`;
+                code += `else if (${maxIdx} === 1) ${target} = [${c0}, ${c3}, ${c1}, ${c2}];`;
+                code += `else if (${maxIdx} === 2) ${target} = [${c0}, ${c1}, ${c3}, ${c2}];`;
+                code += `else ${target} = [${c0}, ${c1}, ${c2}, ${c3}];`;
+                
+                return code;
+            }
+            case 'unitVec2': {
+                // Decode angle
+                const maxVal = (1 << s.bits) - 1;
+                const quantized = variable('quant');
+                const angle = variable('angle');
+                
+                const bytes = Math.ceil(s.bits / 8);
+                
+                let code = '';
+                if (bytes === 1) {
+                    code += readU8(quantized);
+                } else if (bytes === 2) {
+                    code += readU16(quantized);
+                } else {
+                    code += readU32(quantized);
+                }
+                
+                code += `const ${angle} = ${quantized} / ${maxVal} * ${Math.PI * 2};`;
+                code += `${target} = [Math.cos(${angle}), Math.sin(${angle})];`;
+                
+                return code;
+            }
+            case 'unitVec3': {
+                // Decode smallest-two
+                const maxVal = (1 << s.bits) - 1;
+                const scale = maxVal / Math.sqrt(2);
+                
+                const packed = variable('packed');
+                const maxIdx = variable('maxIdx');
+                const sign = variable('sign');
+                const c0 = variable('c0');
+                const c1 = variable('c1');
+                const c2 = variable('c2');
+                
+                const totalBits = 2 + 1 + s.bits * 2;
+                const bytes = Math.ceil(totalBits / 8);
+                
+                let code = '';
+                // Read bytes
+                code += `let ${packed} = 0;`;
+                for (let i = bytes - 1; i >= 0; i--) {
+                    code += `${packed} |= u8[o++] << ${i * 8};`;
+                }
+                
+                // Unpack
+                code += `const ${maxIdx} = (${packed} >> ${totalBits - 2}) & 0x3;`;
+                code += `const ${sign} = (${packed} >> ${totalBits - 3}) & 0x1;`;
+                code += `let ${c0} = (${packed} >> ${s.bits}) & ${maxVal};`;
+                code += `let ${c1} = ${packed} & ${maxVal};`;
+                
+                // Dequantize
+                code += `${c0} = ${c0} / ${scale} - ${1 / Math.sqrt(2)};`;
+                code += `${c1} = ${c1} / ${scale} - ${1 / Math.sqrt(2)};`;
+                
+                // Reconstruct largest
+                code += `let ${c2} = Math.sqrt(Math.max(0, 1 - ${c0}*${c0} - ${c1}*${c1}));`;
+                code += `if (${sign}) ${c2} = -${c2};`;
+                
+                // Assign (as tuple [x, y, z])
+                code += `if (${maxIdx} === 0) ${target} = [${c2}, ${c0}, ${c1}];`;
+                code += `else if (${maxIdx} === 1) ${target} = [${c0}, ${c2}, ${c1}];`;
+                code += `else ${target} = [${c0}, ${c1}, ${c2}];`;
+                
+                return code;
+            }
             case 'string': {
                 return readString(target);
             }
@@ -713,6 +1043,14 @@ function buildValidate(schema: Schema): string {
                 return `if (typeof ${v} !== 'number') return false;`;
             case 'float64':
                 return `if (typeof ${v} !== 'number') return false;`;
+            case 'quantized':
+                return `if (typeof ${v} !== 'number' || ${v} < ${s.min} || ${v} > ${s.max}) return false;`;
+            case 'quaternion':
+                return `if (!Array.isArray(${v}) || ${v}.length !== 4 || typeof ${v}[0] !== 'number' || typeof ${v}[1] !== 'number' || typeof ${v}[2] !== 'number' || typeof ${v}[3] !== 'number') return false;`;
+            case 'unitVec2':
+                return `if (!Array.isArray(${v}) || ${v}.length !== 2 || typeof ${v}[0] !== 'number' || typeof ${v}[1] !== 'number') return false;`;
+            case 'unitVec3':
+                return `if (!Array.isArray(${v}) || ${v}.length !== 3 || typeof ${v}[0] !== 'number' || typeof ${v}[1] !== 'number' || typeof ${v}[2] !== 'number') return false;`;
             case 'string': {
                 return `if (typeof ${v} !== 'string') return false;`;
             }

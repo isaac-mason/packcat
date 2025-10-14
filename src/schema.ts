@@ -50,6 +50,31 @@ export type Float64Schema = {
     type: 'float64';
 };
 
+export type QuantizedSchema = {
+    type: 'quantized';
+    min: number;
+    max: number;
+    step: number;
+};
+
+export type QuaternionSchema = {
+    type: 'quaternion';
+    /** Bits per component (9-15 typical, default 10) */
+    bits: number;
+};
+
+export type UnitVec2Schema = {
+    type: 'unitVec2';
+    /** Bits for angle encoding (10-16 typical, default 12) */
+    bits: number;
+};
+
+export type UnitVec3Schema = {
+    type: 'unitVec3';
+    /** Bits per component (9-15 typical, default 10) */
+    bits: number;
+};
+
 export type ListSchema = {
     type: 'list';
     of: Schema;
@@ -132,6 +157,10 @@ export type Schema =
     | Uint32Schema
     | Float32Schema
     | Float64Schema
+    | QuantizedSchema
+    | QuaternionSchema
+    | UnitVec2Schema
+    | UnitVec3Schema
     | StringSchema
     | ListSchema
     | TupleSchema
@@ -206,6 +235,10 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
     S extends Uint32Schema ? number :
     S extends Float32Schema ? number :
     S extends Float64Schema ? number :
+    S extends QuantizedSchema ? number :
+    S extends QuaternionSchema ? [x: number, y: number, z: number, w: number] :
+    S extends UnitVec2Schema ? [x: number, y: number] :
+    S extends UnitVec3Schema ? [x: number, y: number, z: number] :
     S extends ListSchema ? (
         S['length'] extends number
             ? RepeatType<SchemaType<S['of'], DecrementDepth<Depth>>, S['length']>
@@ -305,3 +338,135 @@ export const union = <K extends string, V extends (ObjectSchema & { fields: { [k
     key,
     variants,
 });
+
+/**
+ * Quantize a floating point number to discrete steps within a range.
+ * 
+ * Values are encoded using the minimum number of bits needed to represent
+ * all possible steps, rounded up to the nearest byte boundary.
+ * 
+ * The actual step size may be slightly smaller than requested due to rounding
+ * up to the nearest power of 2. For example, a range of 0-100 with step=1
+ * requires 101 steps, which rounds to 128 (7 bits), giving an actual step
+ * size of ~0.787.
+ * 
+ * @param min - Minimum value in the range
+ * @param max - Maximum value in the range
+ * @param step - Desired step size (precision). Must be positive and <= (max - min)
+ * 
+ * @example
+ * // Rotation angle with 0.5° precision (uses 2 bytes, actual ~0.35°)
+ * quantized(0, 360, 0.5)
+ * 
+ * @example
+ * // Health percentage as whole numbers (uses 1 byte, actual ~0.79)
+ * quantized(0, 100, 1)
+ * 
+ * @example
+ * // Position with 10cm precision (uses 2 bytes, actual ~3cm)
+ * quantized(-1000, 1000, 0.1)
+ * 
+ * @example
+ * // Normalized value with 1% increments (uses 1 byte, actual ~0.39%)
+ * quantized(0, 1, 0.01)
+ */
+export const quantized = (min: number, max: number, step: number): { type: 'quantized'; min: number; max: number; step: number } => {
+    if (min >= max) {
+        throw new Error(`quantized: min must be less than max (got min=${min}, max=${max})`);
+    }
+    if (step <= 0) {
+        throw new Error(`quantized: step must be positive (got ${step})`);
+    }
+    if (step > max - min) {
+        throw new Error(`quantized: step must be <= (max - min) (got step=${step}, range=${max - min})`);
+    }
+    
+    return { type: 'quantized', min, max, step };
+};
+
+/**
+ * Compressed quaternion using "smallest three" encoding.
+ * 
+ * Since quaternions are unit length (x² + y² + z² + w² = 1), we can
+ * store only the 3 smallest components and reconstruct the largest.
+ * This uses significantly less space than storing all 4 components.
+ * 
+ * The encoding stores:
+ * - Index of the dropped (largest) component (2 bits)
+ * - Sign of the dropped component (1 bit)
+ * - 3 quantized components (bits per component × 3)
+ * 
+ * Total size is always rounded up to the nearest byte.
+ * 
+ * @param bits - Bits per component (9-15 typical, default 10)
+ *               9 bits = ~0.002 precision, 4 bytes total
+ *               10 bits = ~0.001 precision, 4 bytes total
+ *               12 bits = ~0.0002 precision, 5 bytes total
+ * 
+ * @example
+ * // Default 10 bits per component (4 bytes total, ~0.001 precision)
+ * quaternion()
+ * 
+ * @example
+ * // High precision 12 bits per component (5 bytes total, ~0.0002 precision)
+ * quaternion(12)
+ */
+export const quaternion = (bits = 10): { type: 'quaternion'; bits: number } => {
+    if (bits < 2 || bits > 15) {
+        throw new Error(`quaternion: bits must be between 2 and 15 (got ${bits})`);
+    }
+    return { type: 'quaternion', bits };
+};
+
+/**
+ * Compressed unit vector in 2D using angle encoding.
+ * 
+ * Since 2D unit vectors can be represented as a single angle (0 to 2π),
+ * this is more efficient than storing x,y components.
+ * 
+ * @param bits - Bits for angle encoding (10-16 typical, default 12)
+ *               10 bits = ~0.35° precision, 2 bytes total
+ *               12 bits = ~0.09° precision, 2 bytes total
+ *               16 bits = ~0.006° precision, 2 bytes total
+ * 
+ * @example
+ * // Default 12 bits (2 bytes, ~0.09° precision)
+ * unitVec2()
+ * 
+ * @example
+ * // High precision 16 bits (2 bytes, ~0.006° precision)
+ * unitVec2(16)
+ */
+export const unitVec2 = (bits = 12): { type: 'unitVec2'; bits: number } => {
+    if (bits < 2 || bits > 16) {
+        throw new Error(`unitVec2: bits must be between 2 and 16 (got ${bits})`);
+    }
+    return { type: 'unitVec2', bits };
+};
+
+/**
+ * Compressed unit vector in 3D using "smallest two" encoding.
+ * 
+ * Similar to quaternion compression, we exploit the unit length constraint.
+ * We store the 2 smallest components and reconstruct the largest, plus
+ * the index and sign of the dropped component.
+ * 
+ * @param bits - Bits per component (9-15 typical, default 10)
+ *               9 bits = ~0.002 precision, 3 bytes total
+ *               10 bits = ~0.001 precision, 3 bytes total
+ *               12 bits = ~0.0002 precision, 3 bytes total
+ * 
+ * @example
+ * // Default 10 bits per component (3 bytes, ~0.001 precision)
+ * unitVec3()
+ * 
+ * @example
+ * // Low bandwidth 9 bits per component (3 bytes, ~0.002 precision)
+ * unitVec3(9)
+ */
+export const unitVec3 = (bits = 10): { type: 'unitVec3'; bits: number } => {
+    if (bits < 2 || bits > 15) {
+        throw new Error(`unitVec3: bits must be between 2 and 15 (got ${bits})`);
+    }
+    return { type: 'unitVec3', bits };
+};
