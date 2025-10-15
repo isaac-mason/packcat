@@ -1,5 +1,9 @@
 import type { Schema, SchemaType } from './schema';
 
+const f16_buffer = new ArrayBuffer(2);
+const f16 = new Float16Array(f16_buffer);
+const f16_u8 = new Uint8Array(f16_buffer);
+
 const f32_buffer = new ArrayBuffer(4);
 const f32 = new Float32Array(f32_buffer);
 const f32_u8 = new Uint8Array(f32_buffer);
@@ -47,9 +51,11 @@ export function build<S extends Schema>(
 } {
     const serSource = buildSer(schema);
 
-    const ser = new Function('textEncoder', 'f32', 'f32_u8', 'f64', 'f64_u8', 'utf8Length', 'value', serSource).bind(
+    const ser = new Function('textEncoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'utf8Length', 'value', serSource).bind(
         null,
         textEncoder,
+        f16,
+        f16_u8,
         f32,
         f32_u8,
         f64,
@@ -59,9 +65,11 @@ export function build<S extends Schema>(
 
     const desSource = buildDes(schema);
 
-    const des = new Function('textDecoder', 'f32', 'f32_u8', 'f64', 'f64_u8', 'u8', desSource).bind(
+    const des = new Function('textDecoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'u8', desSource).bind(
         null,
         textDecoder,
+        f16,
+        f16_u8,
         f32,
         f32_u8,
         f64,
@@ -97,6 +105,7 @@ function buildSer(schema: Schema): string {
                 return { code: '', fixed: 1 };
             case 'int16':
             case 'uint16':
+            case 'float16':
                 return { code: '', fixed: 2 };
             case 'int32':
             case 'uint32':
@@ -112,26 +121,36 @@ function buildSer(schema: Schema): string {
                 const bytes = Math.ceil(bits / 8);
                 return { code: '', fixed: bytes };
             }
-            case 'quaternion': {
+            case 'quat': {
+                // Calculate bits from step, range is -1/√2 to 1/√2 (√2 total range)
+                const steps = Math.ceil(Math.SQRT2 / s.step);
+                const bits = Math.ceil(Math.log2(steps));
+                
                 // 1 byte metadata + component bytes
                 let bytes = 1; // metadata byte
-                if (s.bits <= 8) {
+                if (bits <= 8) {
                     bytes += 3; // 3 components x 1 byte each
-                } else if (s.bits <= 16) {
+                } else if (bits <= 16) {
                     bytes += 6; // 3 components x 2 bytes each
                 } else {
                     bytes += 12; // 3 components x 4 bytes each
                 }
                 return { code: '', fixed: bytes };
             }
-            case 'unitVec2': {
-                // Just the angle bits
-                const bytes = Math.ceil(s.bits / 8);
+            case 'uv2': {
+                // Calculate bits from step, range is 0 to 2π
+                const steps = Math.ceil((Math.PI * 2) / s.step);
+                const bits = Math.ceil(Math.log2(steps));
+                const bytes = Math.ceil(bits / 8);
                 return { code: '', fixed: bytes };
             }
-            case 'unitVec3': {
+            case 'uv3': {
+                // Calculate bits from step, range is -1/√2 to 1/√2 (√2 total range)
+                const steps = Math.ceil(Math.SQRT2 / s.step);
+                const bits = Math.ceil(Math.log2(steps));
+                
                 // 2 bits for index + 1 bit for sign + (bits * 2) for components
-                const totalBits = 2 + 1 + s.bits * 2;
+                const totalBits = 2 + 1 + bits * 2;
                 const bytes = Math.ceil(totalBits / 8);
                 return { code: '', fixed: bytes };
             }
@@ -344,6 +363,8 @@ function buildSer(schema: Schema): string {
                 return writeI32(v);
             case 'uint32':
                 return writeU32(v);
+            case 'float16':
+                return writeF16(v);
             case 'float32':
                 return writeF32(v);
             case 'float64':
@@ -374,9 +395,12 @@ function buildSer(schema: Schema): string {
                 
                 return code;
             }
-            case 'quaternion': {
+            case 'quat': {
                 // Smallest-three encoding
-                const maxVal = (1 << s.bits) - 1;
+                // Calculate bits from step
+                const steps = Math.ceil(Math.SQRT2 / s.step);
+                const bits = Math.ceil(Math.log2(steps));
+                const maxVal = (1 << bits) - 1;
                 const scale = maxVal / Math.sqrt(2); // max component value is 1/√2
                 
                 const qx = `${v}[0]`;
@@ -418,12 +442,12 @@ function buildSer(schema: Schema): string {
                 code += `u8[o++] = (${maxIdx} << 1) | ${sign};`;
                 
                 // Write components based on bit size
-                if (s.bits <= 8) {
+                if (bits <= 8) {
                     // Components fit in 1 byte each
                     code += `u8[o++] = ${c0};`;
                     code += `u8[o++] = ${c1};`;
                     code += `u8[o++] = ${c2};`;
-                } else if (s.bits <= 16) {
+                } else if (bits <= 16) {
                     // Components need 2 bytes each
                     code += writeU16(c0);
                     code += writeU16(c1);
@@ -437,9 +461,12 @@ function buildSer(schema: Schema): string {
                 
                 return code;
             }
-            case 'unitVec2': {
+            case 'uv2': {
                 // Encode as angle
-                const maxVal = (1 << s.bits) - 1;
+                // Calculate bits from step
+                const steps = Math.ceil((Math.PI * 2) / s.step);
+                const bits = Math.ceil(Math.log2(steps));
+                const maxVal = (1 << bits) - 1;
                 const angle = variable('angle');
                 const quantized = variable('quant');
                 
@@ -449,7 +476,7 @@ function buildSer(schema: Schema): string {
                 code += `if (${angle} < 0) ${angle} += ${Math.PI * 2};`;
                 code += `const ${quantized} = Math.round(${angle} / ${Math.PI * 2} * ${maxVal}) & ${maxVal};`;
                 
-                const bytes = Math.ceil(s.bits / 8);
+                const bytes = Math.ceil(bits / 8);
                 if (bytes === 1) {
                     code += writeU8(quantized);
                 } else if (bytes === 2) {
@@ -460,9 +487,12 @@ function buildSer(schema: Schema): string {
                 
                 return code;
             }
-            case 'unitVec3': {
+            case 'uv3': {
                 // Smallest-two encoding (similar to quaternion)
-                const maxVal = (1 << s.bits) - 1;
+                // Calculate bits from step
+                const steps = Math.ceil(Math.SQRT2 / s.step);
+                const bits = Math.ceil(Math.log2(steps));
+                const maxVal = (1 << bits) - 1;
                 const scale = maxVal / Math.sqrt(2);
                 
                 const vx = `${v}[0]`;
@@ -496,9 +526,9 @@ function buildSer(schema: Schema): string {
                 code += `${c1} = Math.max(0, Math.min(${maxVal}, Math.round((${c1} + ${1 / Math.sqrt(2)}) * ${scale})));`;
                 
                 // Pack
-                const totalBits = 2 + 1 + s.bits * 2;
+                const totalBits = 2 + 1 + bits * 2;
                 const bytes = Math.ceil(totalBits / 8);
-                code += `let ${packed} = (${maxIdx} << ${totalBits - 2}) | (${sign} << ${totalBits - 3}) | (${c0} << ${s.bits}) | ${c1};`;
+                code += `let ${packed} = (${maxIdx} << ${totalBits - 2}) | (${sign} << ${totalBits - 3}) | (${c0} << ${bits}) | ${c1};`;
                 
                 // Write bytes
                 for (let i = bytes - 1; i >= 0; i--) {
@@ -711,6 +741,8 @@ function buildDes(schema: Schema): string {
                 return readI32(target);
             case 'uint32':
                 return readU32(target);
+            case 'float16':
+                return readF16(target);
             case 'float32':
                 return readF32(target);
             case 'float64':
@@ -740,9 +772,12 @@ function buildDes(schema: Schema): string {
                 
                 return code;
             }
-            case 'quaternion': {
+            case 'quat': {
                 // Decode smallest-three quaternion
-                const maxVal = (1 << s.bits) - 1;
+                // Calculate bits from step
+                const steps = Math.ceil(Math.SQRT2 / s.step);
+                const bits = Math.ceil(Math.log2(steps));
+                const maxVal = (1 << bits) - 1;
                 const scale = maxVal / Math.sqrt(2);
                 
                 const metaByte = variable('meta');
@@ -760,11 +795,11 @@ function buildDes(schema: Schema): string {
                 code += `const ${sign} = ${metaByte} & 0x1;`;
                 
                 // Read components based on bit size
-                if (s.bits <= 8) {
+                if (bits <= 8) {
                     code += `let ${c0} = u8[o++];`;
                     code += `let ${c1} = u8[o++];`;
                     code += `let ${c2} = u8[o++];`;
-                } else if (s.bits <= 16) {
+                } else if (bits <= 16) {
                     code += readU16(c0);
                     code += readU16(c1);
                     code += readU16(c2);
@@ -791,13 +826,16 @@ function buildDes(schema: Schema): string {
                 
                 return code;
             }
-            case 'unitVec2': {
+            case 'uv2': {
                 // Decode angle
-                const maxVal = (1 << s.bits) - 1;
+                // Calculate bits from step
+                const steps = Math.ceil((Math.PI * 2) / s.step);
+                const bits = Math.ceil(Math.log2(steps));
+                const maxVal = (1 << bits) - 1;
                 const quantized = variable('quant');
                 const angle = variable('angle');
                 
-                const bytes = Math.ceil(s.bits / 8);
+                const bytes = Math.ceil(bits / 8);
                 
                 let code = '';
                 if (bytes === 1) {
@@ -813,9 +851,12 @@ function buildDes(schema: Schema): string {
                 
                 return code;
             }
-            case 'unitVec3': {
+            case 'uv3': {
                 // Decode smallest-two
-                const maxVal = (1 << s.bits) - 1;
+                // Calculate bits from step
+                const steps = Math.ceil(Math.SQRT2 / s.step);
+                const bits = Math.ceil(Math.log2(steps));
+                const maxVal = (1 << bits) - 1;
                 const scale = maxVal / Math.sqrt(2);
                 
                 const packed = variable('packed');
@@ -825,7 +866,7 @@ function buildDes(schema: Schema): string {
                 const c1 = variable('c1');
                 const c2 = variable('c2');
                 
-                const totalBits = 2 + 1 + s.bits * 2;
+                const totalBits = 2 + 1 + bits * 2;
                 const bytes = Math.ceil(totalBits / 8);
                 
                 let code = '';
@@ -838,7 +879,7 @@ function buildDes(schema: Schema): string {
                 // Unpack
                 code += `const ${maxIdx} = (${packed} >> ${totalBits - 2}) & 0x3;`;
                 code += `const ${sign} = (${packed} >> ${totalBits - 3}) & 0x1;`;
-                code += `let ${c0} = (${packed} >> ${s.bits}) & ${maxVal};`;
+                code += `let ${c0} = (${packed} >> ${bits}) & ${maxVal};`;
                 code += `let ${c1} = ${packed} & ${maxVal};`;
                 
                 // Dequantize
@@ -1039,17 +1080,19 @@ function buildValidate(schema: Schema): string {
                 return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < -2147483648 || ${v} > 2147483647) return false;`;
             case 'uint32':
                 return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < 0 || ${v} > 4294967295) return false;`;
+            case 'float16':
+                return `if (typeof ${v} !== 'number') return false;`;
             case 'float32':
                 return `if (typeof ${v} !== 'number') return false;`;
             case 'float64':
                 return `if (typeof ${v} !== 'number') return false;`;
             case 'quantized':
                 return `if (typeof ${v} !== 'number' || ${v} < ${s.min} || ${v} > ${s.max}) return false;`;
-            case 'quaternion':
+            case 'quat':
                 return `if (!Array.isArray(${v}) || ${v}.length !== 4 || typeof ${v}[0] !== 'number' || typeof ${v}[1] !== 'number' || typeof ${v}[2] !== 'number' || typeof ${v}[3] !== 'number') return false;`;
-            case 'unitVec2':
+            case 'uv2':
                 return `if (!Array.isArray(${v}) || ${v}.length !== 2 || typeof ${v}[0] !== 'number' || typeof ${v}[1] !== 'number') return false;`;
-            case 'unitVec3':
+            case 'uv3':
                 return `if (!Array.isArray(${v}) || ${v}.length !== 3 || typeof ${v}[0] !== 'number' || typeof ${v}[1] !== 'number' || typeof ${v}[2] !== 'number') return false;`;
             case 'string': {
                 return `if (typeof ${v} !== 'string') return false;`;
@@ -1282,6 +1325,20 @@ function readF32(target: string, offset = 'o'): string {
     let code = '';
     code += `f32_u8[0] = u8[${offset}++]; f32_u8[1] = u8[${offset}++]; f32_u8[2] = u8[${offset}++]; f32_u8[3] = u8[${offset}++];`;
     code += `${target} = f32[0];`;
+    return code;
+}
+
+function writeF16(value: string, offset = 'o'): string {
+    let code = '';
+    code += `f16[0] = ${value};`;
+    code += `u8[${offset}++] = f16_u8[0]; u8[${offset}++] = f16_u8[1];`;
+    return code;
+}
+
+function readF16(target: string, offset = 'o'): string {
+    let code = '';
+    code += `f16_u8[0] = u8[${offset}++]; f16_u8[1] = u8[${offset}++];`;
+    code += `${target} = f16[0];`;
     return code;
 }
 

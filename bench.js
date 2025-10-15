@@ -7,16 +7,16 @@ import {
     literal,
     number,
     object,
+    quat,
     quantized,
-    quaternion,
     record,
     string,
     uint8,
     uint16,
     uint32,
     union,
-    unitVec2,
-    unitVec3,
+    uv2,
+    uv3,
 } from './dist/index.js';
 
 function now() {
@@ -144,58 +144,58 @@ const pbPlayerVal = {
 
 benchSchema('pb_player', pbPlayerSchema, pbPlayerVal);
 
-// Quaternion benchmarks - compare different precision levels
-const quatDefaultSchema = quaternion(); // 10 bits default
-const quatLowSchema = quaternion(9); // 9 bits, smallest
-const quatHighSchema = quaternion(12); // 12 bits, higher precision
+// Quat benchmarks - compare different precision levels
+const quatDefaultSchema = quat(); // 0.001 step default
+const quatLowSchema = quat({ step: 0.002 }); // 0.002 step, lower precision
+const quatHighSchema = quat({ step: 0.0002 }); // 0.0002 step, higher precision
 
 /** @type {[number, number, number, number]} */
 const quatVal = [0.2, 0.4, 0.6, Math.sqrt(1 - 0.2**2 - 0.4**2 - 0.6**2)];
 
-benchSchema('quaternion(10)', quatDefaultSchema, quatVal);
-benchSchema('quaternion(9)', quatLowSchema, quatVal);
-benchSchema('quaternion(12)', quatHighSchema, quatVal);
+benchSchema('quat({ step: 0.001 })', quatDefaultSchema, quatVal);
+benchSchema('quat({ step: 0.002 })', quatLowSchema, quatVal);
+benchSchema('quat({ step: 0.0002 })', quatHighSchema, quatVal);
 
 // Compare quaternion vs storing 4 float32s
 const quatAsFloatsSchema = list(float32(), 4);
 benchSchema('quat_as_4xfloat32', quatAsFloatsSchema, quatVal);
 
-// UnitVec2 benchmarks
-const unitVec2DefaultSchema = unitVec2(); // 12 bits default
-const unitVec2LowSchema = unitVec2(10); // 10 bits
-const unitVec2HighSchema = unitVec2(16); // 16 bits
+// UV2 benchmarks
+const unitVec2DefaultSchema = uv2(); // 0.0015 step default
+const unitVec2LowSchema = uv2({ step: 0.006 }); // 0.006 step, lower precision
+const unitVec2HighSchema = uv2({ step: 0.0001 }); // 0.0001 step, higher precision
 
 /** @type {[number, number]} */
 const unitVec2Val = [Math.cos(1.5), Math.sin(1.5)];
 
-benchSchema('unitVec2(12)', unitVec2DefaultSchema, unitVec2Val);
-benchSchema('unitVec2(10)', unitVec2LowSchema, unitVec2Val);
-benchSchema('unitVec2(16)', unitVec2HighSchema, unitVec2Val);
+benchSchema('uv2({ step: 0.0015 })', unitVec2DefaultSchema, unitVec2Val);
+benchSchema('uv2({ step: 0.006 })', unitVec2LowSchema, unitVec2Val);
+benchSchema('uv2({ step: 0.0001 })', unitVec2HighSchema, unitVec2Val);
 
-// Compare unitVec2 vs storing 2 float32s
+// Compare uv2 vs storing 2 float32s
 const vec2AsFloatsSchema = list(float32(), 2);
-benchSchema('unitVec2_as_2xfloat32', vec2AsFloatsSchema, unitVec2Val);
+benchSchema('uv2_as_2xfloat32', vec2AsFloatsSchema, unitVec2Val);
 
-// UnitVec3 benchmarks
-const unitVec3DefaultSchema = unitVec3(); // 10 bits default
-const unitVec3LowSchema = unitVec3(9); // 9 bits
-const unitVec3HighSchema = unitVec3(12); // 12 bits
+// UV3 benchmarks
+const unitVec3DefaultSchema = uv3(); // 0.001 step default
+const unitVec3LowSchema = uv3({ step: 0.002 }); // 0.002 step, lower precision
+const unitVec3HighSchema = uv3({ step: 0.0002 }); // 0.0002 step, higher precision
 
 /** @type {[number, number, number]} */
 const unitVec3Val = [1 / Math.sqrt(3), 1 / Math.sqrt(3), 1 / Math.sqrt(3)];
 
-benchSchema('unitVec3(10)', unitVec3DefaultSchema, unitVec3Val);
-benchSchema('unitVec3(9)', unitVec3LowSchema, unitVec3Val);
-benchSchema('unitVec3(12)', unitVec3HighSchema, unitVec3Val);
+benchSchema('uv3({ step: 0.001 })', unitVec3DefaultSchema, unitVec3Val);
+benchSchema('uv3({ step: 0.002 })', unitVec3LowSchema, unitVec3Val);
+benchSchema('uv3({ step: 0.0002 })', unitVec3HighSchema, unitVec3Val);
 
-// Compare unitVec3 vs storing 3 float32s
+// Compare uv3 vs storing 3 float32s
 const vec3AsFloatsSchema = list(float32(), 3);
-benchSchema('unitVec3_as_3xfloat32', vec3AsFloatsSchema, unitVec3Val);
+benchSchema('uv3_as_3xfloat32', vec3AsFloatsSchema, unitVec3Val);
 
 // Quantized benchmarks - useful for positions, angles, health, etc.
-const angleSchema = quantized(0, 360, 0.5); // rotation angle with 0.5° precision
-const healthSchema = quantized(0, 100, 1); // health percentage
-const positionSchema = quantized(-1000, 1000, 0.1); // position with 10cm precision
+const angleSchema = quantized(0, 360, { step: 0.5 }); // rotation angle with 0.5° precision
+const healthSchema = quantized(0, 100, { step: 1 }); // health percentage
+const positionSchema = quantized(-1000, 1000, { step: 0.1 }); // position with 10cm precision
 
 benchSchema('quantized_angle', angleSchema, 123.4);
 benchSchema('quantized_health', healthSchema, 75);
@@ -209,10 +209,10 @@ benchSchema('position_as_float32', float32(), 456.789);
 // Real-world game entity example with quaternions and unit vectors
 const entitySchema = object({
     id: uint32(),
-    position: list(quantized(-1000, 1000, 0.1), 3), // [x, y, z]
-    rotation: quaternion(), // orientation
-    velocity: unitVec3(), // normalized direction
-    speed: quantized(0, 100, 0.1), // speed magnitude
+    position: list(quantized(-1000, 1000, { step: 0.1 }), 3), // [x, y, z]
+    rotation: quat(), // orientation
+    velocity: uv3(), // normalized direction
+    speed: quantized(0, 100, { step: 0.1 }), // speed magnitude
 });
 
 /** @type {import('./dist').SchemaType<typeof entitySchema>} */

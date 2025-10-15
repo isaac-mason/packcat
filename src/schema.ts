@@ -42,6 +42,10 @@ export type Uint32Schema = {
     type: 'uint32';
 };
 
+export type Float16Schema = {
+    type: 'float16';
+};
+
 export type Float32Schema = {
     type: 'float32';
 };
@@ -54,25 +58,34 @@ export type QuantizedSchema = {
     type: 'quantized';
     min: number;
     max: number;
+    /** Precision/step size for quantization */
     step: number;
+    /** Bytes used for encoding (derived from step or explicitly set) */
+    bytes: number;
 };
 
-export type QuaternionSchema = {
-    type: 'quaternion';
-    /** Bits per component (9-15 typical, default 10) */
-    bits: number;
+export type QuatSchema = {
+    type: 'quat';
+    /** Precision/step size for component quantization */
+    step: number;
+    /** Bytes used for encoding (derived from step or explicitly set) */
+    bytes: number;
 };
 
-export type UnitVec2Schema = {
-    type: 'unitVec2';
-    /** Bits for angle encoding (10-16 typical, default 12) */
-    bits: number;
+export type UV2Schema = {
+    type: 'uv2';
+    /** Precision/step size for angle quantization */
+    step: number;
+    /** Bytes used for encoding (derived from step or explicitly set) */
+    bytes: number;
 };
 
-export type UnitVec3Schema = {
-    type: 'unitVec3';
-    /** Bits per component (9-15 typical, default 10) */
-    bits: number;
+export type UV3Schema = {
+    type: 'uv3';
+    /** Precision/step size for component quantization */
+    step: number;
+    /** Bytes used for encoding (derived from step or explicitly set) */
+    bytes: number;
 };
 
 export type ListSchema = {
@@ -155,12 +168,13 @@ export type Schema =
     | Uint16Schema
     | Int32Schema
     | Uint32Schema
+    | Float16Schema
     | Float32Schema
     | Float64Schema
     | QuantizedSchema
-    | QuaternionSchema
-    | UnitVec2Schema
-    | UnitVec3Schema
+    | QuatSchema
+    | UV2Schema
+    | UV3Schema
     | StringSchema
     | ListSchema
     | TupleSchema
@@ -233,12 +247,13 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
     S extends Uint16Schema ? number :
     S extends Int32Schema ? number :
     S extends Uint32Schema ? number :
+    S extends Float16Schema ? number :
     S extends Float32Schema ? number :
     S extends Float64Schema ? number :
     S extends QuantizedSchema ? number :
-    S extends QuaternionSchema ? [x: number, y: number, z: number, w: number] :
-    S extends UnitVec2Schema ? [x: number, y: number] :
-    S extends UnitVec3Schema ? [x: number, y: number, z: number] :
+    S extends QuatSchema ? [x: number, y: number, z: number, w: number] :
+    S extends UV2Schema ? [x: number, y: number] :
+    S extends UV3Schema ? [x: number, y: number, z: number] :
     S extends ListSchema ? (
         S['length'] extends number
             ? RepeatType<SchemaType<S['of'], DecrementDepth<Depth>>, S['length']>
@@ -283,6 +298,8 @@ export const uint16 = (): { type: 'uint16' } => ({ type: 'uint16' });
 export const int32 = (): { type: 'int32' } => ({ type: 'int32' });
 
 export const uint32 = (): { type: 'uint32' } => ({ type: 'uint32' });
+
+export const float16 = (): { type: 'float16' } => ({ type: 'float16' });
 
 export const float32 = (): { type: 'float32' } => ({ type: 'float32' });
 
@@ -345,6 +362,10 @@ export const union = <K extends string, V extends (ObjectSchema & { fields: { [k
  * Values are encoded using the minimum number of bits needed to represent
  * all possible steps, rounded up to the nearest byte boundary.
  * 
+ * You can specify precision either by step size or byte budget:
+ * - `{ step }`: Desired step size, bytes are calculated
+ * - `{ bytes }`: Byte budget, actual step is calculated
+ * 
  * The actual step size may be slightly smaller than requested due to rounding
  * up to the nearest power of 2. For example, a range of 0-100 with step=1
  * requires 101 steps, which rounds to 128 (7 bits), giving an actual step
@@ -352,36 +373,62 @@ export const union = <K extends string, V extends (ObjectSchema & { fields: { [k
  * 
  * @param min - Minimum value in the range
  * @param max - Maximum value in the range
- * @param step - Desired step size (precision). Must be positive and <= (max - min)
+ * @param precision - Either `{ step: number }` or `{ bytes: number }`
  * 
  * @example
  * // Rotation angle with 0.5° precision (uses 2 bytes, actual ~0.35°)
- * quantized(0, 360, 0.5)
+ * quantized(0, 360, { step: 0.5 })
  * 
  * @example
- * // Health percentage as whole numbers (uses 1 byte, actual ~0.79)
- * quantized(0, 100, 1)
+ * // Health percentage with 1 byte budget (actual step ~0.39)
+ * quantized(0, 100, { bytes: 1 })
  * 
  * @example
  * // Position with 10cm precision (uses 2 bytes, actual ~3cm)
- * quantized(-1000, 1000, 0.1)
+ * quantized(-1000, 1000, { step: 0.1 })
  * 
  * @example
  * // Normalized value with 1% increments (uses 1 byte, actual ~0.39%)
- * quantized(0, 1, 0.01)
+ * quantized(0, 1, { step: 0.01 })
  */
-export const quantized = (min: number, max: number, step: number): { type: 'quantized'; min: number; max: number; step: number } => {
+export const quantized = (
+    min: number, 
+    max: number, 
+    precision: { step: number } | { bytes: number } = { step: 0.01 }
+): { type: 'quantized'; min: number; max: number; step: number; bytes: number } => {
     if (min >= max) {
         throw new Error(`quantized: min must be less than max (got min=${min}, max=${max})`);
     }
-    if (step <= 0) {
-        throw new Error(`quantized: step must be positive (got ${step})`);
-    }
-    if (step > max - min) {
-        throw new Error(`quantized: step must be <= (max - min) (got step=${step}, range=${max - min})`);
+    
+    const range = max - min;
+    let step: number;
+    let bytes: number;
+    
+    if ('step' in precision) {
+        step = precision.step;
+        if (step <= 0) {
+            throw new Error(`quantized: step must be positive (got ${step})`);
+        }
+        if (step > range) {
+            throw new Error(`quantized: step must be <= (max - min) (got step=${step}, range=${range})`);
+        }
+        
+        // Calculate bytes needed for this step size
+        const numSteps = Math.ceil(range / step);
+        const bitsNeeded = Math.ceil(Math.log2(numSteps));
+        bytes = Math.ceil(bitsNeeded / 8);
+    } else {
+        bytes = precision.bytes;
+        if (bytes <= 0 || !Number.isInteger(bytes)) {
+            throw new Error(`quantized: bytes must be a positive integer (got ${bytes})`);
+        }
+        
+        // Calculate step from bytes
+        const maxValue = (1 << (bytes * 8)) - 1;
+        step = range / maxValue;
     }
     
-    return { type: 'quantized', min, max, step };
+    return { type: 'quantized', min, max, step, bytes };
 };
 
 /**
@@ -394,54 +441,123 @@ export const quantized = (min: number, max: number, step: number): { type: 'quan
  * The encoding stores:
  * - Index of the dropped (largest) component (2 bits)
  * - Sign of the dropped component (1 bit)
- * - 3 quantized components (bits per component × 3)
+ * - 3 quantized components
  * 
- * Total size is always rounded up to the nearest byte.
+ * Component values range from -1/√2 to 1/√2, so the quantization step
+ * is relative to this range (~1.414).
  * 
- * @param bits - Bits per component (9-15 typical, default 10)
- *               9 bits = ~0.002 precision, 4 bytes total
- *               10 bits = ~0.001 precision, 4 bytes total
- *               12 bits = ~0.0002 precision, 5 bytes total
+ * You can specify precision either by step size or byte budget:
+ * - `{ step }`: Desired step size, bytes are calculated
+ * - `{ bytes }`: Byte budget, actual step is calculated
  * 
- * @example
- * // Default 10 bits per component (4 bytes total, ~0.001 precision)
- * quaternion()
+ * @param precision - Either `{ step: number }` or `{ bytes: number }` (default: { step: 0.001 })
  * 
  * @example
- * // High precision 12 bits per component (5 bytes total, ~0.0002 precision)
- * quaternion(12)
+ * // Default 0.001 precision (7 bytes)
+ * quat()
+ * 
+ * @example
+ * // High precision via step (7 bytes)
+ * quat({ step: 0.0002 })
+ * 
+ * @example
+ * // Low bandwidth via bytes (4 bytes, step ~0.002)
+ * quat({ bytes: 4 })
  */
-export const quaternion = (bits = 10): { type: 'quaternion'; bits: number } => {
-    if (bits < 2 || bits > 15) {
-        throw new Error(`quaternion: bits must be between 2 and 15 (got ${bits})`);
+export const quat = (
+    precision: { step: number } | { bytes: number } = { step: 0.001 }
+): { type: 'quat'; step: number; bytes: number } => {
+    const range = Math.SQRT2; // -1/√2 to 1/√2
+    let step: number;
+    let bytes: number;
+    
+    if ('step' in precision) {
+        step = precision.step;
+        if (step <= 0) {
+            throw new Error(`quat: step must be positive (got ${step})`);
+        }
+        if (step > range) {
+            throw new Error(`quat: step must be <= √2 ~1.414 (got ${step})`);
+        }
+        
+        // Calculate bytes needed for 3 components + 3 bits overhead
+        const numSteps = Math.ceil(range / step);
+        const bitsPerComponent = Math.ceil(Math.log2(numSteps));
+        const totalBits = (bitsPerComponent * 3) + 3; // 3 components + index(2) + sign(1)
+        bytes = Math.ceil(totalBits / 8);
+    } else {
+        bytes = precision.bytes;
+        if (bytes <= 0 || !Number.isInteger(bytes)) {
+            throw new Error(`quat: bytes must be a positive integer (got ${bytes})`);
+        }
+        
+        // Calculate step from bytes (subtract 3 overhead bits, divide by 3 components)
+        const totalBits = bytes * 8;
+        const bitsPerComponent = Math.floor((totalBits - 3) / 3);
+        const maxValue = (1 << bitsPerComponent) - 1;
+        step = range / maxValue;
     }
-    return { type: 'quaternion', bits };
+    
+    return { type: 'quat', step, bytes };
 };
 
 /**
  * Compressed unit vector in 2D using angle encoding.
  * 
  * Since 2D unit vectors can be represented as a single angle (0 to 2π),
- * this is more efficient than storing x,y components.
+ * this is more efficient than storing x,y components. The angle range
+ * is 0 to 2π (~6.283 radians).
  * 
- * @param bits - Bits for angle encoding (10-16 typical, default 12)
- *               10 bits = ~0.35° precision, 2 bytes total
- *               12 bits = ~0.09° precision, 2 bytes total
- *               16 bits = ~0.006° precision, 2 bytes total
+ * You can specify precision either by step size or byte budget:
+ * - `{ step }`: Desired step size in radians, bytes are calculated
+ * - `{ bytes }`: Byte budget, actual step is calculated
  * 
- * @example
- * // Default 12 bits (2 bytes, ~0.09° precision)
- * unitVec2()
+ * @param precision - Either `{ step: number }` or `{ bytes: number }` (default: { step: 0.0015 })
  * 
  * @example
- * // High precision 16 bits (2 bytes, ~0.006° precision)
- * unitVec2(16)
+ * // Default ~0.09° precision (2 bytes)
+ * uv2()
+ * 
+ * @example
+ * // High precision ~0.006° via step (3 bytes)
+ * uv2({ step: 0.0001 })
+ * 
+ * @example
+ * // 1 byte budget (step ~0.025 radians = 1.4°)
+ * uv2({ bytes: 1 })
  */
-export const unitVec2 = (bits = 12): { type: 'unitVec2'; bits: number } => {
-    if (bits < 2 || bits > 16) {
-        throw new Error(`unitVec2: bits must be between 2 and 16 (got ${bits})`);
+export const uv2 = (
+    precision: { step: number } | { bytes: number } = { step: 0.0015 }
+): { type: 'uv2'; step: number; bytes: number } => {
+    const range = Math.PI * 2; // 0 to 2π
+    let step: number;
+    let bytes: number;
+    
+    if ('step' in precision) {
+        step = precision.step;
+        if (step <= 0) {
+            throw new Error(`uv2: step must be positive (got ${step})`);
+        }
+        if (step > range) {
+            throw new Error(`uv2: step must be <= 2π ~6.283 (got ${step})`);
+        }
+        
+        // Calculate bytes needed for angle
+        const numSteps = Math.ceil(range / step);
+        const bitsNeeded = Math.ceil(Math.log2(numSteps));
+        bytes = Math.ceil(bitsNeeded / 8);
+    } else {
+        bytes = precision.bytes;
+        if (bytes <= 0 || !Number.isInteger(bytes)) {
+            throw new Error(`uv2: bytes must be a positive integer (got ${bytes})`);
+        }
+        
+        // Calculate step from bytes
+        const maxValue = (1 << (bytes * 8)) - 1;
+        step = range / maxValue;
     }
-    return { type: 'unitVec2', bits };
+    
+    return { type: 'uv2', step, bytes };
 };
 
 /**
@@ -451,22 +567,60 @@ export const unitVec2 = (bits = 12): { type: 'unitVec2'; bits: number } => {
  * We store the 2 smallest components and reconstruct the largest, plus
  * the index and sign of the dropped component.
  * 
- * @param bits - Bits per component (9-15 typical, default 10)
- *               9 bits = ~0.002 precision, 3 bytes total
- *               10 bits = ~0.001 precision, 3 bytes total
- *               12 bits = ~0.0002 precision, 3 bytes total
+ * Component values range from -1/√2 to 1/√2, so the quantization step
+ * is relative to this range (~1.414).
+ * 
+ * You can specify precision either by step size or byte budget:
+ * - `{ step }`: Desired step size, bytes are calculated
+ * - `{ bytes }`: Byte budget, actual step is calculated
+ * 
+ * @param precision - Either `{ step: number }` or `{ bytes: number }` (default: { step: 0.001 })
  * 
  * @example
- * // Default 10 bits per component (3 bytes, ~0.001 precision)
- * unitVec3()
+ * // Default 0.001 precision (3 bytes)
+ * uv3()
  * 
  * @example
- * // Low bandwidth 9 bits per component (3 bytes, ~0.002 precision)
- * unitVec3(9)
+ * // Low bandwidth via bytes (2 bytes, step ~0.006)
+ * uv3({ bytes: 2 })
+ * 
+ * @example
+ * // High precision via step (4 bytes)
+ * uv3({ step: 0.0002 })
  */
-export const unitVec3 = (bits = 10): { type: 'unitVec3'; bits: number } => {
-    if (bits < 2 || bits > 15) {
-        throw new Error(`unitVec3: bits must be between 2 and 15 (got ${bits})`);
+export const uv3 = (
+    precision: { step: number } | { bytes: number } = { step: 0.001 }
+): { type: 'uv3'; step: number; bytes: number } => {
+    const range = Math.SQRT2; // -1/√2 to 1/√2
+    let step: number;
+    let bytes: number;
+    
+    if ('step' in precision) {
+        step = precision.step;
+        if (step <= 0) {
+            throw new Error(`uv3: step must be positive (got ${step})`);
+        }
+        if (step > range) {
+            throw new Error(`uv3: step must be <= √2 ~1.414 (got ${step})`);
+        }
+        
+        // Calculate bytes needed for 2 components + 3 bits overhead
+        const numSteps = Math.ceil(range / step);
+        const bitsPerComponent = Math.ceil(Math.log2(numSteps));
+        const totalBits = (bitsPerComponent * 2) + 3; // 2 components + index(2) + sign(1)
+        bytes = Math.ceil(totalBits / 8);
+    } else {
+        bytes = precision.bytes;
+        if (bytes <= 0 || !Number.isInteger(bytes)) {
+            throw new Error(`uv3: bytes must be a positive integer (got ${bytes})`);
+        }
+        
+        // Calculate step from bytes (subtract 3 overhead bits, divide by 2 components)
+        const totalBits = bytes * 8;
+        const bitsPerComponent = Math.floor((totalBits - 3) / 2);
+        const maxValue = (1 << bitsPerComponent) - 1;
+        step = range / maxValue;
     }
-    return { type: 'unitVec3', bits };
+    
+    return { type: 'uv3', step, bytes };
 };
