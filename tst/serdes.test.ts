@@ -1840,6 +1840,117 @@ describe('validate', () => {
         expect(schemaSerDes.validate({ key: 'hello', value: 123 })).toBe(false);
     });
 
+    test('object field order independence - cross-schema ser/des', () => {
+        // Create two schemas with the same fields but different definition order
+        const schema1 = object({
+            name: string(),
+            id: uint32(),
+            active: boolean(),
+            score: float32(),
+        });
+
+        const schema2 = object({
+            score: float32(),
+            active: boolean(),
+            name: string(),
+            id: uint32(),
+        });
+
+        const { ser: ser1, des: des1 } = build(schema1);
+        const { ser: ser2, des: des2 } = build(schema2);
+
+        const data = {
+            name: 'Player1',
+            id: 42,
+            active: true,
+            score: 123.45,
+        };
+
+        // Serialize with schema1, deserialize with schema2
+        const buf1 = ser1(data);
+        const out2 = des2(buf1);
+
+        expect(out2.name).toBe(data.name);
+        expect(out2.id).toBe(data.id);
+        expect(out2.active).toBe(data.active);
+        expect(out2.score).toBeCloseTo(data.score, 5);
+
+        // Serialize with schema2, deserialize with schema1
+        const buf2 = ser2(data);
+        const out1 = des1(buf2);
+
+        expect(out1.name).toBe(data.name);
+        expect(out1.id).toBe(data.id);
+        expect(out1.active).toBe(data.active);
+        expect(out1.score).toBeCloseTo(data.score, 5);
+
+        // Both serialized buffers should be identical
+        expect(buf1).toEqual(buf2);
+
+        // Roundtrip through both schemas (with float precision tolerance)
+        const roundtrip1 = des1(ser1(data));
+        expect(roundtrip1.name).toBe(data.name);
+        expect(roundtrip1.id).toBe(data.id);
+        expect(roundtrip1.active).toBe(data.active);
+        expect(roundtrip1.score).toBeCloseTo(data.score, 5);
+
+        const roundtrip2 = des2(ser2(data));
+        expect(roundtrip2.name).toBe(data.name);
+        expect(roundtrip2.id).toBe(data.id);
+        expect(roundtrip2.active).toBe(data.active);
+        expect(roundtrip2.score).toBeCloseTo(data.score, 5);
+    });
+
+    test('nested object field order independence', () => {
+        // Test with nested objects to ensure deep field ordering is consistent
+        const schema1 = object({
+            outer1: string(),
+            nested: object({
+                z: uint8(),
+                y: uint8(),
+                x: uint8(),
+            }),
+            outer2: uint32(),
+        });
+
+        const schema2 = object({
+            nested: object({
+                x: uint8(),
+                y: uint8(),
+                z: uint8(),
+            }),
+            outer2: uint32(),
+            outer1: string(),
+        });
+
+        const { ser: ser1, des: des1 } = build(schema1);
+        const { ser: ser2, des: des2 } = build(schema2);
+
+        const data = {
+            outer1: 'test',
+            nested: {
+                z: 3,
+                y: 2,
+                x: 1,
+            },
+            outer2: 999,
+        };
+
+        // Cross-schema ser/des
+        const buf1 = ser1(data);
+        const out2 = des2(buf1);
+
+        expect(out2).toEqual(data);
+
+        const buf2 = ser2(data);
+        const out1 = des1(buf2);
+
+        expect(out1).toEqual(data);
+
+        // Both buffers should be identical
+        expect(buf1).toEqual(buf2);
+    });
+
     test('record', () => {
         const schema = record(string());
         const schemaSerDes = build(schema);

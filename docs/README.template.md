@@ -30,7 +30,7 @@ First, define your data format with the schema utils:
 
 <Snippet source="./snippets.ts" select="schema" />
 
-Next, you can create a serializer/deserializer for that schema, and use `SchemaType` to infer the TypeScript type of the schema:
+Next, you can build the schema, which gives you `ser`, `des`, and `validate` functions, and use `SchemaType` to infer the TypeScript type of the schema:
 
 <Snippet source="./snippets.ts" select="serdes" />
 
@@ -66,6 +66,12 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <RenderType type="import('packcat').uint32" />
 
+<RenderType type="import('packcat').int64" />
+
+<RenderType type="import('packcat').uint64" />
+
+<RenderType type="import('packcat').float16" />
+
 <RenderType type="import('packcat').float32" />
 
 <RenderType type="import('packcat').float64" />
@@ -92,6 +98,14 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <RenderType type="import('packcat').union" />
 
+<RenderType type="import('packcat').quantized" />
+
+<RenderType type="import('packcat').quat" />
+
+<RenderType type="import('packcat').uv2" />
+
+<RenderType type="import('packcat').uv3" />
+
 #### Schema Types
 
 <RenderType type="import('packcat').Schema" />
@@ -113,6 +127,12 @@ You can also use `validate` if you don't trust whether the input data confirms t
 <RenderType type="import('packcat').Int32Schema" />
 
 <RenderType type="import('packcat').Uint32Schema" />
+
+<RenderType type="import('packcat').Int64Schema" />
+
+<RenderType type="import('packcat').Uint64Schema" />
+
+<RenderType type="import('packcat').Float16Schema" />
 
 <RenderType type="import('packcat').Float32Schema" />
 
@@ -139,3 +159,11 @@ You can also use `validate` if you don't trust whether the input data confirms t
 <RenderType type="import('packcat').NullishSchema" />
 
 <RenderType type="import('packcat').UnionSchema" />
+
+<RenderType type="import('packcat').QuantizedSchema" />
+
+<RenderType type="import('packcat').QuatSchema" />
+
+<RenderType type="import('packcat').UV2Schema" />
+
+<RenderType type="import('packcat').UV3Schema" />

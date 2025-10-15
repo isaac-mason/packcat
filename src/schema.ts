@@ -66,33 +66,25 @@ export type QuantizedSchema = {
     type: 'quantized';
     min: number;
     max: number;
-    /** Precision/step size for quantization */
     step: number;
-    /** Bytes used for encoding (derived from step or explicitly set) */
     bytes: number;
 };
 
 export type QuatSchema = {
     type: 'quat';
-    /** Precision/step size for component quantization */
     step: number;
-    /** Bytes used for encoding (derived from step or explicitly set) */
     bytes: number;
 };
 
 export type UV2Schema = {
     type: 'uv2';
-    /** Precision/step size for angle quantization */
     step: number;
-    /** Bytes used for encoding (derived from step or explicitly set) */
     bytes: number;
 };
 
 export type UV3Schema = {
     type: 'uv3';
-    /** Precision/step size for component quantization */
     step: number;
-    /** Bytes used for encoding (derived from step or explicitly set) */
     bytes: number;
 };
 
@@ -290,66 +282,337 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
 
 /* lightweight helpers that just return objects */
 
+/**
+ * Boolean schema - stores true/false values using 1 byte.
+ * 
+ * @returns A boolean schema definition
+ * 
+ * @example
+ * boolean() // Stores boolean value (1 byte)
+ */
 export const boolean = (): { type: 'boolean' } => ({ type: 'boolean' });
 
+/**
+ * String schema - variable-length UTF-8 encoded strings.
+ * 
+ * Strings are prefixed with a varuint length followed by UTF-8 bytes.
+ * 
+ * @returns A string schema definition
+ * 
+ * @example
+ * string() // Variable-length string
+ */
 export const string = (): { type: 'string' } => ({ type: 'string' });
 
+/**
+ * Number schema - JavaScript number using Float64 (8 bytes).
+ * 
+ * This is equivalent to `float64()` but uses JavaScript's native number type.
+ * For smaller numbers, consider using `float32()`, `int32()`, or `varint()`.
+ * 
+ * @returns A number schema definition
+ * 
+ * @example
+ * number() // Standard JavaScript number (8 bytes)
+ */
 export const number = (): { type: 'number' } => ({ type: 'number' });
 
+/**
+ * Variable-length signed integer using zigzag encoding.
+ * 
+ * Uses 1-5 bytes depending on magnitude. Smaller absolute values use fewer bytes.
+ * 
+ * Range: -2,147,483,648 to 2,147,483,647 (32-bit signed)
+ * 
+ * @returns A varint schema definition
+ * 
+ * @example
+ * varint() // 1-5 bytes, optimal for small integers
+ */
 export const varint = (): { type: 'varint' } => ({ type: 'varint' });
 
+/**
+ * Variable-length unsigned integer.
+ * 
+ * Uses 1-5 bytes depending on magnitude. Smaller values use fewer bytes.
+ * 
+ * Range: 0 to 4,294,967,295 (32-bit unsigned)
+ * 
+ * @returns A varuint schema definition
+ * 
+ * @example
+ * varuint() // 1-5 bytes, optimal for small positive integers
+ */
 export const varuint = (): { type: 'varuint' } => ({ type: 'varuint' });
 
+/**
+ * 8-bit signed integer (1 byte).
+ * 
+ * Range: -128 to 127
+ * 
+ * @returns An int8 schema definition
+ * 
+ * @example
+ * int8() // 1 byte signed integer
+ */
 export const int8 = (): { type: 'int8' } => ({ type: 'int8' });
 
+/**
+ * 8-bit unsigned integer (1 byte).
+ * 
+ * Range: 0 to 255
+ * 
+ * @returns A uint8 schema definition
+ * 
+ * @example
+ * uint8() // 1 byte unsigned integer
+ */
 export const uint8 = (): { type: 'uint8' } => ({ type: 'uint8' });
 
+/**
+ * 16-bit signed integer (2 bytes).
+ * 
+ * Range: -32,768 to 32,767
+ * 
+ * @returns An int16 schema definition
+ * 
+ * @example
+ * int16() // 2 bytes signed integer
+ */
 export const int16 = (): { type: 'int16' } => ({ type: 'int16' });
 
+/**
+ * 16-bit unsigned integer (2 bytes).
+ * 
+ * Range: 0 to 65,535
+ * 
+ * @returns A uint16 schema definition
+ * 
+ * @example
+ * uint16() // 2 bytes unsigned integer
+ */
 export const uint16 = (): { type: 'uint16' } => ({ type: 'uint16' });
 
+/**
+ * 32-bit signed integer (4 bytes).
+ * 
+ * Range: -2,147,483,648 to 2,147,483,647
+ * 
+ * @returns An int32 schema definition
+ * 
+ * @example
+ * int32() // 4 bytes signed integer
+ */
 export const int32 = (): { type: 'int32' } => ({ type: 'int32' });
 
+/**
+ * 32-bit unsigned integer (4 bytes).
+ * 
+ * Range: 0 to 4,294,967,295
+ * 
+ * @returns A uint32 schema definition
+ * 
+ * @example
+ * uint32() // 4 bytes unsigned integer
+ */
 export const uint32 = (): { type: 'uint32' } => ({ type: 'uint32' });
 
+/**
+ * 64-bit signed integer (8 bytes) stored as BigInt.
+ * 
+ * Range: -9,223,372,036,854,775,808 to 9,223,372,036,854,775,807
+ * 
+ * @returns An int64 schema definition
+ * 
+ * @example
+ * int64() // 8 bytes signed BigInt
+ */
 export const int64 = (): { type: 'int64' } => ({ type: 'int64' });
 
+/**
+ * 64-bit unsigned integer (8 bytes) stored as BigInt.
+ * 
+ * Range: 0 to 18,446,744,073,709,551,615
+ * 
+ * @returns A uint64 schema definition
+ * 
+ * @example
+ * uint64() // 8 bytes unsigned BigInt
+ */
 export const uint64 = (): { type: 'uint64' } => ({ type: 'uint64' });
 
+/**
+ * 16-bit floating point (2 bytes) - half precision.
+ * 
+ * Range: ±65,504 with ~3 decimal digits of precision
+ * Useful for reduced bandwidth when full precision isn't needed.
+ * 
+ * @returns A float16 schema definition
+ * 
+ * @example
+ * float16() // 2 bytes floating point
+ */
 export const float16 = (): { type: 'float16' } => ({ type: 'float16' });
 
+/**
+ * 32-bit floating point (4 bytes) - single precision.
+ * 
+ * Range: ±3.4e38 with ~7 decimal digits of precision
+ * 
+ * @returns A float32 schema definition
+ * 
+ * @example
+ * float32() // 4 bytes floating point
+ */
 export const float32 = (): { type: 'float32' } => ({ type: 'float32' });
 
+/**
+ * 64-bit floating point (8 bytes) - double precision.
+ * 
+ * Range: ±1.7e308 with ~15 decimal digits of precision
+ * This is JavaScript's native number type.
+ * 
+ * @returns A float64 schema definition
+ * 
+ * @example
+ * float64() // 8 bytes floating point
+ */
 export const float64 = (): { type: 'float64' } => ({ type: 'float64' });
 
+/**
+ * List (array) schema - variable or fixed-length homogeneous arrays.
+ * 
+ * Without length: Variable-length array prefixed with varuint count
+ * With length: Fixed-length array with no length prefix
+ * 
+ * @param of - Schema for array elements
+ * @param length - Optional fixed length
+ * @returns A list schema definition
+ * 
+ * @example
+ * // Variable-length array of numbers
+ * list(number())
+ * 
+ * @example
+ * // Fixed-length array of 3 floats (like a 3D vector)
+ * list(float32(), 3)
+ */
 export function list<T extends Schema>(of: T): { type: 'list'; of: T };
 export function list<T extends Schema, L extends number>(of: T, length: L): { type: 'list'; of: T; length: L };
 export function list<T extends Schema, L extends number>(of: T, length?: L) {
     return (length === undefined ? { type: 'list', of } : { type: 'list', of, length }) as any;
 }
 
+/**
+ * Tuple schema - fixed-length array with heterogeneous types.
+ * 
+ * Each element can have a different schema. No length prefix is stored.
+ * 
+ * @param of - Array of schemas for each tuple element
+ * @returns A tuple schema definition
+ * 
+ * @example
+ * // Position with metadata: [x, y, timestamp]
+ * tuple([float32(), float32(), uint32()])
+ * 
+ * @example
+ * // Player data: [id, name, score]
+ * tuple([uint16(), string(), varuint()])
+ */
 export const tuple = <T extends Schema[]>(of: T): { type: 'tuple'; of: [...T] } => ({
     type: 'tuple',
     of,
 });
 
+/**
+ * Object schema - fixed set of named fields.
+ * 
+ * Fields are serialized in alphabetically sorted order (by field name).
+ * Field names are not stored in the binary format.
+ * 
+ * @param fields - Record mapping field names to their schemas
+ * @returns An object schema definition
+ * 
+ * @example
+ * object({
+ *   id: uint32(),
+ *   position: tuple([float32(), float32(), float32()]),
+ *   health: uint8()
+ * })
+ */
 export const object = <F extends Record<string, Schema>>(fields: F): { type: 'object'; fields: F } => ({
     type: 'object',
     fields,
 });
 
+/**
+ * Record schema - dynamic key-value map with homogeneous values.
+ * 
+ * Keys are strings, all values share the same schema.
+ * Stored as varuint count followed by [key, value] pairs.
+ * 
+ * @param field - Schema for all values
+ * @returns A record schema definition
+ * 
+ * @example
+ * // Map of player IDs to scores
+ * record(uint32())
+ * 
+ * @example
+ * // Map of item names to quantities
+ * record(varuint())
+ */
 export const record = <F extends Schema>(field: F): { type: 'record'; field: F } => ({
     type: 'record',
     field,
 });
 
+/**
+ * Uint8Array schema - raw byte buffer.
+ * 
+ * Without length: Variable-length buffer prefixed with varuint count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length - Optional fixed length in bytes
+ * @returns A Uint8Array schema definition
+ * 
+ * @example
+ * // Variable-length binary data
+ * uint8Array()
+ * 
+ * @example
+ * // 16-byte UUID or hash
+ * uint8Array(16)
+ */
 export const uint8Array = (length?: number) => 
     length === undefined ? { type: 'uint8Array' as const } : { type: 'uint8Array' as const, length };
 
+/**
+ * Bitset schema - compact storage for boolean flags.
+ * 
+ * Each key uses 1 bit. Stored as a variable number of bytes based on key count.
+ * More efficient than storing individual booleans for multiple flags.
+ * 
+ * @param keys - Array of flag names
+ * @returns A bitset schema definition
+ * 
+ * @example
+ * bitset(['hasShield', 'isInvincible', 'canFly', 'isGrounded'])
+ * // Stores 4 flags in 1 byte
+ */
 export const bitset = <Keys extends string[]>(keys: [...Keys]): { type: 'bitset'; keys: [...Keys] } => {
     return { type: 'bitset', keys };
 };
 
+/**
+ * Literal schema - constant value that doesn't need to be serialized.
+ * 
+ * The value is part of the schema definition and takes 0 bytes to encode.
+ * Useful for discriminators in unions or constant metadata.
+ * 
+ * @param value - The constant primitive value
+ * @returns A literal schema definition
+ */
 export const literal = <S extends PrimitiveSchema, V extends SchemaType<S>>(
     value: V,
 ): {
@@ -359,12 +622,71 @@ export const literal = <S extends PrimitiveSchema, V extends SchemaType<S>>(
     return { type: 'literal', value };
 };
 
+/**
+ * Nullable schema - value that can be null.
+ * 
+ * Uses 1 byte to indicate presence (0=null, 1=present), followed by the value if non-null.
+ * 
+ * @param of - Schema for the non-null value
+ * @returns A nullable schema definition
+ * 
+ * @example
+ * nullable(string()) // string | null
+ * 
+ * @example
+ * nullable(object({ x: float32(), y: float32() })) // object | null
+ */
 export const nullable = <S extends Schema>(of: S): { type: 'nullable'; of: S } => ({ type: 'nullable', of });
 
+/**
+ * Optional schema - value that can be undefined.
+ * 
+ * Uses 1 byte to indicate presence (0=undefined, 1=present), followed by the value if defined.
+ * 
+ * @param of - Schema for the defined value
+ * @returns An optional schema definition
+ * 
+ * @example
+ * optional(uint32()) // number | undefined
+ * 
+ * @example
+ * optional(string()) // string | undefined
+ */
 export const optional = <S extends Schema>(of: S): { type: 'optional'; of: S } => ({ type: 'optional', of });
 
+/**
+ * Nullish schema - value that can be null or undefined.
+ * 
+ * Uses 1 byte to indicate state (0=null, 1=undefined, 2=present), followed by the value if present.
+ * 
+ * @param of - Schema for the non-nullish value
+ * @returns A nullish schema definition
+ * 
+ * @example
+ * nullish(float32()) // number | null | undefined
+ * 
+ * @example
+ * nullish(string()) // string | null | undefined
+ */
 export const nullish = <S extends Schema>(of: S): { type: 'nullish'; of: S } => ({ type: 'nullish', of });
 
+/**
+ * Union schema - discriminated union of object variants.
+ * 
+ * Each variant must be an object with a literal discriminator field.
+ * The discriminator is used to determine which variant to deserialize.
+ * 
+ * @param key - Name of the discriminator field
+ * @param variants - Array of object schemas, each with a literal for the key field
+ * @returns A union schema definition
+ * 
+ * @example
+ * union('type', [
+ *   object({ type: literal('player'), id: uint32(), name: string() }),
+ *   object({ type: literal('enemy'), id: uint32(), level: uint8() }),
+ *   object({ type: literal('npc'), id: uint32(), dialog: string() })
+ * ])
+ */
 export const union = <K extends string, V extends (ObjectSchema & { fields: { [k in K]: LiteralSchema } })[]>(
     key: K,
     variants: [...V],
@@ -622,7 +944,7 @@ export const uv3 = (
             throw new Error(`uv3: step must be <= √2 ~1.414 (got ${step})`);
         }
         
-        // Calculate bytes needed for 2 components + 3 bits overhead
+        // calculate bytes needed for 2 components + 3 bits overhead
         const numSteps = Math.ceil(range / step);
         const bitsPerComponent = Math.ceil(Math.log2(numSteps));
         const totalBits = (bitsPerComponent * 2) + 3; // 2 components + index(2) + sign(1)
@@ -632,8 +954,8 @@ export const uv3 = (
         if (bytes <= 0 || !Number.isInteger(bytes)) {
             throw new Error(`uv3: bytes must be a positive integer (got ${bytes})`);
         }
-        
-        // Calculate step from bytes (subtract 3 overhead bits, divide by 2 components)
+
+        // calculate step from bytes (subtract 3 overhead bits, divide by 2 components)
         const totalBits = bytes * 8;
         const bitsPerComponent = Math.floor((totalBits - 3) / 2);
         const maxValue = (1 << bitsPerComponent) - 1;

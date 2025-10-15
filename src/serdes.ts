@@ -234,7 +234,10 @@ function buildSer(schema: Schema): string {
                 // sum all unconditional fixed child sizes into fixed; collect dynamic parts separately.
                 let fixed = 0;
                 const parts: string[] = [];
-                for (const [k, f] of Object.entries(s.fields)) {
+                // Sort keys for deterministic serialization order
+                const sortedKeys = Object.keys(s.fields).sort();
+                for (const k of sortedKeys) {
+                    const f = s.fields[k];
                     const child = size(f, `${v}[${JSON.stringify(k)}]`);
                     // always accumulate unconditional fixed bytes
                     fixed += child.fixed;
@@ -606,7 +609,10 @@ function buildSer(schema: Schema): string {
             }
             case 'object': {
                 let out = '';
-                for (const [k, f] of Object.entries(s.fields)) {
+                // Sort keys for deterministic serialization order
+                const sortedKeys = Object.keys(s.fields).sort();
+                for (const k of sortedKeys) {
+                    const f = s.fields[k];
                     out += ser(f, `${v}[${JSON.stringify(k)}]`);
                 }
                 return out;
@@ -977,7 +983,10 @@ function buildDes(schema: Schema): string {
             }
             case 'object': {
                 let inner = `${target} = {};`;
-                for (const [key, fieldSchema] of Object.entries(s.fields)) {
+                // Sort keys for deterministic deserialization order (must match serialization)
+                const sortedKeys = Object.keys(s.fields).sort();
+                for (const key of sortedKeys) {
+                    const fieldSchema = s.fields[key];
                     inner += des(fieldSchema, `${target}[${JSON.stringify(key)}]`);
                 }
                 return inner;
@@ -1166,7 +1175,10 @@ function buildValidate(schema: Schema): string {
 
                 inner += `if (typeof (${v}) !== "object") return false;`;
 
-                for (const [k, f] of Object.entries(s.fields)) {
+                // Sort keys for consistency (though order doesn't matter for validation)
+                const sortedKeys = Object.keys(s.fields).sort();
+                for (const k of sortedKeys) {
+                    const f = s.fields[k];
                     const key = JSON.stringify(k);
 
                     inner += `if (!(${key} in ${v})) return false;`;
