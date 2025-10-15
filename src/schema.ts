@@ -42,6 +42,14 @@ export type Uint32Schema = {
     type: 'uint32';
 };
 
+export type Int64Schema = {
+    type: 'int64';
+};
+
+export type Uint64Schema = {
+    type: 'uint64';
+};
+
 export type Float16Schema = {
     type: 'float16';
 };
@@ -168,6 +176,8 @@ export type Schema =
     | Uint16Schema
     | Int32Schema
     | Uint32Schema
+    | Int64Schema
+    | Uint64Schema
     | Float16Schema
     | Float32Schema
     | Float64Schema
@@ -247,6 +257,8 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
     S extends Uint16Schema ? number :
     S extends Int32Schema ? number :
     S extends Uint32Schema ? number :
+    S extends Int64Schema ? bigint :
+    S extends Uint64Schema ? bigint :
     S extends Float16Schema ? number :
     S extends Float32Schema ? number :
     S extends Float64Schema ? number :
@@ -298,6 +310,10 @@ export const uint16 = (): { type: 'uint16' } => ({ type: 'uint16' });
 export const int32 = (): { type: 'int32' } => ({ type: 'int32' });
 
 export const uint32 = (): { type: 'uint32' } => ({ type: 'uint32' });
+
+export const int64 = (): { type: 'int64' } => ({ type: 'int64' });
+
+export const uint64 = (): { type: 'uint64' } => ({ type: 'uint64' });
 
 export const float16 = (): { type: 'float16' } => ({ type: 'float16' });
 

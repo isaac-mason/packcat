@@ -12,6 +12,7 @@ import {
     int8,
     int16,
     int32,
+    int64,
     list,
     literal,
     nullable,
@@ -28,6 +29,7 @@ import {
     uint8Array,
     uint16,
     uint32,
+    uint64,
     union,
     uv2,
     uv3,
@@ -111,6 +113,94 @@ describe('serDes', () => {
         expect(serializedF64.byteLength).toBe(8);
         const outF64 = desF64(serializedF64);
         expect(outF64).toBeCloseTo(2.718281828459045, 12);
+    });
+
+    test('int64 and uint64', () => {
+        // int64 - signed 64-bit integer
+        const { ser: serI64, des: desI64, validate: validateI64 } = build(int64());
+        
+        // Basic positive value
+        const serializedI64_1 = serI64(123456789012345n);
+        expect(serializedI64_1.byteLength).toBe(8);
+        expect(desI64(serializedI64_1)).toBe(123456789012345n);
+        
+        // Basic negative value
+        const serializedI64_2 = serI64(-987654321098765n);
+        expect(serializedI64_2.byteLength).toBe(8);
+        expect(desI64(serializedI64_2)).toBe(-987654321098765n);
+        
+        // Zero
+        const serializedI64_3 = serI64(0n);
+        expect(serializedI64_3.byteLength).toBe(8);
+        expect(desI64(serializedI64_3)).toBe(0n);
+        
+        // Minimum value: -2^63
+        const minI64 = -9223372036854775808n;
+        const serializedI64_min = serI64(minI64);
+        expect(serializedI64_min.byteLength).toBe(8);
+        expect(desI64(serializedI64_min)).toBe(minI64);
+        
+        // Maximum value: 2^63 - 1
+        const maxI64 = 9223372036854775807n;
+        const serializedI64_max = serI64(maxI64);
+        expect(serializedI64_max.byteLength).toBe(8);
+        expect(desI64(serializedI64_max)).toBe(maxI64);
+        
+        // Validation tests
+        expect(validateI64(123n)).toBe(true);
+        expect(validateI64(-456n)).toBe(true);
+        expect(validateI64(maxI64)).toBe(true);
+        expect(validateI64(minI64)).toBe(true);
+        expect(validateI64(123 as any)).toBe(false); // not a bigint
+        expect(validateI64('123' as any)).toBe(false); // not a bigint
+        
+        // uint64 - unsigned 64-bit integer
+        const { ser: serU64, des: desU64, validate: validateU64 } = build(uint64());
+        
+        // Basic value
+        const serializedU64_1 = serU64(123456789012345n);
+        expect(serializedU64_1.byteLength).toBe(8);
+        expect(desU64(serializedU64_1)).toBe(123456789012345n);
+        
+        // Zero
+        const serializedU64_2 = serU64(0n);
+        expect(serializedU64_2.byteLength).toBe(8);
+        expect(desU64(serializedU64_2)).toBe(0n);
+        
+        // Maximum value: 2^64 - 1
+        const maxU64 = 18446744073709551615n;
+        const serializedU64_max = serU64(maxU64);
+        expect(serializedU64_max.byteLength).toBe(8);
+        expect(desU64(serializedU64_max)).toBe(maxU64);
+        
+        // Large value near max
+        const largeU64 = 18446744073709551000n;
+        const serializedU64_large = serU64(largeU64);
+        expect(serializedU64_large.byteLength).toBe(8);
+        expect(desU64(serializedU64_large)).toBe(largeU64);
+        
+        // Validation tests
+        expect(validateU64(123n)).toBe(true);
+        expect(validateU64(0n)).toBe(true);
+        expect(validateU64(maxU64)).toBe(true);
+        expect(validateU64(-1n as any)).toBe(false); // negative not allowed
+        expect(validateU64(123 as any)).toBe(false); // not a bigint
+        expect(validateU64('123' as any)).toBe(false); // not a bigint
+        
+        // Test endianness consistency - serialize and deserialize should be inverse operations
+        const testValue = 0x0102030405060708n;
+        const serialized = serI64(testValue);
+        expect(desI64(serialized)).toBe(testValue);
+        
+        // Verify little-endian byte order
+        expect(serialized[0]).toBe(0x08);
+        expect(serialized[1]).toBe(0x07);
+        expect(serialized[2]).toBe(0x06);
+        expect(serialized[3]).toBe(0x05);
+        expect(serialized[4]).toBe(0x04);
+        expect(serialized[5]).toBe(0x03);
+        expect(serialized[6]).toBe(0x02);
+        expect(serialized[7]).toBe(0x01);
     });
 
     test('varint/varuint with expected byte lengths', () => {

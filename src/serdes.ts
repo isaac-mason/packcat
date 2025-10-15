@@ -12,6 +12,14 @@ const f64_buffer = new ArrayBuffer(8);
 const f64 = new Float64Array(f64_buffer);
 const f64_u8 = new Uint8Array(f64_buffer);
 
+const i64_buffer = new ArrayBuffer(8);
+const i64 = new BigInt64Array(i64_buffer);
+const i64_u8 = new Uint8Array(i64_buffer);
+
+const u64_buffer = new ArrayBuffer(8);
+const u64 = new BigUint64Array(u64_buffer);
+const u64_u8 = new Uint8Array(u64_buffer);
+
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
@@ -51,7 +59,7 @@ export function build<S extends Schema>(
 } {
     const serSource = buildSer(schema);
 
-    const ser = new Function('textEncoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'utf8Length', 'value', serSource).bind(
+    const ser = new Function('textEncoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'utf8Length', 'value', serSource).bind(
         null,
         textEncoder,
         f16,
@@ -60,12 +68,16 @@ export function build<S extends Schema>(
         f32_u8,
         f64,
         f64_u8,
+        i64,
+        i64_u8,
+        u64,
+        u64_u8,
         utf8Length,
     ) as (value: SchemaType<S>) => Uint8Array;
 
     const desSource = buildDes(schema);
 
-    const des = new Function('textDecoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'u8', desSource).bind(
+    const des = new Function('textDecoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'u8', desSource).bind(
         null,
         textDecoder,
         f16,
@@ -74,6 +86,10 @@ export function build<S extends Schema>(
         f32_u8,
         f64,
         f64_u8,
+        i64,
+        i64_u8,
+        u64,
+        u64_u8,
     ) as (u8: Uint8Array) => SchemaType<S>;
 
     const validateSource = buildValidate(schema);
@@ -111,6 +127,8 @@ function buildSer(schema: Schema): string {
             case 'uint32':
             case 'float32':
                 return { code: '', fixed: 4 };
+            case 'int64':
+            case 'uint64':
             case 'number':
             case 'float64':
                 return { code: '', fixed: 8 };
@@ -363,6 +381,10 @@ function buildSer(schema: Schema): string {
                 return writeI32(v);
             case 'uint32':
                 return writeU32(v);
+            case 'int64':
+                return writeI64(v);
+            case 'uint64':
+                return writeU64(v);
             case 'float16':
                 return writeF16(v);
             case 'float32':
@@ -741,6 +763,10 @@ function buildDes(schema: Schema): string {
                 return readI32(target);
             case 'uint32':
                 return readU32(target);
+            case 'int64':
+                return readI64(target);
+            case 'uint64':
+                return readU64(target);
             case 'float16':
                 return readF16(target);
             case 'float32':
@@ -1080,6 +1106,10 @@ function buildValidate(schema: Schema): string {
                 return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < -2147483648 || ${v} > 2147483647) return false;`;
             case 'uint32':
                 return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < 0 || ${v} > 4294967295) return false;`;
+            case 'int64':
+                return `if (typeof ${v} !== 'bigint' || ${v} < -9223372036854775808n || ${v} > 9223372036854775807n) return false;`;
+            case 'uint64':
+                return `if (typeof ${v} !== 'bigint' || ${v} < 0n || ${v} > 18446744073709551615n) return false;`;
             case 'float16':
                 return `if (typeof ${v} !== 'number') return false;`;
             case 'float32':
@@ -1319,6 +1349,38 @@ function readU32(target: string, offset = 'o'): string {
 
 function writeU32(value: string, offset = 'o'): string {
     return `val = ${value} >>> 0; u8[${offset}++] = val & 0xff; u8[${offset}++] = (val >> 8) & 0xff; u8[${offset}++] = (val >> 16) & 0xff; u8[${offset}++] = (val >> 24) & 0xff;`;
+}
+
+function readI64(target: string, offset = 'o'): string {
+    let code = '';
+    code += `i64_u8[0] = u8[${offset}++]; i64_u8[1] = u8[${offset}++]; i64_u8[2] = u8[${offset}++]; i64_u8[3] = u8[${offset}++];`;
+    code += `i64_u8[4] = u8[${offset}++]; i64_u8[5] = u8[${offset}++]; i64_u8[6] = u8[${offset}++]; i64_u8[7] = u8[${offset}++];`;
+    code += `${target} = i64[0];`;
+    return code;
+}
+
+function writeI64(value: string, offset = 'o'): string {
+    let code = '';
+    code += `i64[0] = ${value};`;
+    code += `u8[${offset}++] = i64_u8[0]; u8[${offset}++] = i64_u8[1]; u8[${offset}++] = i64_u8[2]; u8[${offset}++] = i64_u8[3];`;
+    code += `u8[${offset}++] = i64_u8[4]; u8[${offset}++] = i64_u8[5]; u8[${offset}++] = i64_u8[6]; u8[${offset}++] = i64_u8[7];`;
+    return code;
+}
+
+function readU64(target: string, offset = 'o'): string {
+    let code = '';
+    code += `u64_u8[0] = u8[${offset}++]; u64_u8[1] = u8[${offset}++]; u64_u8[2] = u8[${offset}++]; u64_u8[3] = u8[${offset}++];`;
+    code += `u64_u8[4] = u8[${offset}++]; u64_u8[5] = u8[${offset}++]; u64_u8[6] = u8[${offset}++]; u64_u8[7] = u8[${offset}++];`;
+    code += `${target} = u64[0];`;
+    return code;
+}
+
+function writeU64(value: string, offset = 'o'): string {
+    let code = '';
+    code += `u64[0] = ${value};`;
+    code += `u8[${offset}++] = u64_u8[0]; u8[${offset}++] = u64_u8[1]; u8[${offset}++] = u64_u8[2]; u8[${offset}++] = u64_u8[3];`;
+    code += `u8[${offset}++] = u64_u8[4]; u8[${offset}++] = u64_u8[5]; u8[${offset}++] = u64_u8[6]; u8[${offset}++] = u64_u8[7];`;
+    return code;
 }
 
 function readF32(target: string, offset = 'o'): string {

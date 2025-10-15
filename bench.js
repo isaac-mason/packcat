@@ -3,6 +3,7 @@ import {
     boolean,
     build,
     float32,
+    int64,
     list,
     literal,
     number,
@@ -14,6 +15,7 @@ import {
     uint8,
     uint16,
     uint32,
+    uint64,
     union,
     uv2,
     uv3,
@@ -46,9 +48,16 @@ function benchSchema(name, schema, val) {
     console.log('serVal byteLength:', serVal.byteLength);
     console.log('desVal:', des(serVal));
 
-    bench(`JSON.stringify ${name}`, () => JSON.stringify(val), N);
-    const serJsonVal = JSON.stringify(val);
-    bench(`JSON.parse ${name}`, () => JSON.parse(serJsonVal), N);
+    // Convert BigInt to string for JSON serialization
+    const jsonReplacer = (key, value) => typeof value === 'bigint' ? value.toString() : value;
+    const jsonReviver = (key, value) => {
+        // This is a simplified reviver - in practice you'd need schema info to know which strings should be BigInt
+        return value;
+    };
+
+    bench(`JSON.stringify ${name}`, () => JSON.stringify(val, jsonReplacer), N);
+    const serJsonVal = JSON.stringify(val, jsonReplacer);
+    bench(`JSON.parse ${name}`, () => JSON.parse(serJsonVal, jsonReviver), N);
 
     console.log('serJsonVal byteLength:', new TextEncoder().encode(serJsonVal).byteLength);
 
@@ -236,3 +245,36 @@ const entityAsFloatsSchema = object({
 });
 
 benchSchema('game_entity_as_floats', entityAsFloatsSchema, entityVal);
+
+// BigInt (int64/uint64) benchmarks
+const int64Schema = int64();
+const uint64Schema = uint64();
+
+// Test various int64 values
+benchSchema('int64_small', int64Schema, 123456789n);
+benchSchema('int64_negative', int64Schema, -987654321098765n);
+benchSchema('int64_max', int64Schema, 9223372036854775807n); // 2^63 - 1
+benchSchema('int64_min', int64Schema, -9223372036854775808n); // -2^63
+
+// Test various uint64 values
+benchSchema('uint64_small', uint64Schema, 123456789n);
+benchSchema('uint64_large', uint64Schema, 18446744073709551000n);
+benchSchema('uint64_max', uint64Schema, 18446744073709551615n); // 2^64 - 1
+
+// Real-world use case: user IDs, timestamps, large counters
+const userProfileSchema = object({
+    userId: uint64(), // Large user ID
+    createdAt: uint64(), // Unix timestamp in milliseconds
+    totalViews: uint64(), // Large counter
+    balance: int64(), // Can be negative
+});
+
+/** @type {import('./dist').SchemaType<typeof userProfileSchema>} */
+const userProfileVal = {
+    userId: 1234567890123456789n,
+    createdAt: 1729000000000n, // ~Oct 2024 in ms
+    totalViews: 9876543210n,
+    balance: -50000n,
+};
+
+benchSchema('user_profile_bigint', userProfileSchema, userProfileVal);
