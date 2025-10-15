@@ -119,6 +119,7 @@ export type RecordSchema = {
 
 export type Uint8ArraySchema = {
     type: 'uint8Array';
+    length?: number;
 };
 
 export type BitSetSchema = {
@@ -342,7 +343,8 @@ export const record = <F extends Schema>(field: F): { type: 'record'; field: F }
     field,
 });
 
-export const uint8Array = (): { type: 'uint8Array' } => ({ type: 'uint8Array' });
+export const uint8Array = (length?: number) => 
+    length === undefined ? { type: 'uint8Array' as const } : { type: 'uint8Array' as const, length };
 
 export const bitset = <Keys extends string[]>(keys: [...Keys]): { type: 'bitset'; keys: [...Keys] } => {
     return { type: 'bitset', keys };

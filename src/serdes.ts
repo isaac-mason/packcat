@@ -184,7 +184,11 @@ function buildSer(schema: Schema): string {
                 return { code: varuintSize(v), fixed: 0 };
             }
             case 'uint8Array': {
-                // store a varuint length prefix followed by raw bytes
+                if ('length' in s && typeof s.length === 'number') {
+                    // fixed-length: just the bytes
+                    return { code: '', fixed: s.length };
+                }
+                // variable-length: varuint length prefix followed by raw bytes
                 const lenVar = variable('len');
                 return { code: `const ${lenVar} = ${v}.length; ${varuintSize(lenVar)} size += ${lenVar};`, fixed: 0 };
             }
@@ -566,7 +570,11 @@ function buildSer(schema: Schema): string {
             case 'varuint':
                 return writeVaruint(v);
             case 'uint8Array': {
-                // write varuint length then copy raw bytes
+                if ('length' in s && typeof s.length === 'number') {
+                    // fixed-length: direct byte copy
+                    return `u8.set(${v}, o); o += ${s.length};`;
+                }
+                // variable-length: write varuint length then copy raw bytes
                 const lenVar = variable('len');
                 let inner = '';
                 inner += `const ${lenVar} = ${v}.length;`;
@@ -933,7 +941,11 @@ function buildDes(schema: Schema): string {
                 return readVaruint(target);
             }
             case 'uint8Array': {
-                // read varuint length then create a view on the main buffer
+                if ('length' in s && typeof s.length === 'number') {
+                    // fixed-length: direct subarray slice
+                    return `${target} = u8.subarray(o, o + ${s.length}); o += ${s.length};`;
+                }
+                // variable-length: read varuint length then create a view on the main buffer
                 let inner = '';
                 inner += readVaruint('len');
                 inner += `${target} = u8.subarray(o, o + len); o += len;`;
@@ -1198,7 +1210,11 @@ function buildValidate(schema: Schema): string {
                 return `if (${JSON.stringify(s.value)} !== ${v}) return false;`;
             }
             case 'uint8Array': {
-                return `if (!(${v} instanceof Uint8Array)) return false;`;
+                let inner = `if (!(${v} instanceof Uint8Array)) return false;`;
+                if ('length' in s && typeof s.length === 'number') {
+                    inner += ` if (${v}.length !== ${s.length}) return false;`;
+                }
+                return inner;
             }
             case 'nullable': {
                 let inner = '';

@@ -118,34 +118,34 @@ describe('serDes', () => {
     test('int64 and uint64', () => {
         // int64 - signed 64-bit integer
         const { ser: serI64, des: desI64, validate: validateI64 } = build(int64());
-        
+
         // Basic positive value
         const serializedI64_1 = serI64(123456789012345n);
         expect(serializedI64_1.byteLength).toBe(8);
         expect(desI64(serializedI64_1)).toBe(123456789012345n);
-        
+
         // Basic negative value
         const serializedI64_2 = serI64(-987654321098765n);
         expect(serializedI64_2.byteLength).toBe(8);
         expect(desI64(serializedI64_2)).toBe(-987654321098765n);
-        
+
         // Zero
         const serializedI64_3 = serI64(0n);
         expect(serializedI64_3.byteLength).toBe(8);
         expect(desI64(serializedI64_3)).toBe(0n);
-        
+
         // Minimum value: -2^63
         const minI64 = -9223372036854775808n;
         const serializedI64_min = serI64(minI64);
         expect(serializedI64_min.byteLength).toBe(8);
         expect(desI64(serializedI64_min)).toBe(minI64);
-        
+
         // Maximum value: 2^63 - 1
         const maxI64 = 9223372036854775807n;
         const serializedI64_max = serI64(maxI64);
         expect(serializedI64_max.byteLength).toBe(8);
         expect(desI64(serializedI64_max)).toBe(maxI64);
-        
+
         // Validation tests
         expect(validateI64(123n)).toBe(true);
         expect(validateI64(-456n)).toBe(true);
@@ -153,32 +153,32 @@ describe('serDes', () => {
         expect(validateI64(minI64)).toBe(true);
         expect(validateI64(123 as any)).toBe(false); // not a bigint
         expect(validateI64('123' as any)).toBe(false); // not a bigint
-        
+
         // uint64 - unsigned 64-bit integer
         const { ser: serU64, des: desU64, validate: validateU64 } = build(uint64());
-        
+
         // Basic value
         const serializedU64_1 = serU64(123456789012345n);
         expect(serializedU64_1.byteLength).toBe(8);
         expect(desU64(serializedU64_1)).toBe(123456789012345n);
-        
+
         // Zero
         const serializedU64_2 = serU64(0n);
         expect(serializedU64_2.byteLength).toBe(8);
         expect(desU64(serializedU64_2)).toBe(0n);
-        
+
         // Maximum value: 2^64 - 1
         const maxU64 = 18446744073709551615n;
         const serializedU64_max = serU64(maxU64);
         expect(serializedU64_max.byteLength).toBe(8);
         expect(desU64(serializedU64_max)).toBe(maxU64);
-        
+
         // Large value near max
         const largeU64 = 18446744073709551000n;
         const serializedU64_large = serU64(largeU64);
         expect(serializedU64_large.byteLength).toBe(8);
         expect(desU64(serializedU64_large)).toBe(largeU64);
-        
+
         // Validation tests
         expect(validateU64(123n)).toBe(true);
         expect(validateU64(0n)).toBe(true);
@@ -186,12 +186,12 @@ describe('serDes', () => {
         expect(validateU64(-1n as any)).toBe(false); // negative not allowed
         expect(validateU64(123 as any)).toBe(false); // not a bigint
         expect(validateU64('123' as any)).toBe(false); // not a bigint
-        
+
         // Test endianness consistency - serialize and deserialize should be inverse operations
         const testValue = 0x0102030405060708n;
         const serialized = serI64(testValue);
         expect(desI64(serialized)).toBe(testValue);
-        
+
         // Verify little-endian byte order
         expect(serialized[0]).toBe(0x08);
         expect(serialized[1]).toBe(0x07);
@@ -308,30 +308,30 @@ describe('serDes', () => {
 
     test('float16 precision and special values', () => {
         const { ser, des } = build(float16());
-        
+
         // Test basic values
         expect(des(ser(0))).toBe(0);
         expect(des(ser(1))).toBeCloseTo(1, 3);
         expect(des(ser(-1))).toBeCloseTo(-1, 3);
         expect(des(ser(3.14159))).toBeCloseTo(3.14159, 2);
-        
+
         // Test max representable value (~65504)
         const maxVal = 65504;
         expect(des(ser(maxVal))).toBeCloseTo(maxVal, -3);
-        
+
         // Test small values
         expect(des(ser(0.0001))).toBeCloseTo(0.0001, 4);
         expect(des(ser(0.5))).toBeCloseTo(0.5, 3);
-        
+
         // Test special values
         expect(des(ser(Infinity))).toBe(Infinity);
         expect(des(ser(-Infinity))).toBe(-Infinity);
         expect(des(ser(NaN))).toBe(NaN);
-        
+
         // Test values beyond range become infinity
         expect(des(ser(100000))).toBe(Infinity);
         expect(des(ser(-100000))).toBe(-Infinity);
-        
+
         // Verify byte size
         expect(ser(123.45).byteLength).toBe(2);
     });
@@ -344,7 +344,7 @@ describe('serDes', () => {
         expect(serializedAngle.byteLength).toBe(2); // 720 steps → 10 bits → 2 bytes
         const outAngle = desAngle(serializedAngle);
         expect(Math.abs(outAngle - angle)).toBeLessThanOrEqual(0.5); // Within step precision
-        
+
         // Health: 0-100 with 1 step (whole numbers)
         const { ser: serHealth, des: desHealth } = build(quantized(0, 100, { step: 1 }));
         const health = 75;
@@ -352,7 +352,7 @@ describe('serDes', () => {
         expect(serializedHealth.byteLength).toBe(1); // 101 steps → 7 bits → 1 byte
         const outHealth = desHealth(serializedHealth);
         expect(Math.abs(outHealth - health)).toBeLessThanOrEqual(1); // Within step precision
-        
+
         // Position: -1000 to 1000 with 0.1 step
         const { ser: serPos, des: desPos } = build(quantized(-1000, 1000, { step: 0.1 }));
         const pos = 456.789;
@@ -360,7 +360,7 @@ describe('serDes', () => {
         expect(serializedPos.byteLength).toBe(2); // 20000 steps → 15 bits → 2 bytes
         const outPos = desPos(serializedPos);
         expect(Math.abs(outPos - pos)).toBeLessThanOrEqual(0.1); // Within step precision
-        
+
         // Normalized: 0-1 with 0.01 step
         const { ser: serNorm, des: desNorm } = build(quantized(0, 1, { step: 0.01 }));
         const norm = 0.567;
@@ -372,19 +372,19 @@ describe('serDes', () => {
 
     test('quantized edge values', () => {
         const { ser, des } = build(quantized(0, 100, { step: 1 }));
-        
+
         // Min value - should be exact
         const min = 0;
         expect(des(ser(min))).toBe(0);
-        
+
         // Max value - should be exact
         const max = 100;
         expect(des(ser(max))).toBe(100);
-        
+
         // Mid value - should be exact
         const mid = 50;
         expect(des(ser(mid))).toBe(50);
-        
+
         // Fractional values get quantized to nearest step
         const frac = 50.7;
         const outFrac = des(ser(frac));
@@ -393,18 +393,18 @@ describe('serDes', () => {
 
     test('quantized negative ranges', () => {
         const { ser, des } = build(quantized(-50, 50, { step: 0.5 }));
-        
+
         // Negative value
         const neg = -25.3;
         const serialized = ser(neg);
         expect(serialized.byteLength).toBe(1); // 200 steps → 8 bits → 1 byte
         const out = des(serialized);
         expect(Math.abs(out - neg)).toBeLessThanOrEqual(0.5);
-        
+
         // Positive value
         const pos = 30.7;
         expect(Math.abs(des(ser(pos)) - pos)).toBeLessThanOrEqual(0.5);
-        
+
         // Zero should be exact
         expect(des(ser(0))).toBe(0);
     });
@@ -435,23 +435,20 @@ describe('serDes', () => {
         const schema = object({
             rotation: quantized(0, 360, { step: 0.5 }),
             health: quantized(0, 100, { step: 1 }),
-            position: tuple([
-                quantized(-1000, 1000, { step: 0.1 }),
-                quantized(-1000, 1000, { step: 0.1 }),
-            ]),
+            position: tuple([quantized(-1000, 1000, { step: 0.1 }), quantized(-1000, 1000, { step: 0.1 })]),
         });
-        
+
         const { ser, des } = build(schema);
-        
+
         const data = {
             rotation: 45.6,
             health: 87,
             position: [123.4, -567.8],
         };
-        
+
         const serialized = ser(data);
         const out = des(serialized);
-        
+
         expect(Math.abs(out.rotation - data.rotation)).toBeLessThanOrEqual(0.5);
         expect(out.health).toBe(87); // Exact
         expect(Math.abs(out.position[0] - data.position[0])).toBeLessThanOrEqual(0.1);
@@ -460,11 +457,11 @@ describe('serDes', () => {
 
     test('quantized in list', () => {
         const { ser, des } = build(list(quantized(0, 100, { step: 0.5 })));
-        
+
         const data = [10.2, 50.7, 99.1];
         const serialized = ser(data);
         const out = des(serialized);
-        
+
         expect(out.length).toBe(data.length);
         for (let i = 0; i < data.length; i++) {
             expect(Math.abs(out[i] - data[i])).toBeLessThanOrEqual(0.5);
@@ -473,18 +470,18 @@ describe('serDes', () => {
 
     test('quantized validation', () => {
         const { validate } = build(quantized(0, 100, { step: 1 }));
-        
+
         // Valid values
         expect(validate(0)).toBe(true);
         expect(validate(50)).toBe(true);
         expect(validate(100)).toBe(true);
         expect(validate(50.5)).toBe(true); // Within range
-        
+
         // Invalid: out of range
         expect(validate(-1)).toBe(false);
         expect(validate(101)).toBe(false);
         expect(validate(1000)).toBe(false);
-        
+
         // Invalid: wrong type
         // @ts-expect-error testing invalid input
         expect(validate('50')).toBe(false);
@@ -498,11 +495,11 @@ describe('serDes', () => {
         // Invalid: min >= max
         expect(() => quantized(100, 0, { step: 1 })).toThrow('min must be less than max');
         expect(() => quantized(50, 50, { step: 1 })).toThrow('min must be less than max');
-        
+
         // Invalid: step <= 0
         expect(() => quantized(0, 100, { step: 0 })).toThrow('step must be positive');
         expect(() => quantized(0, 100, { step: -1 })).toThrow('step must be positive');
-        
+
         // Invalid: step > range
         expect(() => quantized(0, 100, { step: 150 })).toThrow('step must be <= (max - min)');
         expect(() => quantized(0, 10, { step: 20 })).toThrow('step must be <= (max - min)');
@@ -510,15 +507,15 @@ describe('serDes', () => {
 
     test('quantized clamping behavior', () => {
         const { ser, des } = build(quantized(0, 100, { step: 1 }));
-        
+
         // Values below min should clamp to min
         const belowMin = -10;
         expect(des(ser(belowMin))).toBe(0);
-        
+
         // Values above max should clamp to max
         const aboveMax = 150;
         expect(des(ser(aboveMax))).toBe(100);
-        
+
         // Way out of range
         expect(des(ser(-1000))).toBe(0);
         expect(des(ser(1000))).toBe(100);
@@ -550,7 +547,7 @@ describe('serDes', () => {
         const { ser: ser1, des: des1 } = build(quantized(0, 256, { step: 1 }));
         expect(des1(ser1(127))).toBe(127);
         expect(des1(ser1(128))).toBe(128);
-        
+
         const { ser: ser2, des: des2 } = build(quantized(0, 512, { step: 2 }));
         expect(des2(ser2(254))).toBe(254); // Exact multiple of 2
         expect(des2(ser2(255))).toBe(256); // 255 rounds to nearest multiple: 256
@@ -561,12 +558,12 @@ describe('serDes', () => {
         const schema1 = quantized(0, 100, { step: 0.5 }); // 200 steps
         const { ser: ser1 } = build(schema1);
         expect(ser1(50).byteLength).toBe(1);
-        
+
         // 2 bytes: 257-65536 steps (9-16 bits)
         const schema2 = quantized(0, 1000, { step: 0.1 }); // 10000 steps
         const { ser: ser2 } = build(schema2);
         expect(ser2(500).byteLength).toBe(2);
-        
+
         // 3 bytes: 65537+ steps (17-24 bits)
         const schema3 = quantized(0, 100000, { step: 0.1 }); // 1000000 steps
         const { ser: ser3 } = build(schema3);
@@ -575,14 +572,14 @@ describe('serDes', () => {
 
     test('quantized roundtrip with special values', () => {
         const { ser, des } = build(quantized(-100, 100, { step: 0.1 }));
-        
+
         // Test precise values that should roundtrip exactly
         expect(des(ser(0))).toBe(0);
         expect(des(ser(10))).toBe(10);
         expect(des(ser(-10))).toBe(-10);
         expect(des(ser(50.5))).toBe(50.5);
         expect(des(ser(-50.5))).toBe(-50.5);
-        
+
         // Test values that get quantized
         expect(des(ser(10.12))).toBeCloseTo(10.1, 10);
         expect(des(ser(10.18))).toBeCloseTo(10.2, 10);
@@ -592,7 +589,7 @@ describe('serDes', () => {
     test('quantized asymmetric ranges', () => {
         // Range where min and max are not symmetric around 0
         const { ser, des } = build(quantized(10, 90, { step: 2 }));
-        
+
         expect(des(ser(10))).toBe(10); // Min
         expect(des(ser(90))).toBe(90); // Max
         expect(des(ser(50))).toBe(50); // Mid (exact multiple)
@@ -602,21 +599,21 @@ describe('serDes', () => {
 
     test('quantized with nullable and optional', () => {
         const { ser: serNull, des: desNull } = build(nullable(quantized(0, 100, { step: 1 })));
-        
+
         // Null value
         const nullSer = serNull(null);
         expect(desNull(nullSer)).toBeNull();
-        
+
         // Normal value
         const normalSer = serNull(50.7);
         expect(desNull(normalSer)).toBe(51);
-        
+
         const { ser: serOpt, des: desOpt } = build(optional(quantized(0, 100, { step: 1 })));
-        
+
         // Undefined value
         const undefinedSer = serOpt(undefined);
         expect(desOpt(undefinedSer)).toBeUndefined();
-        
+
         // Normal value
         const normalOptSer = serOpt(25.3);
         expect(desOpt(normalOptSer)).toBe(25);
@@ -1187,9 +1184,7 @@ describe('serDes', () => {
 
     test('union with many variants (>255)', () => {
         // Create 300 variants to test varuint encoding
-        const variants = Array.from({ length: 300 }, (_, i) =>
-            object({ type: literal(`type${i}`), value: uint8() }),
-        );
+        const variants = Array.from({ length: 300 }, (_, i) => object({ type: literal(`type${i}`), value: uint8() }));
         const schema = union('type', variants as any);
         const { ser, des, validate } = build(schema);
 
@@ -1358,7 +1353,7 @@ describe('serDes', () => {
         const emptyKey = { '': 42 };
         expect(des(ser(emptyKey))).toEqual(emptyKey);
 
-        const mixed = { '': 1, 'normal': 2, 'another': 3 };
+        const mixed = { '': 1, normal: 2, another: 3 };
         expect(des(ser(mixed))).toEqual(mixed);
     });
 
@@ -1381,9 +1376,9 @@ describe('serDes', () => {
         const { ser, des } = build(record(string()));
 
         const unicodeKeys = {
-            'ключ': 'Russian',
+            ключ: 'Russian',
             '😊': 'emoji',
-            '你好': 'Chinese',
+            你好: 'Chinese',
             '🌍': 'Earth',
         };
         expect(des(ser(unicodeKeys))).toEqual(unicodeKeys);
@@ -1394,7 +1389,7 @@ describe('serDes', () => {
 
         const specialKeys = {
             'with"quote': 1,
-            'with\'apostrophe': 2,
+            "with'apostrophe": 2,
             'with\nnewline': 3,
             'with\ttab': 4,
             'with\\backslash': 5,
@@ -1407,7 +1402,7 @@ describe('serDes', () => {
 
         const longKey = 'x'.repeat(100);
         const data = {
-            '': { 'inner': 1 },
+            '': { inner: 1 },
             '😊': { '': 2, [longKey]: 3 },
         };
         expect(des(ser(data))).toEqual(data);
@@ -1506,6 +1501,236 @@ describe('serDes', () => {
         };
 
         expect(des(ser(data))).toEqual(data);
+    });
+
+    test('quaternion basic encoding', () => {
+        const { ser, des } = build(quat());
+
+        // Identity quaternion (no rotation) [x, y, z, w]
+        const identity: [number, number, number, number] = [0, 0, 0, 1];
+        expect(ser(identity).byteLength).toBe(7); // 1 metadata byte + 6 component bytes (10 bits needs 2 bytes per component)
+        const outIdentity = des(ser(identity));
+        expect(outIdentity[0]).toBeCloseTo(identity[0], 2);
+        expect(outIdentity[1]).toBeCloseTo(identity[1], 2);
+        expect(outIdentity[2]).toBeCloseTo(identity[2], 2);
+        expect(outIdentity[3]).toBeCloseTo(identity[3], 2);
+
+        // 90° rotation around Y axis [x, y, z, w]
+        const rot90Y: [number, number, number, number] = [0, Math.sin(Math.PI / 4), 0, Math.cos(Math.PI / 4)];
+        const outRot90Y = des(ser(rot90Y));
+        expect(outRot90Y[0]).toBeCloseTo(rot90Y[0], 2);
+        expect(outRot90Y[1]).toBeCloseTo(rot90Y[1], 2);
+        expect(outRot90Y[2]).toBeCloseTo(rot90Y[2], 2);
+        expect(outRot90Y[3]).toBeCloseTo(rot90Y[3], 2);
+
+        // Verify quaternion properties
+        const lengthSq = outRot90Y[0] ** 2 + outRot90Y[1] ** 2 + outRot90Y[2] ** 2 + outRot90Y[3] ** 2;
+        expect(lengthSq).toBeCloseTo(1, 1); // Should be unit length
+    });
+
+    test('quaternion precision levels', () => {
+        const q: [number, number, number, number] = [0.1, 0.2, 0.3, Math.sqrt(1 - 0.1 ** 2 - 0.2 ** 2 - 0.3 ** 2)];
+
+        // 0.002 step (lower precision, smaller size)
+        const { ser: ser002, des: des002 } = build(quat({ step: 0.002 }));
+        expect(ser002(q).byteLength).toBe(7); // ~10 bits per component, 1 metadata + 6 component bytes
+        const out002 = des002(ser002(q));
+        expect(out002[0]).toBeCloseTo(q[0], 2);
+
+        // 0.0002 step (higher precision, larger size)
+        const { ser: ser0002, des: des0002 } = build(quat({ step: 0.0002 }));
+        expect(ser0002(q).byteLength).toBe(7); // 1 metadata + 6 component bytes
+        const out0002 = des0002(ser0002(q));
+        expect(out0002[0]).toBeCloseTo(q[0], 3);
+    });
+
+    test('quaternion edge cases', () => {
+        const { ser, des } = build(quat());
+
+        // Test all four components as largest [x, y, z, w]
+        const testCases: [number, number, number, number][] = [
+            [1, 0, 0, 0], // x largest
+            [0, 1, 0, 0], // y largest
+            [0, 0, 1, 0], // z largest
+            [0, 0, 0, 1], // w largest
+        ];
+
+        for (const q of testCases) {
+            const out = des(ser(q));
+            expect(out[0]).toBeCloseTo(q[0], 2);
+            expect(out[1]).toBeCloseTo(q[1], 2);
+            expect(out[2]).toBeCloseTo(q[2], 2);
+            expect(out[3]).toBeCloseTo(q[3], 2);
+        }
+
+        // Negative components
+        const negQ: [number, number, number, number] = [-0.5, -0.5, 0.5, 0.5];
+        const outNeg = des(ser(negQ));
+        expect(outNeg[0]).toBeCloseTo(negQ[0], 1);
+        expect(outNeg[1]).toBeCloseTo(negQ[1], 1);
+    });
+
+    test('uv2 basic encoding', () => {
+        const { ser, des } = build(uv2());
+
+        // Right [x, y] = [1, 0]
+        const right: [number, number] = [1, 0];
+        expect(ser(right).byteLength).toBe(2); // 12 bits → 2 bytes
+        const outRight = des(ser(right));
+        expect(outRight[0]).toBeCloseTo(right[0], 2);
+        expect(outRight[1]).toBeCloseTo(right[1], 2);
+
+        // Up [x, y] = [0, 1]
+        const up: [number, number] = [0, 1];
+        const outUp = des(ser(up));
+        expect(outUp[0]).toBeCloseTo(up[0], 2);
+        expect(outUp[1]).toBeCloseTo(up[1], 2);
+
+        // 45° angle
+        const angle45: [number, number] = [Math.cos(Math.PI / 4), Math.sin(Math.PI / 4)];
+        const out45 = des(ser(angle45));
+        expect(out45[0]).toBeCloseTo(angle45[0], 2);
+        expect(out45[1]).toBeCloseTo(angle45[1], 2);
+
+        // Verify unit length
+        const lengthSq = out45[0] ** 2 + out45[1] ** 2;
+        expect(lengthSq).toBeCloseTo(1, 2);
+    });
+
+    test('uv2 precision levels', () => {
+        const v: [number, number] = [Math.cos(0.5), Math.sin(0.5)];
+
+        // 0.006 step (lower precision, ~0.35°)
+        const { ser: ser006, des: des006 } = build(uv2({ step: 0.006 }));
+        expect(ser006(v).byteLength).toBe(2);
+        const out006 = des006(ser006(v));
+        expect(out006[0]).toBeCloseTo(v[0], 2);
+
+        // 0.0001 step (higher precision, ~0.006°)
+        const { ser: ser0001, des: des0001 } = build(uv2({ step: 0.0001 }));
+        expect(ser0001(v).byteLength).toBe(2);
+        const out0001 = des0001(ser0001(v));
+        expect(out0001[0]).toBeCloseTo(v[0], 3);
+    });
+
+    test('uv2 all quadrants', () => {
+        const { ser, des } = build(uv2());
+
+        // Test vectors in all four quadrants
+        const angles = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2, 2 * Math.PI - 0.1];
+
+        for (const angle of angles) {
+            const v: [number, number] = [Math.cos(angle), Math.sin(angle)];
+            const out = des(ser(v));
+            expect(out[0]).toBeCloseTo(v[0], 2);
+            expect(out[1]).toBeCloseTo(v[1], 2);
+        }
+    });
+
+    test('uv3 basic encoding', () => {
+        const { ser, des } = build(uv3());
+
+        // Unit X [x, y, z]
+        const unitX: [number, number, number] = [1, 0, 0];
+        expect(ser(unitX).byteLength).toBe(4); // 11*2 + 3 = 25 bits → 4 bytes
+        const outX = des(ser(unitX));
+        expect(outX[0]).toBeCloseTo(unitX[0], 2);
+        expect(outX[1]).toBeCloseTo(unitX[1], 2);
+        expect(outX[2]).toBeCloseTo(unitX[2], 2);
+
+        // Unit Y
+        const unitY: [number, number, number] = [0, 1, 0];
+        const outY = des(ser(unitY));
+        expect(outY[1]).toBeCloseTo(unitY[1], 2);
+
+        // Unit Z
+        const unitZ: [number, number, number] = [0, 0, 1];
+        const outZ = des(ser(unitZ));
+        expect(outZ[2]).toBeCloseTo(unitZ[2], 2);
+
+        // Arbitrary direction
+        const dir: [number, number, number] = [1 / Math.sqrt(3), 1 / Math.sqrt(3), 1 / Math.sqrt(3)];
+        const outDir = des(ser(dir));
+        expect(outDir[0]).toBeCloseTo(dir[0], 2);
+        expect(outDir[1]).toBeCloseTo(dir[1], 2);
+        expect(outDir[2]).toBeCloseTo(dir[2], 2);
+
+        // Verify unit length
+        const lengthSq = outDir[0] ** 2 + outDir[1] ** 2 + outDir[2] ** 2;
+        expect(lengthSq).toBeCloseTo(1, 1);
+    });
+
+    test('uv3 precision levels', () => {
+        const v: [number, number, number] = [0.267, 0.535, 0.802];
+
+        // 0.002 step (lower precision)
+        const { ser: ser002, des: des002 } = build(uv3({ step: 0.002 }));
+        expect(ser002(v).byteLength).toBe(3);
+        const out002 = des002(ser002(v));
+        expect(out002[0]).toBeCloseTo(v[0], 1);
+
+        // 0.0002 step (higher precision)
+        const { ser: ser0002, des: des0002 } = build(uv3({ step: 0.0002 }));
+        expect(ser0002(v).byteLength).toBe(4);
+        const out0002 = des0002(ser0002(v));
+        expect(out0002[0]).toBeCloseTo(v[0], 2);
+    });
+
+    test('uv3 negative components', () => {
+        const { ser, des } = build(uv3());
+
+        const testVecs: [number, number, number][] = [
+            [-1, 0, 0],
+            [0, -1, 0],
+            [0, 0, -1],
+            [-1 / Math.sqrt(3), -1 / Math.sqrt(3), 1 / Math.sqrt(3)],
+        ];
+
+        for (const v of testVecs) {
+            const out = des(ser(v));
+            expect(out[0]).toBeCloseTo(v[0], 2);
+            expect(out[1]).toBeCloseTo(v[1], 2);
+            expect(out[2]).toBeCloseTo(v[2], 2);
+        }
+    });
+
+    test('uint8Array variable length', () => {
+        const { ser, des } = build(uint8Array());
+
+        // Basic array
+        const data1 = new Uint8Array([1, 2, 3, 4, 5]);
+        expect(ser(data1).byteLength).toBe(6); // 1 byte varuint + 5 bytes
+        expect(des(ser(data1))).toEqual(data1);
+
+        // Empty array
+        const data2 = new Uint8Array([]);
+        expect(ser(data2).byteLength).toBe(1); // 1 byte varuint (length=0)
+        expect(des(ser(data2))).toEqual(data2);
+
+        // Large array (>127 = 2-byte varuint)
+        const data3 = new Uint8Array(300).map((_, i) => i % 256);
+        expect(ser(data3).byteLength).toBe(302); // 2 bytes varuint + 300 bytes
+        expect(des(ser(data3))).toEqual(data3);
+    });
+
+    test('uint8Array fixed length', () => {
+        // 5 bytes - no varuint prefix
+        const { ser: ser5, des: des5 } = build(uint8Array(5));
+        const data5 = new Uint8Array([10, 20, 30, 40, 50]);
+        expect(ser5(data5).byteLength).toBe(5);
+        expect(des5(ser5(data5))).toEqual(data5);
+
+        // 0 bytes
+        const { ser: ser0, des: des0 } = build(uint8Array(0));
+        const data0 = new Uint8Array([]);
+        expect(ser0(data0).byteLength).toBe(0);
+        expect(des0(ser0(data0))).toEqual(data0);
+
+        // 1 byte
+        const { ser: ser1, des: des1 } = build(uint8Array(1));
+        const data1 = new Uint8Array([255]);
+        expect(ser1(data1).byteLength).toBe(1);
+        expect(des1(ser1(data1))).toEqual(data1);
     });
 });
 
@@ -1674,31 +1899,18 @@ describe('validate', () => {
         expect(u32.validate(-1)).toBe(false);
     });
 
-    test('float32/float64 and ser/des roundtrip', () => {
+    test('float16/float32/float64', () => {
+        const f16 = build(float16());
+        expect(f16.validate(0)).toBe(true);
+        expect(f16.validate(1.5)).toBe(true);
+        // @ts-expect-error expected failure
+        expect(f16.validate('1.5')).toBe(false);
+
         const f32 = build(float32());
         expect(f32.validate(0)).toBe(true);
         expect(f32.validate(1.5)).toBe(true);
         // @ts-expect-error expected failure
         expect(f32.validate('1.5')).toBe(false);
-
-        // roundtrip for float32 should be approximate
-        const { ser: serF32, des: desF32 } = f32;
-        const buf = serF32(123.456);
-        const out = desF32(buf);
-        expect(out).toBeDefined();
-        expect(out).toBeCloseTo(123.456, 5);
-
-        const f64 = build(float64());
-        expect(f64.validate(0)).toBe(true);
-        expect(f64.validate(1.5)).toBe(true);
-        // @ts-expect-error expected failure
-        expect(f64.validate('1.5')).toBe(false);
-
-        const { ser: serF64, des: desF64 } = f64;
-        const buf64 = serF64(123.4567890123);
-        const out64 = desF64(buf64);
-        expect(out64).toBeDefined();
-        expect(out64).toBeCloseTo(123.4567890123, 10);
     });
 
     test('mixed types tuple', () => {
@@ -1740,7 +1952,7 @@ describe('validate', () => {
         expect(s.validate([[1.5, 'a']])).toBe(false);
     });
 
-    test('bitset missing key / wrong type', () => {
+    test('bitset', () => {
         const s = build(bitset(['x', 'y'] as const));
         expect(s.validate({ x: true, y: false })).toBe(true);
         //  @ts-expect-error missing
@@ -1774,7 +1986,7 @@ describe('validate', () => {
         expect(nullishSchema.validate('42')).toBe(false);
     });
 
-    test('union with invalid discriminant', () => {
+    test('union', () => {
         const pet = union('type', [
             object({ type: literal('dog'), name: string() }),
             object({ type: literal('cat'), name: string() }),
@@ -1793,7 +2005,7 @@ describe('validate', () => {
         expect(validate({ name: 'Rex' })).toBe(false);
     });
 
-    test('literal with wrong value', () => {
+    test('literal', () => {
         const schema = build(literal('hello'));
         expect(schema.validate('hello')).toBe(true);
         // @ts-expect-error wrong value
@@ -1807,241 +2019,31 @@ describe('validate', () => {
         expect(numLiteral.validate(43)).toBe(false);
     });
 
-    test('quaternion basic encoding', () => {
-        const { ser, des } = build(quat());
-        
-        // Identity quaternion (no rotation) [x, y, z, w]
-        const identity: [number, number, number, number] = [0, 0, 0, 1];
-        expect(ser(identity).byteLength).toBe(7); // 1 metadata byte + 6 component bytes (10 bits needs 2 bytes per component)
-        const outIdentity = des(ser(identity));
-        expect(outIdentity[0]).toBeCloseTo(identity[0], 2);
-        expect(outIdentity[1]).toBeCloseTo(identity[1], 2);
-        expect(outIdentity[2]).toBeCloseTo(identity[2], 2);
-        expect(outIdentity[3]).toBeCloseTo(identity[3], 2);
-        
-        // 90° rotation around Y axis [x, y, z, w]
-        const rot90Y: [number, number, number, number] = [0, Math.sin(Math.PI / 4), 0, Math.cos(Math.PI / 4)];
-        const outRot90Y = des(ser(rot90Y));
-        expect(outRot90Y[0]).toBeCloseTo(rot90Y[0], 2);
-        expect(outRot90Y[1]).toBeCloseTo(rot90Y[1], 2);
-        expect(outRot90Y[2]).toBeCloseTo(rot90Y[2], 2);
-        expect(outRot90Y[3]).toBeCloseTo(rot90Y[3], 2);
-        
-        // Verify quaternion properties
-        const lengthSq = outRot90Y[0] ** 2 + outRot90Y[1] ** 2 + outRot90Y[2] ** 2 + outRot90Y[3] ** 2;
-        expect(lengthSq).toBeCloseTo(1, 1); // Should be unit length
+    test('uint8Array', () => {
+        // Variable length - type checking
+        const { validate: validateVar } = build(uint8Array());
+        expect(validateVar(new Uint8Array([1, 2, 3]))).toBe(true);
+        expect(validateVar([1, 2, 3] as any)).toBe(false);
+        expect(validateVar(null as any)).toBe(false);
+
+        // Fixed length - length checking
+        const { validate: validateFixed } = build(uint8Array(3));
+        expect(validateFixed(new Uint8Array([1, 2, 3]))).toBe(true);
+        expect(validateFixed(new Uint8Array([1, 2]))).toBe(false); // wrong length
+        expect(validateFixed(new Uint8Array([1, 2, 3, 4]))).toBe(false);
     });
 
-    test('quaternion precision levels', () => {
-        const q: [number, number, number, number] = [0.1, 0.2, 0.3, Math.sqrt(1 - 0.1**2 - 0.2**2 - 0.3**2)];
-        
-        // 0.002 step (lower precision, smaller size)
-        const { ser: ser002, des: des002 } = build(quat({ step: 0.002 }));
-        expect(ser002(q).byteLength).toBe(7); // ~10 bits per component, 1 metadata + 6 component bytes
-        const out002 = des002(ser002(q));
-        expect(out002[0]).toBeCloseTo(q[0], 2);
-        
-        // 0.0002 step (higher precision, larger size)
-        const { ser: ser0002, des: des0002 } = build(quat({ step: 0.0002 }));
-        expect(ser0002(q).byteLength).toBe(7); // 1 metadata + 6 component bytes
-        const out0002 = des0002(ser0002(q));
-        expect(out0002[0]).toBeCloseTo(q[0], 3);
-    });
-
-    test('quaternion edge cases', () => {
-        const { ser, des } = build(quat());
-        
-        // Test all four components as largest [x, y, z, w]
-        const testCases: [number, number, number, number][] = [
-            [1, 0, 0, 0], // x largest
-            [0, 1, 0, 0], // y largest
-            [0, 0, 1, 0], // z largest
-            [0, 0, 0, 1], // w largest
-        ];
-        
-        for (const q of testCases) {
-            const out = des(ser(q));
-            expect(out[0]).toBeCloseTo(q[0], 2);
-            expect(out[1]).toBeCloseTo(q[1], 2);
-            expect(out[2]).toBeCloseTo(q[2], 2);
-            expect(out[3]).toBeCloseTo(q[3], 2);
-        }
-        
-        // Negative components
-        const negQ: [number, number, number, number] = [-0.5, -0.5, 0.5, 0.5];
-        const outNeg = des(ser(negQ));
-        expect(outNeg[0]).toBeCloseTo(negQ[0], 1);
-        expect(outNeg[1]).toBeCloseTo(negQ[1], 1);
-    });
-
-    test('quaternion validation', () => {
+    test('quaternion', () => {
         const { validate } = build(quat());
-        
+
         expect(validate([0, 0, 0, 1])).toBe(true);
         expect(validate([0.5, 0.5, 0.5, 0.5])).toBe(true);
-        
+
         // @ts-expect-error wrong length
         expect(validate([0, 0])).toBe(false);
         // @ts-expect-error wrong type
         expect(validate('quaternion')).toBe(false);
         // @ts-expect-error null
         expect(validate(null)).toBe(false);
-    });
-
-    test('uv2 basic encoding', () => {
-        const { ser, des } = build(uv2());
-        
-        // Right [x, y] = [1, 0]
-        const right: [number, number] = [1, 0];
-        expect(ser(right).byteLength).toBe(2); // 12 bits → 2 bytes
-        const outRight = des(ser(right));
-        expect(outRight[0]).toBeCloseTo(right[0], 2);
-        expect(outRight[1]).toBeCloseTo(right[1], 2);
-        
-        // Up [x, y] = [0, 1]
-        const up: [number, number] = [0, 1];
-        const outUp = des(ser(up));
-        expect(outUp[0]).toBeCloseTo(up[0], 2);
-        expect(outUp[1]).toBeCloseTo(up[1], 2);
-        
-        // 45° angle
-        const angle45: [number, number] = [Math.cos(Math.PI / 4), Math.sin(Math.PI / 4)];
-        const out45 = des(ser(angle45));
-        expect(out45[0]).toBeCloseTo(angle45[0], 2);
-        expect(out45[1]).toBeCloseTo(angle45[1], 2);
-        
-        // Verify unit length
-        const lengthSq = out45[0] ** 2 + out45[1] ** 2;
-        expect(lengthSq).toBeCloseTo(1, 2);
-    });
-
-    test('uv2 precision levels', () => {
-        const v: [number, number] = [Math.cos(0.5), Math.sin(0.5)];
-        
-        // 0.006 step (lower precision, ~0.35°)
-        const { ser: ser006, des: des006 } = build(uv2({ step: 0.006 }));
-        expect(ser006(v).byteLength).toBe(2);
-        const out006 = des006(ser006(v));
-        expect(out006[0]).toBeCloseTo(v[0], 2);
-        
-        // 0.0001 step (higher precision, ~0.006°)
-        const { ser: ser0001, des: des0001 } = build(uv2({ step: 0.0001 }));
-        expect(ser0001(v).byteLength).toBe(2);
-        const out0001 = des0001(ser0001(v));
-        expect(out0001[0]).toBeCloseTo(v[0], 3);
-    });
-
-    test('uv2 all quadrants', () => {
-        const { ser, des } = build(uv2());
-        
-        // Test vectors in all four quadrants
-        const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2, 2 * Math.PI - 0.1];
-        
-        for (const angle of angles) {
-            const v: [number, number] = [Math.cos(angle), Math.sin(angle)];
-            const out = des(ser(v));
-            expect(out[0]).toBeCloseTo(v[0], 2);
-            expect(out[1]).toBeCloseTo(v[1], 2);
-        }
-    });
-
-    test('uv3 basic encoding', () => {
-        const { ser, des } = build(uv3());
-        
-        // Unit X [x, y, z]
-        const unitX: [number, number, number] = [1, 0, 0];
-        expect(ser(unitX).byteLength).toBe(4); // 11*2 + 3 = 25 bits → 4 bytes
-        const outX = des(ser(unitX));
-        expect(outX[0]).toBeCloseTo(unitX[0], 2);
-        expect(outX[1]).toBeCloseTo(unitX[1], 2);
-        expect(outX[2]).toBeCloseTo(unitX[2], 2);
-        
-        // Unit Y
-        const unitY: [number, number, number] = [0, 1, 0];
-        const outY = des(ser(unitY));
-        expect(outY[1]).toBeCloseTo(unitY[1], 2);
-        
-        // Unit Z
-        const unitZ: [number, number, number] = [0, 0, 1];
-        const outZ = des(ser(unitZ));
-        expect(outZ[2]).toBeCloseTo(unitZ[2], 2);
-        
-        // Arbitrary direction
-        const dir: [number, number, number] = [1 / Math.sqrt(3), 1 / Math.sqrt(3), 1 / Math.sqrt(3)];
-        const outDir = des(ser(dir));
-        expect(outDir[0]).toBeCloseTo(dir[0], 2);
-        expect(outDir[1]).toBeCloseTo(dir[1], 2);
-        expect(outDir[2]).toBeCloseTo(dir[2], 2);
-        
-        // Verify unit length
-        const lengthSq = outDir[0] ** 2 + outDir[1] ** 2 + outDir[2] ** 2;
-        expect(lengthSq).toBeCloseTo(1, 1);
-    });
-
-    test('uv3 precision levels', () => {
-        const v: [number, number, number] = [0.267, 0.535, 0.802];
-        
-        // 0.002 step (lower precision)
-        const { ser: ser002, des: des002 } = build(uv3({ step: 0.002 }));
-        expect(ser002(v).byteLength).toBe(3);
-        const out002 = des002(ser002(v));
-        expect(out002[0]).toBeCloseTo(v[0], 1);
-        
-        // 0.0002 step (higher precision)
-        const { ser: ser0002, des: des0002 } = build(uv3({ step: 0.0002 }));
-        expect(ser0002(v).byteLength).toBe(4);
-        const out0002 = des0002(ser0002(v));
-        expect(out0002[0]).toBeCloseTo(v[0], 2);
-    });
-
-    test('uv3 negative components', () => {
-        const { ser, des } = build(uv3());
-        
-        const testVecs: [number, number, number][] = [
-            [-1, 0, 0],
-            [0, -1, 0],
-            [0, 0, -1],
-            [-1 / Math.sqrt(3), -1 / Math.sqrt(3), 1 / Math.sqrt(3)],
-        ];
-        
-        for (const v of testVecs) {
-            const out = des(ser(v));
-            expect(out[0]).toBeCloseTo(v[0], 2);
-            expect(out[1]).toBeCloseTo(v[1], 2);
-            expect(out[2]).toBeCloseTo(v[2], 2);
-        }
-    });
-
-    test('quaternion in object', () => {
-        const schema = object({
-            position: tuple([float32(), float32(), float32()]),
-            rotation: quat(),
-        });
-        const { ser, des } = build(schema);
-        
-        const data = {
-            position: [10.5, 20.3, 30.1],
-            rotation: [0, 0, 0, 1] as [number, number, number, number],
-        };
-        
-        const out = des(ser(data));
-        expect(out.position[0]).toBeCloseTo(data.position[0], 5);
-        expect(out.rotation[3]).toBeCloseTo(data.rotation[3], 2);
-    });
-
-    test('uv3 in list', () => {
-        const { ser, des } = build(list(uv3()));
-        
-        const data: [number, number, number][] = [
-            [1, 0, 0],
-            [0, 1, 0],
-            [0, 0, 1],
-        ];
-        
-        const out = des(ser(data));
-        expect(out.length).toBe(3);
-        expect(out[0][0]).toBeCloseTo(1, 2);
-        expect(out[1][1]).toBeCloseTo(1, 2);
-        expect(out[2][2]).toBeCloseTo(1, 2);
     });
 });
