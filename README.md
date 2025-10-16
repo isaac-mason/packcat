@@ -139,18 +139,17 @@ export function string(): {
 
 ```ts
 /**
- * Number schema - JavaScript number using Float64 (8 bytes).
- * 
- * This is equivalent to `float64()` but uses JavaScript's native number type.
+ * Alias for float64(), which is JavaScript's native number type.
+ *
  * For smaller numbers, consider using `float32()`, `int32()`, or `varint()`.
  * 
  * @returns A number schema definition
  * 
  * @example
- * number() // Standard JavaScript number (8 bytes)
+ * number() // Standard JavaScript float64 number (8 bytes)
  */
 export function number(): {
-    type: 'number';
+    type: 'float64';
 };
 ```
 
@@ -739,7 +738,7 @@ export function uv3(precision: {
 #### Schema Types
 
 ```ts
-export type Schema = BooleanSchema | NumberSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Int64Schema | Uint64Schema | Float16Schema | Float32Schema | Float64Schema | QuantizedSchema | QuatSchema | UV2Schema | UV3Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | BitSetSchema | UnionSchema | LiteralSchema | NullableSchema | OptionalSchema | NullishSchema;
+export type Schema = BooleanSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Int64Schema | Uint64Schema | Float16Schema | Float32Schema | Float64Schema | QuantizedSchema | QuatSchema | UV2Schema | UV3Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | BitSetSchema | UnionSchema | LiteralSchema | NullableSchema | OptionalSchema | NullishSchema;
 ```
 
 ```ts
@@ -751,12 +750,6 @@ export type BooleanSchema = {
 ```ts
 export type StringSchema = {
     type: 'string';
-};
-```
-
-```ts
-export type NumberSchema = {
-    type: 'number';
 };
 ```
 

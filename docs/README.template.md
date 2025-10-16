@@ -114,8 +114,6 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <RenderType type="import('packcat').StringSchema" />
 
-<RenderType type="import('packcat').NumberSchema" />
-
 <RenderType type="import('packcat').Int8Schema" />
 
 <RenderType type="import('packcat').Uint8Schema" />
