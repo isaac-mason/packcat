@@ -1755,16 +1755,6 @@ describe('validate', () => {
         expect(schemaSerDes.validate(123)).toBe(false);
     });
 
-    test('number', () => {
-        const schema = number();
-        const schemaSerDes = build(schema);
-
-        expect(schemaSerDes.validate(123)).toBe(true);
-
-        // @ts-expect-error expected failure
-        expect(schemaSerDes.validate('string')).toBe(false);
-    });
-
     test('list', () => {
         const schema = list(string());
         const schemaSerDes = build(schema);

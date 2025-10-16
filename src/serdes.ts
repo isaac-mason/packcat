@@ -129,7 +129,6 @@ function buildSer(schema: Schema): string {
                 return { code: '', fixed: 4 };
             case 'int64':
             case 'uint64':
-            case 'number':
             case 'float64':
                 return { code: '', fixed: 8 };
             case 'quantized': {
@@ -374,8 +373,6 @@ function buildSer(schema: Schema): string {
         switch (s.type) {
             case 'boolean':
                 return writeBool(v);
-            case 'number':
-                return writeF64(v);
             case 'int8':
                 return writeI8(v);
             case 'uint8':
@@ -763,8 +760,6 @@ function buildDes(schema: Schema): string {
         switch (s.type) {
             case 'boolean':
                 return readBool(target);
-            case 'number':
-                return readF64(target);
             case 'int8':
                 return readI8(target);
             case 'uint8':
@@ -1109,8 +1104,6 @@ function buildValidate(schema: Schema): string {
         switch (s.type) {
             case 'boolean':
                 return `if (typeof ${v} !== 'boolean') return false;`;
-            case 'number':
-                return `if (typeof ${v} !== 'number') return false;`;
             case 'varint':
                 return `if (typeof ${v} !== 'number' || !Number.isInteger(${v})) return false;`;
             case 'varuint':

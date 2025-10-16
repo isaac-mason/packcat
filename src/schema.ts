@@ -6,10 +6,6 @@ export type StringSchema = {
     type: 'string';
 };
 
-export type NumberSchema = {
-    type: 'number';
-};
-
 export type VarIntSchema = {
     type: 'varint';
 };
@@ -147,7 +143,6 @@ export type UnionSchema = {
 
 export type PrimitiveSchema =
     | BooleanSchema
-    | NumberSchema
     | Int8Schema
     | Uint8Schema
     | Int16Schema
@@ -160,7 +155,6 @@ export type PrimitiveSchema =
 
 export type Schema =
     | BooleanSchema
-    | NumberSchema
     | VarIntSchema
     | VarUintSchema
     | Int8Schema
@@ -241,7 +235,6 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
     Depth extends 0 ? any :
     S extends BooleanSchema ? boolean :
     S extends StringSchema ? string :
-    S extends NumberSchema ? number :
     S extends VarIntSchema ? number :
     S extends VarUintSchema ? number :
     S extends Int8Schema ? number :
@@ -305,17 +298,16 @@ export const boolean = (): { type: 'boolean' } => ({ type: 'boolean' });
 export const string = (): { type: 'string' } => ({ type: 'string' });
 
 /**
- * Number schema - JavaScript number using Float64 (8 bytes).
- * 
- * This is equivalent to `float64()` but uses JavaScript's native number type.
+ * Alias for float64(), which is JavaScript's native number type.
+ *
  * For smaller numbers, consider using `float32()`, `int32()`, or `varint()`.
  * 
  * @returns A number schema definition
  * 
  * @example
- * number() // Standard JavaScript number (8 bytes)
+ * number() // Standard JavaScript float64 number (8 bytes)
  */
-export const number = (): { type: 'number' } => ({ type: 'number' });
+export const number = (): { type: 'float64' } => ({ type: 'float64' });
 
 /**
  * Variable-length signed integer using zigzag encoding.
