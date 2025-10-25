@@ -440,7 +440,7 @@ describe('serDes', () => {
 
         const { ser, des } = build(schema);
 
-        const data = {
+        const data: SchemaType<typeof schema> = {
             rotation: 45.6,
             health: 87,
             position: [123.4, -567.8],
@@ -865,20 +865,20 @@ describe('serDes', () => {
     });
 
     test('tuple', () => {
-        const { ser, des } = build(tuple([number(), string(), boolean()] as const));
+        const { ser, des } = build(tuple([number(), string(), boolean()]));
 
         const data: [number, string, boolean] = [42.5, 'hello', true];
         const serialized = ser(data);
         expect(serialized.byteLength).toBe(8 + 1 + data[1].length + 1); // number (8) + string varuint prefix (1) + string bytes + boolean (1)
 
-        const out = des(serialized) as [number, string, boolean];
+        const out = des(serialized);
         expect(out[0]).toBeCloseTo(data[0]);
         expect(out[1]).toBe(data[1]);
         expect(out[2]).toBe(data[2]);
     });
 
     test('tuple (long string - 2 byte varuint)', () => {
-        const { ser, des } = build(tuple([number(), string(), boolean()] as const));
+        const { ser, des } = build(tuple([number(), string(), boolean()]));
 
         const data: [number, string, boolean] = [42.5, 'z'.repeat(250), true];
         const serialized = ser(data);
@@ -891,8 +891,8 @@ describe('serDes', () => {
     });
 
     test('tuple of tuples', () => {
-        const inner = tuple([number(), string()] as const);
-        const schema = tuple([inner, inner] as const);
+        const inner = tuple([number(), string()]);
+        const schema = tuple([inner, inner]);
         const { ser, des } = build(schema);
 
         const data: [[number, string], [number, string]] = [
@@ -902,7 +902,7 @@ describe('serDes', () => {
 
         const buf = ser(data);
 
-        const out = des(buf) as [[number, string], [number, string]];
+        const out = des(buf);
 
         expect(out.length).toBe(2);
         expect(out[0][0]).toBeCloseTo(data[0][0]);
@@ -1085,7 +1085,7 @@ describe('serDes', () => {
             id: uint32(),
             name: string(),
             active: boolean(),
-            flags: bitset(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']),
+            flags: bitset(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'] as const),
             stats: object({
                 score: number(),
                 level: uint32(),
@@ -1099,7 +1099,7 @@ describe('serDes', () => {
                 }),
             ),
             matrix: list(list(int16())),
-            nestedTuple: tuple([number(), object({ x: float64(), y: float64() }), list(boolean())] as const),
+            nestedTuple: tuple([number(), object({ x: float64(), y: float64() }), list(boolean())]),
             mapOfMaps: record(record(uint32())),
         });
 
@@ -1163,7 +1163,7 @@ describe('serDes', () => {
         const pet = union('type', [
             object({ type: literal('dog'), name: string(), bark: uint8() }),
             object({ type: literal('cat'), name: string(), lives: uint8() }),
-        ] as const);
+        ]);
 
         const { ser, des, validate } = build(pet);
 
@@ -1409,14 +1409,14 @@ describe('serDes', () => {
     });
 
     test('bitset with all true', () => {
-        const { ser, des } = build(bitset(['a', 'b', 'c', 'd', 'e']));
+        const { ser, des } = build(bitset(['a', 'b', 'c', 'd', 'e'] as const));
 
         const allTrue = { a: true, b: true, c: true, d: true, e: true };
         expect(des(ser(allTrue))).toEqual(allTrue);
     });
 
     test('bitset with all false', () => {
-        const { ser, des } = build(bitset(['a', 'b', 'c', 'd', 'e']));
+        const { ser, des } = build(bitset(['a', 'b', 'c', 'd', 'e'] as const));
 
         const allFalse = { a: false, b: false, c: false, d: false, e: false };
         expect(des(ser(allFalse))).toEqual(allFalse);
@@ -2015,7 +2015,7 @@ describe('validate', () => {
     });
 
     test('mixed types tuple', () => {
-        const schema = tuple([number(), string(), boolean()] as const);
+        const schema = tuple([number(), string(), boolean()]);
         const s = build(schema);
 
         expect(s.validate([1.5, 'x', true])).toBe(true);
@@ -2028,8 +2028,8 @@ describe('validate', () => {
     });
 
     test('tuple of tuples', () => {
-        const inner = tuple([number(), string()] as const);
-        const schema = tuple([inner, inner] as const);
+        const inner = tuple([number(), string()]);
+        const schema = tuple([inner, inner]);
         const s = build(schema);
 
         expect(
@@ -2091,7 +2091,7 @@ describe('validate', () => {
         const pet = union('type', [
             object({ type: literal('dog'), name: string() }),
             object({ type: literal('cat'), name: string() }),
-        ] as const);
+        ]);
 
         const { validate } = build(pet);
 
