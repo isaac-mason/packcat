@@ -505,11 +505,11 @@ export function list<T extends Schema, L extends number>(of: T, length?: L) {
  * 
  * @example
  * // Position with metadata: [x, y, timestamp]
- * tuple([float32(), float32(), uint32()])
+ * tuple([float32(), float32(), uint32()] as const)
  * 
  * @example
  * // Player data: [id, name, score]
- * tuple([uint16(), string(), varuint()])
+ * tuple([uint16(), string(), varuint()] as const)
  */
 export const tuple = <T extends Schema[]>(of: T): { type: 'tuple'; of: [...T] } => ({
     type: 'tuple',
