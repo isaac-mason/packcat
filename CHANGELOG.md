@@ -1,11 +1,8 @@
 # CHANGELOG
 
-## 0.0.7 (Unreleased)
+## 0.0.7
 
-- feat: add `enumeration` schema type for enum-like behavior with string values
-    - Serialize as varuint index
-    - Deserialize back to string value
-    - Validate against allowed values
+- feat: add `enumeration` schema type for string or number values that encodes as a varuint index
 
 ## 0.0.6
 
