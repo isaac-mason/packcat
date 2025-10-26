@@ -78,6 +78,8 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <RenderType type="import('packcat').literal" />
 
+<RenderType type="import('packcat').enumeration" />
+
 <RenderType type="import('packcat').list" />
 
 <RenderType type="import('packcat').tuple" />
@@ -137,6 +139,8 @@ You can also use `validate` if you don't trust whether the input data confirms t
 <RenderType type="import('packcat').Float64Schema" />
 
 <RenderType type="import('packcat').LiteralSchema" />
+
+<RenderType type="import('packcat').EnumerationSchema" />
 
 <RenderType type="import('packcat').ListSchema" />
 

@@ -627,13 +627,10 @@ export const literal = <S extends PrimitiveSchema, V extends SchemaType<S>>(
  * @returns A enumeration schema definition
  * 
  * @example
- * enumeration(['red', 'green', 'blue'])
+ * enumeration(['red', 'green', 'blue'] as const)
  * 
  * @example
- * enumeration([1, 2, 3])
- * 
- * @example
- * enumeration(['small', 'medium', 'large', 'extra-large'])
+ * enumeration([1, 2, 3] as const)
  */
 export const enumeration = <V extends (string | number)[]>(values: [...V]): { type: 'enumeration'; values: [...V] } => {
     return { type: 'enumeration', values };

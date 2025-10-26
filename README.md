@@ -338,12 +338,34 @@ export function float64(): {
  * The value is part of the schema definition and takes 0 bytes to encode.
  * Useful for discriminators in unions or constant metadata.
  * 
- * @param value - The constant primitive value
+ * @param value The constant primitive value
  * @returns A literal schema definition
  */
 export function literal<S extends PrimitiveSchema, V extends SchemaType<S>>(value: V): {
     type: 'literal';
     value: V;
+};
+```
+
+```ts
+/**
+ * Enumeration schema - value restricted to a predefined set of literals.
+ * @param values Array of allowed string or number values
+ * @returns A enumeration schema definition
+ * 
+ * @example
+ * enumeration(['red', 'green', 'blue'] as const)
+ * 
+ * @example
+ * enumeration([1, 2, 3] as const)
+ */
+export function enumeration<V extends (string | number)[]>(values: [
+    ...V
+]): {
+    type: 'enumeration';
+    values: [
+        ...V
+    ];
 };
 ```
 
@@ -357,18 +379,20 @@ export function list<T extends Schema, L extends number>(of: T, length?: L);
  * 
  * Each element can have a different schema. No length prefix is stored.
  * 
- * @param of - Array of schemas for each tuple element
+ * @param of Array of schemas for each tuple element
  * @returns A tuple schema definition
  * 
  * @example
  * // Position with metadata: [x, y, timestamp]
  * tuple([float32(), float32(), uint32()])
- * 
+ *
  * @example
  * // Player data: [id, name, score]
  * tuple([uint16(), string(), varuint()])
  */
-export function tuple<T extends Schema[]>(of: T): {
+export function tuple<T extends Schema[]>(of: [
+    ...T
+]): {
     type: 'tuple';
     of: [
         ...T
@@ -383,7 +407,7 @@ export function tuple<T extends Schema[]>(of: T): {
  * Fields are serialized in alphabetically sorted order (by field name).
  * Field names are not stored in the binary format.
  * 
- * @param fields - Record mapping field names to their schemas
+ * @param fields Record mapping field names to their schemas
  * @returns An object schema definition
  * 
  * @example
@@ -406,7 +430,7 @@ export function object<F extends Record<string, Schema>>(fields: F): {
  * Keys are strings, all values share the same schema.
  * Stored as varuint count followed by [key, value] pairs.
  * 
- * @param field - Schema for all values
+ * @param field Schema for all values
  * @returns A record schema definition
  * 
  * @example
@@ -430,7 +454,7 @@ export function record<F extends Schema>(field: F): {
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
  * 
- * @param length - Optional fixed length in bytes
+ * @param length Optional fixed length in bytes
  * @returns A Uint8Array schema definition
  * 
  * @example
@@ -451,7 +475,7 @@ export function uint8Array(length?: number);
  * Each key uses 1 bit. Stored as a variable number of bytes based on key count.
  * More efficient than storing individual booleans for multiple flags.
  * 
- * @param keys - Array of flag names
+ * @param keys Array of flag names
  * @returns A bitset schema definition
  * 
  * @example
@@ -738,7 +762,7 @@ export function uv3(precision: {
 #### Schema Types
 
 ```ts
-export type Schema = BooleanSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Int64Schema | Uint64Schema | Float16Schema | Float32Schema | Float64Schema | QuantizedSchema | QuatSchema | UV2Schema | UV3Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | BitSetSchema | UnionSchema | LiteralSchema | NullableSchema | OptionalSchema | NullishSchema;
+export type Schema = BooleanSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Int64Schema | Uint64Schema | Float16Schema | Float32Schema | Float64Schema | QuantizedSchema | QuatSchema | UV2Schema | UV3Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | BitSetSchema | UnionSchema | LiteralSchema | EnumerationSchema | NullableSchema | OptionalSchema | NullishSchema;
 ```
 
 ```ts
@@ -823,6 +847,13 @@ export type Float64Schema = {
 export type LiteralSchema = {
     type: 'literal';
     value: SchemaType<PrimitiveSchema>;
+};
+```
+
+```ts
+export type EnumerationSchema = {
+    type: 'enumeration';
+    values: readonly (string | number)[];
 };
 ```
 
