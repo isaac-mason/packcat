@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 0.0.7 (Unreleased)
+
+- feat: add `enumeration` schema type for enum-like behavior with string values
+    - Serialize as varuint index
+    - Deserialize back to string value
+    - Validate against allowed values
+
 ## 0.0.6
 
 - feat: remove the need for `as const` in tuple schema usage

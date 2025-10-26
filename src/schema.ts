@@ -120,6 +120,11 @@ export type LiteralSchema = {
     value: SchemaType<PrimitiveSchema>;
 };
 
+export type EnumerationSchema = {
+    type: 'enumeration';
+    values: readonly (string | number)[];
+};
+
 export type NullableSchema = {
     type: 'nullable';
     of: Schema;
@@ -181,6 +186,7 @@ export type Schema =
     | BitSetSchema
     | UnionSchema
     | LiteralSchema
+    | EnumerationSchema
     | NullableSchema
     | OptionalSchema
     | NullishSchema;
@@ -267,6 +273,7 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
     S extends Uint8ArraySchema ? Uint8Array :
     S extends BitSetSchema ? Record<S['keys'][number], boolean> :
     S extends LiteralSchema ? S['value'] :
+    S extends EnumerationSchema ? S['values'][number] :
     S extends NullableSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | null :
     S extends OptionalSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | undefined :
     S extends NullishSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | null | undefined :
@@ -477,8 +484,8 @@ export const float64 = (): { type: 'float64' } => ({ type: 'float64' });
  * Without length: Variable-length array prefixed with varuint count
  * With length: Fixed-length array with no length prefix
  * 
- * @param of - Schema for array elements
- * @param length - Optional fixed length
+ * @param of Schema for array elements
+ * @param length Optional fixed length
  * @returns A list schema definition
  * 
  * @example
@@ -500,7 +507,7 @@ export function list<T extends Schema, L extends number>(of: T, length?: L) {
  * 
  * Each element can have a different schema. No length prefix is stored.
  * 
- * @param of - Array of schemas for each tuple element
+ * @param of Array of schemas for each tuple element
  * @returns A tuple schema definition
  * 
  * @example
@@ -522,7 +529,7 @@ export const tuple = <T extends Schema[]>(of: [...T]): { type: 'tuple'; of: [...
  * Fields are serialized in alphabetically sorted order (by field name).
  * Field names are not stored in the binary format.
  * 
- * @param fields - Record mapping field names to their schemas
+ * @param fields Record mapping field names to their schemas
  * @returns An object schema definition
  * 
  * @example
@@ -543,7 +550,7 @@ export const object = <F extends Record<string, Schema>>(fields: F): { type: 'ob
  * Keys are strings, all values share the same schema.
  * Stored as varuint count followed by [key, value] pairs.
  * 
- * @param field - Schema for all values
+ * @param field Schema for all values
  * @returns A record schema definition
  * 
  * @example
@@ -565,7 +572,7 @@ export const record = <F extends Schema>(field: F): { type: 'record'; field: F }
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
  * 
- * @param length - Optional fixed length in bytes
+ * @param length Optional fixed length in bytes
  * @returns A Uint8Array schema definition
  * 
  * @example
@@ -585,7 +592,7 @@ export const uint8Array = (length?: number) =>
  * Each key uses 1 bit. Stored as a variable number of bytes based on key count.
  * More efficient than storing individual booleans for multiple flags.
  * 
- * @param keys - Array of flag names
+ * @param keys Array of flag names
  * @returns A bitset schema definition
  * 
  * @example
@@ -602,7 +609,7 @@ export const bitset = <Keys extends string[]>(keys: [...Keys]): { type: 'bitset'
  * The value is part of the schema definition and takes 0 bytes to encode.
  * Useful for discriminators in unions or constant metadata.
  * 
- * @param value - The constant primitive value
+ * @param value The constant primitive value
  * @returns A literal schema definition
  */
 export const literal = <S extends PrimitiveSchema, V extends SchemaType<S>>(
@@ -612,6 +619,24 @@ export const literal = <S extends PrimitiveSchema, V extends SchemaType<S>>(
     value: V;
 } => {
     return { type: 'literal', value };
+};
+
+/**
+ * Enumeration schema - value restricted to a predefined set of literals.
+ * @param values Array of allowed string or number values
+ * @returns A enumeration schema definition
+ * 
+ * @example
+ * enumeration(['red', 'green', 'blue'])
+ * 
+ * @example
+ * enumeration([1, 2, 3])
+ * 
+ * @example
+ * enumeration(['small', 'medium', 'large', 'extra-large'])
+ */
+export const enumeration = <V extends (string | number)[]>(values: [...V]): { type: 'enumeration'; values: [...V] } => {
+    return { type: 'enumeration', values };
 };
 
 /**

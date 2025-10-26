@@ -6,6 +6,7 @@ import {
     bitset,
     boolean,
     build,
+    enumeration,
     float16,
     float32,
     float64,
@@ -1041,6 +1042,34 @@ describe('serDes', () => {
 
         const out = des(buf);
         expect(out).toEqual(v);
+    });
+
+    test('enumeration with string values', () => {
+        const status = build(object({ value: enumeration(['pending', 'active', 'completed'] as const) }));
+        const { ser, des } = status;
+
+        const buf = ser({ value: 'active' });
+        expect(buf.byteLength).toBe(1); // 1 byte for varuint index 1
+        expect(des(buf)).toEqual({ value: 'active' });
+    });
+
+    test('enumeration with numeric values', () => {
+        const priority = build(object({ level: enumeration([1, 5, 10] as const) }));
+        const { ser, des } = priority;
+
+        const buf = ser({ level: 10 });
+        expect(buf.byteLength).toBe(1); // 1 byte for varuint index 2
+        expect(des(buf)).toEqual({ level: 10 });
+    });
+
+    test('enumeration with mixed values', () => {
+        const mixed = build(object({ val: enumeration([0, 'auto', 1, 'manual'] as const) }));
+        const { ser, des } = mixed;
+
+        expect(des(ser({ val: 0 }))).toEqual({ val: 0 });
+        expect(des(ser({ val: 'auto' }))).toEqual({ val: 'auto' });
+        expect(des(ser({ val: 1 }))).toEqual({ val: 1 });
+        expect(des(ser({ val: 'manual' }))).toEqual({ val: 'manual' });
     });
 
     test('optional', () => {
@@ -2118,6 +2147,45 @@ describe('validate', () => {
         expect(numLiteral.validate(42)).toBe(true);
         // @ts-expect-error wrong value
         expect(numLiteral.validate(43)).toBe(false);
+    });
+
+    test('enumeration', () => {
+        const stringEnum = build(object({ value: enumeration(['pending', 'active', 'completed'] as const) }));
+        const { validate } = stringEnum;
+
+        expect(validate({ value: 'pending' })).toBe(true);
+        expect(validate({ value: 'active' })).toBe(true);
+        expect(validate({ value: 'completed' })).toBe(true);
+
+        // @ts-expect-error invalid value
+        expect(validate({ value: 'archived' })).toBe(false);
+        // @ts-expect-error wrong type
+        expect(validate({ value: 1 })).toBe(false);
+
+        const numberEnum = build(object({ value: enumeration([0, 1, 2] as const) }));
+        const { validate: validateNum } = numberEnum;
+
+        expect(validateNum({ value: 0 })).toBe(true);
+        expect(validateNum({ value: 1 })).toBe(true);
+        expect(validateNum({ value: 2 })).toBe(true);
+
+        // @ts-expect-error invalid value
+        expect(validateNum({ value: 3 })).toBe(false);
+        // @ts-expect-error wrong type
+        expect(validateNum({ value: '1' })).toBe(false);
+
+        const mixedEnum = build(object({ value: enumeration(['yes', 1, 'no', 0] as const) }));
+        const { validate: validateMixed } = mixedEnum;
+
+        expect(validateMixed({ value: 'yes' })).toBe(true);
+        expect(validateMixed({ value: 1 })).toBe(true);
+        expect(validateMixed({ value: 'no' })).toBe(true);
+        expect(validateMixed({ value: 0 })).toBe(true);
+
+        // @ts-expect-error invalid value
+        expect(validateMixed({ value: true })).toBe(false);
+        // @ts-expect-error wrong type
+        expect(validateMixed({ value: '1' })).toBe(false);
     });
 
     test('uint8Array', () => {

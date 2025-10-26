@@ -2,6 +2,7 @@ import {
     bitset,
     boolean,
     build,
+    enumeration,
     float32,
     int64,
     list,
@@ -278,3 +279,32 @@ const userProfileVal = {
 };
 
 benchSchema('user_profile_bigint', userProfileSchema, userProfileVal);
+
+// Enumeration benchmarks - compare enum vs string for representing game state
+const gameStateEnumSchema = object({
+    state: enumeration(['menu', 'loading', 'playing', 'paused', 'gameover']),
+    difficulty: enumeration(['easy', 'normal', 'hard', 'expert']),
+    weapon: enumeration(['sword', 'bow', 'staff', 'axe', 'dagger']),
+});
+
+const gameStateStringSchema = object({
+    state: string(),
+    difficulty: string(),
+    weapon: string(),
+});
+
+/** @type {import('./dist').SchemaType<typeof gameStateEnumSchema>} */
+const gameStateEnumVal = {
+    state: 'playing',
+    difficulty: 'hard',
+    weapon: 'bow',
+};
+
+const gameStateStringVal = {
+    state: 'playing',
+    difficulty: 'hard',
+    weapon: 'bow',
+};
+
+benchSchema('game_state_enum', gameStateEnumSchema, gameStateEnumVal);
+benchSchema('game_state_string', gameStateStringSchema, gameStateStringVal);

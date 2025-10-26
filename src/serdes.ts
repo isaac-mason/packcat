@@ -350,6 +350,16 @@ function buildSer(schema: Schema): string {
 
                 return { code: inner, fixed: 0 };
             }
+            case 'enumeration': {
+                // find value index and calculate varuint size
+                let inner = '';
+                for (let i = 0; i < s.values.length; i++) {
+                    const prefix = i === 0 ? 'if' : ' else if';
+                    inner += `${prefix} (${v} === ${JSON.stringify(s.values[i])}) { ${varuintSize(i.toString())} }`;
+                }
+                inner += ` else { throw new Error('Invalid enum value: ' + ${v}); }`;
+                return { code: inner, fixed: 0 };
+            }
             default: {
                 return {
                     code: `throw new Error('Unsupported schema: ${s}');`,
@@ -695,6 +705,16 @@ function buildSer(schema: Schema): string {
 
                 return inner;
             }
+            case 'enumeration': {
+                // match value and write index as varuint
+                let inner = '';
+                for (let i = 0; i < s.values.length; i++) {
+                    const prefix = i === 0 ? 'if' : ' else if';
+                    inner += `${prefix} (${v} === ${JSON.stringify(s.values[i])}) { ${writeVaruint(i.toString())} }`;
+                }
+                inner += ` else { throw new Error('Invalid enum value at serialize: ' + ${v}); }`;
+                return inner;
+            }
             case 'nullable': {
                 let inner = '';
 
@@ -1031,6 +1051,19 @@ function buildDes(schema: Schema): string {
             case 'literal': {
                 return `${target} = ${JSON.stringify(s.value)};`;
             }
+            case 'enumeration': {
+                // read varuint index and map back to value
+                const tag = variable('enumTag');
+                let out = '';
+                out += `let ${tag};`;
+                out += readVaruint(tag);
+                for (let i = 0; i < s.values.length; i++) {
+                    const prefix = i === 0 ? 'if' : ' else if';
+                    out += `${prefix} (${tag} === ${i}) { ${target} = ${JSON.stringify(s.values[i])}; }`;
+                }
+                out += ` else { throw new Error('Invalid enum index: ' + ${tag}); }`;
+                return out;
+            }
             case 'nullable': {
                 let inner = '';
 
@@ -1213,6 +1246,11 @@ function buildValidate(schema: Schema): string {
             }
             case 'literal': {
                 return `if (${JSON.stringify(s.value)} !== ${v}) return false;`;
+            }
+            case 'enumeration': {
+                // check if value is one of the allowed enum values
+                const checks = s.values.map(val => `${v} === ${JSON.stringify(val)}`).join(' || ');
+                return `if (!(${checks})) return false;`;
             }
             case 'uint8Array': {
                 let inner = `if (!(${v} instanceof Uint8Array)) return false;`;
