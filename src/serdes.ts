@@ -49,15 +49,24 @@ function utf8Length(s: string) {
     return l;
 }
 
+export type SerIntoResult = {
+    success: boolean;
+    bytesWritten: number;
+    bytesNeeded?: number;
+};
+
 export function build<S extends Schema>(
     schema: S,
 ): {
     ser: (value: SchemaType<S>) => Uint8Array;
+    serInto: (value: SchemaType<S>, u8: Uint8Array, offset?: number) => SerIntoResult;
     des: (u8: Uint8Array) => SchemaType<S>;
     validate: (value: SchemaType<S>) => boolean;
-    source: { ser: string; des: string; validate: string };
+    source: { ser: string; serInto: string; des: string; validate: string };
 } {
-    const serSource = buildSer(schema);
+    const serCore = buildSerCore(schema);
+    const serSource = buildSer(serCore);
+    const serIntoSource = buildSerInto(serCore);
 
     const ser = new Function('textEncoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'utf8Length', 'value', serSource).bind(
         null,
@@ -74,6 +83,22 @@ export function build<S extends Schema>(
         u64_u8,
         utf8Length,
     ) as (value: SchemaType<S>) => Uint8Array;
+
+    const serInto = new Function('textEncoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'utf8Length', 'value', 'u8', 'offset', serIntoSource).bind(
+        null,
+        textEncoder,
+        f16,
+        f16_u8,
+        f32,
+        f32_u8,
+        f64,
+        f64_u8,
+        i64,
+        i64_u8,
+        u64,
+        u64_u8,
+        utf8Length,
+    ) as (value: SchemaType<S>, u8: Uint8Array, offset?: number) => SerIntoResult;
 
     const desSource = buildDes(schema);
 
@@ -96,22 +121,22 @@ export function build<S extends Schema>(
 
     const validate = new Function('value', validateSource) as (value: SchemaType<S>) => boolean;
 
-    return { ser, des, validate, source: { ser: serSource, des: desSource, validate: validateSource } };
+    return { ser, serInto, des, validate, source: { ser: serSource, serInto: serIntoSource, des: desSource, validate: validateSource } };
 }
 
-function buildSer(schema: Schema): string {
+type SizeCalc = { code: string; fixed: number };
+
+function buildSerCore(schema: Schema): { header: string; body: string } {
     variableCounter = 1;
     
-    let code = '';
+    let header = '';
 
-    code += 'let len = 0;';
-    code += 'let vint = 0;';
-    code += 'let vuint = 0;';
-    code += 'let keys;';
-    code += 'let val = 0;';
-    code += 'let textEncoderResult;';
-
-    type SizeCalc = { code: string; fixed: number };
+    header += 'let len = 0;';
+    header += 'let vint = 0;';
+    header += 'let vuint = 0;';
+    header += 'let keys;';
+    header += 'let val = 0;';
+    header += 'let textEncoderResult;';
 
     function size(s: Schema, v: string): SizeCalc {
         switch (s.type) {
@@ -371,13 +396,8 @@ function buildSer(schema: Schema): string {
 
     const calc = size(schema, 'value');
 
-    code += `let size = ${calc.fixed};`;
-    code += calc.code;
-
-    code += 'const arrayBuffer = new ArrayBuffer(size);';
-    code += 'let o = 0;';
-
-    code += 'const u8 = new Uint8Array(arrayBuffer); ';
+    header += `let size = ${calc.fixed};`;
+    header += calc.code;
 
     function ser(s: Schema, v: string): string {
         switch (s.type) {
@@ -758,10 +778,41 @@ function buildSer(schema: Schema): string {
         }
     }
 
-    code += ser(schema, 'value');
+    const body = ser(schema, 'value');
 
+    return { header, body };
+}
+
+function buildSer(core: { header: string; body: string }): string {
+    let code = core.header;
+    
+    // ser-specific: allocate buffer
+    code += 'const arrayBuffer = new ArrayBuffer(size);';
+    code += 'let o = 0;';
+    code += 'const u8 = new Uint8Array(arrayBuffer);';
+    
+    code += core.body;
+    
+    // ser-specific: return buffer
     code += 'return u8;';
+    
+    return code;
+}
 
+function buildSerInto(core: { header: string; body: string }): string {
+    let code = core.header;
+    
+    // serInto-specific: validate buffer & setup offset
+    code += 'let o = offset || 0;';
+    code += 'if (o + size > u8.length) {';
+    code += '  return { success: false, bytesWritten: 0, bytesNeeded: size };';
+    code += '}';
+    
+    code += core.body;
+    
+    // serInto-specific: return status
+    code += 'return { success: true, bytesWritten: size };';
+    
     return code;
 }
 

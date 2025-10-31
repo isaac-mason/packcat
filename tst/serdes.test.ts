@@ -21,8 +21,8 @@ import {
     number,
     object,
     optional,
-    quat,
     quantized,
+    quat,
     record,
     string,
     tuple,
@@ -47,6 +47,54 @@ describe('serDes', () => {
         const serializedFalse = ser(false);
         const result2 = des(serializedFalse);
         expect(result2).toBe(false);
+    });
+
+    test('serInto basic usage', () => {
+        const schema = object({
+            id: uint32(),
+            name: string(),
+            score: float32(),
+        });
+
+        const { ser, serInto, des } = build(schema);
+
+        const data = { id: 42, name: 'test', score: 123.45 };
+
+        // test success case - buffer is large enough
+        const buffer = new Uint8Array(100);
+        const result = serInto(data, buffer, 0);
+
+        expect(result.success).toBe(true);
+        expect(result.bytesWritten).toBeGreaterThan(0);
+        expect(result.bytesNeeded).toBeUndefined();
+
+        // verify serInto produces same output as ser
+        const serOutput = ser(data);
+        expect(result.bytesWritten).toBe(serOutput.byteLength);
+        expect(buffer.subarray(0, result.bytesWritten)).toEqual(serOutput);
+
+        // verify deserialization works
+        const deserialized = des(buffer.subarray(0, result.bytesWritten));
+        expect(deserialized.id).toBe(data.id);
+        expect(deserialized.name).toBe(data.name);
+        expect(deserialized.score).toBeCloseTo(data.score, 5);
+
+        // test failure case - buffer too small
+        const tinyBuffer = new Uint8Array(5);
+        const failResult = serInto(data, tinyBuffer, 0);
+
+        expect(failResult.success).toBe(false);
+        expect(failResult.bytesWritten).toBe(0);
+        expect(failResult.bytesNeeded).toBeGreaterThan(5);
+        expect(failResult.bytesNeeded).toBe(serOutput.byteLength);
+
+        // test with offset
+        const bigBuffer = new Uint8Array(200);
+        const offsetResult = serInto(data, bigBuffer, 50);
+
+        expect(offsetResult.success).toBe(true);
+        expect(offsetResult.bytesWritten).toBe(serOutput.byteLength);
+        expect(bigBuffer.subarray(50, 50 + offsetResult.bytesWritten)).toEqual(serOutput);
     });
 
     test('numbers', () => {
