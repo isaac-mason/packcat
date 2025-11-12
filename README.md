@@ -8,25 +8,22 @@
 
 # packcat
 
-packcat is a small library for serializing and deserializing objects to and from buffers.
+packcat is a small library for packing objects to and from buffers.
 
 ## Table Of Contents
 
 - [Overview](#overview)
 - [Usage](#usage)
 - [API Documentation](#api-documentation)
-  - [Ser/Des](#serdes)
-  - [Schema](#schema)
-    - [Schema Utilities](#schema-utilities)
     - [Schema Types](#schema-types)
 
 ## Overview
 
-This library takes defined schemas, and then generates efficient functions that serialize and deserialize objects fitting the schemas into compact buffers.
+This library takes defined schemas, and then generates efficient functions that pack and unpack objects fitting the schemas into compact buffers.
 
 It is great for use cases like networked games/apps where minimizing bandwidth is important, and both the client and server use javascript and can share schema definitions.
 
-Currently there is no formal specification for the serialized data format, and no guarantees are made about the stability of the format between versions. As such, the same version of packcat should be used on both the serializing and deserializing end, and it is not recommended to persist serialized data.
+Currently there is no formal specification for the packed data format, and no guarantees are made about the stability of the format between versions. As such, the same version of packcat should be used on both the packing and unpacking end, and it is not recommended to persist packed data.
 
 This library assumes the host machine is little-endian in its use of JavaScript typed arrays. While supporting big-endian is technically possible, it falls outside the practical scope and realistic use cases of this library.
 
@@ -54,12 +51,12 @@ const playerInputSchema = object({
 type PlayerInputType = SchemaType<typeof playerInputSchema>;
 ```
 
-Next, you can build the schema, which gives you `ser`, `des`, and `validate` functions, and use `SchemaType` to infer the TypeScript type of the schema:
+Next, you can build the schema, which gives you `pack`, `unpack`, and `validate` functions, and use `SchemaType` to infer the TypeScript type of the schema:
 
 ```ts
 import { build } from 'packcat';
 
-const { ser, des, validate } = build(playerInputSchema);
+const { pack, unpack, validate } = build(playerInputSchema);
 
 const playerInput: PlayerInputType = {
     frame: 1,
@@ -68,13 +65,13 @@ const playerInput: PlayerInputType = {
     cmd: [{ type: 'interact' }, { type: 'use', primary: true, secondary: false }],
 };
 
-const u8 = ser(playerInput);
+const u8 = pack(playerInput);
 
 console.log(u8); // Uint8Array
 
-const deserialized = des(u8);
+const value = unpack(u8);
 
-console.log(deserialized); // { frame: 1, nipple: [ 0, 1 ], buttons: { jump: true, sprint: false, crouch: true }, cmd: [ { type: 'interact' }, { type: 'use', primary: true, secondary: false } ] }
+console.log(value); // { frame: 1, nipple: [ 0, 1 ], buttons: { jump: true, sprint: false, crouch: true }, cmd: [ { type: 'interact' }, { type: 'use', primary: true, secondary: false } ] }
 ```
 
 You can also use `validate` if you don't trust whether the input data confirms to the schema type:
@@ -88,24 +85,18 @@ console.log(validate({ foo: 'bar' })); // false
 
 ## API Documentation
 
-### Ser/Des
-
 ```ts
 export function build<S extends Schema>(schema: S): {
-    ser: (value: SchemaType<S>) => Uint8Array;
-    des: (u8: Uint8Array) => SchemaType<S>;
+    pack: (value: SchemaType<S>) => Uint8Array;
+    unpack: (u8: Uint8Array) => SchemaType<S>;
     validate: (value: SchemaType<S>) => boolean;
     source: {
-        ser: string;
-        des: string;
+        pack: string;
+        unpack: string;
         validate: string;
     };
 };
 ```
-
-### Schema
-
-#### Schema Utilities
 
 ```ts
 /**

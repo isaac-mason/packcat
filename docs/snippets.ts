@@ -22,7 +22,7 @@ type PlayerInputType = SchemaType<typeof playerInputSchema>;
 /* SNIPPET_START: serdes */
 import { build } from 'packcat';
 
-const { ser, des, validate } = build(playerInputSchema);
+const { pack, unpack, validate } = build(playerInputSchema);
 
 const playerInput: PlayerInputType = {
     frame: 1,
@@ -31,13 +31,13 @@ const playerInput: PlayerInputType = {
     cmd: [{ type: 'interact' }, { type: 'use', primary: true, secondary: false }],
 };
 
-const u8 = ser(playerInput);
+const u8 = pack(playerInput);
 
 console.log(u8); // Uint8Array
 
-const deserialized = des(u8);
+const value = unpack(u8);
 
-console.log(deserialized); // { frame: 1, nipple: [ 0, 1 ], buttons: { jump: true, sprint: false, crouch: true }, cmd: [ { type: 'interact' }, { type: 'use', primary: true, secondary: false } ] }
+console.log(value); // { frame: 1, nipple: [ 0, 1 ], buttons: { jump: true, sprint: false, crouch: true }, cmd: [ { type: 'interact' }, { type: 'use', primary: true, secondary: false } ] }
 /* SNIPPET_END: serdes */
 
 /* SNIPPET_START: validate */

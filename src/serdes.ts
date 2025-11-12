@@ -52,14 +52,14 @@ function utf8Length(s: string) {
 export function build<S extends Schema>(
     schema: S,
 ): {
-    ser: (value: SchemaType<S>) => Uint8Array;
-    des: (u8: Uint8Array) => SchemaType<S>;
+    pack: (value: SchemaType<S>) => Uint8Array;
+    unpack: (u8: Uint8Array) => SchemaType<S>;
     validate: (value: SchemaType<S>) => boolean;
-    source: { ser: string; des: string; validate: string };
+    source: { pack: string; unpack: string; validate: string };
 } {
-    const serSource = buildSer(schema);
+    const packSource = buildPack(schema);
 
-    const ser = new Function('textEncoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'utf8Length', 'value', serSource).bind(
+    const pack = new Function('textEncoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'utf8Length', 'value', packSource).bind(
         null,
         textEncoder,
         f16,
@@ -75,9 +75,9 @@ export function build<S extends Schema>(
         utf8Length,
     ) as (value: SchemaType<S>) => Uint8Array;
 
-    const desSource = buildDes(schema);
+    const unpackSource = buildUnpack(schema);
 
-    const des = new Function('textDecoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'u8', desSource).bind(
+    const unpack = new Function('textDecoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'u8', unpackSource).bind(
         null,
         textDecoder,
         f16,
@@ -96,10 +96,10 @@ export function build<S extends Schema>(
 
     const validate = new Function('value', validateSource) as (value: SchemaType<S>) => boolean;
 
-    return { ser, des, validate, source: { ser: serSource, des: desSource, validate: validateSource } };
+    return { pack, unpack, validate, source: { pack: packSource, unpack: unpackSource, validate: validateSource } };
 }
 
-function buildSer(schema: Schema): string {
+function buildPack(schema: Schema): string {
     variableCounter = 1;
     
     let code = '';
@@ -379,7 +379,7 @@ function buildSer(schema: Schema): string {
 
     code += 'const u8 = new Uint8Array(arrayBuffer); ';
 
-    function ser(s: Schema, v: string): string {
+    function pack(s: Schema, v: string): string {
         switch (s.type) {
             case 'boolean':
                 return writeBool(v);
@@ -597,7 +597,7 @@ function buildSer(schema: Schema): string {
                     // generate unrolled fixed-length list serialization
                     let inner = '';
                     for (let i = 0; i < s.length; i++) {
-                        inner += ser(s.of, `${v}[${i}]`);
+                        inner += pack(s.of, `${v}[${i}]`);
                     }
                     return inner;
                 } else {
@@ -609,7 +609,7 @@ function buildSer(schema: Schema): string {
                     inner += `const ${lenVar} = ${v}.length;`;
                     inner += writeVaruint(lenVar);
                     inner += `for (let ${i} = 0; ${i} < ${lenVar}; ${i}++) {`;
-                    inner += ser(s.of, `${v}[${i}]`);
+                    inner += pack(s.of, `${v}[${i}]`);
                     inner += '}';
                     return inner;
                 }
@@ -620,7 +620,7 @@ function buildSer(schema: Schema): string {
                 const sortedKeys = Object.keys(s.fields).sort();
                 for (const k of sortedKeys) {
                     const f = s.fields[k];
-                    out += ser(f, `${v}[${JSON.stringify(k)}]`);
+                    out += pack(f, `${v}[${JSON.stringify(k)}]`);
                 }
                 return out;
             }
@@ -630,7 +630,7 @@ function buildSer(schema: Schema): string {
             case 'tuple': {
                 let out = '';
                 for (let i = 0; i < s.of.length; i++) {
-                    out += ser(s.of[i], `${v}[${i}]`);
+                    out += pack(s.of[i], `${v}[${i}]`);
                 }
                 return out;
             }
@@ -649,7 +649,7 @@ function buildSer(schema: Schema): string {
                 inner += `const ${keyVar} = ${keys}[${i}];`;
                 inner += writeString(keyVar);
                 inner += `const ${valVar} = ${v}[${keyVar}];`;
-                inner += ser(s.field, valVar);
+                inner += pack(s.field, valVar);
                 inner += `}`;
                 return inner;
             }
@@ -668,9 +668,9 @@ function buildSer(schema: Schema): string {
                     const lit = (disc as any).value;
 
                     if (i === 0) {
-                        inner += `if (${discriminant} === ${JSON.stringify(lit)}) { ${writeVaruint(i.toString())} ${ser(variant, v)} }`;
+                        inner += `if (${discriminant} === ${JSON.stringify(lit)}) { ${writeVaruint(i.toString())} ${pack(variant, v)} }`;
                     } else {
-                        inner += ` else if (${discriminant} === ${JSON.stringify(lit)}) { ${writeVaruint(i.toString())} ${ser(variant, v)} }`;
+                        inner += ` else if (${discriminant} === ${JSON.stringify(lit)}) { ${writeVaruint(i.toString())} ${pack(variant, v)} }`;
                     }
                 }
 
@@ -722,7 +722,7 @@ function buildSer(schema: Schema): string {
                 inner += `u8[o++] = 0;`;
                 inner += `} else {`;
                 inner += `u8[o++] = 1;`;
-                inner += ser(s.of, v);
+                inner += pack(s.of, v);
                 inner += `}`;
 
                 return inner;
@@ -734,7 +734,7 @@ function buildSer(schema: Schema): string {
                 inner += `u8[o++] = 0;`;
                 inner += `} else {`;
                 inner += `u8[o++] = 1;`;
-                inner += ser(s.of, v);
+                inner += pack(s.of, v);
                 inner += `}`;
 
                 return inner;
@@ -748,7 +748,7 @@ function buildSer(schema: Schema): string {
                 inner += `u8[o++] = 1;`;
                 inner += `} else {`;
                 inner += `u8[o++] = 2;`;
-                inner += ser(s.of, v);
+                inner += pack(s.of, v);
                 inner += `}`;
 
                 return inner;
@@ -758,14 +758,14 @@ function buildSer(schema: Schema): string {
         }
     }
 
-    code += ser(schema, 'value');
+    code += pack(schema, 'value');
 
     code += 'return u8;';
 
     return code;
 }
 
-function buildDes(schema: Schema): string {
+function buildUnpack(schema: Schema): string {
     variableCounter = 1;
     
     let code = '';
@@ -776,7 +776,7 @@ function buildDes(schema: Schema): string {
     code += 'let shift = 0;';
     code += 'let byte = 0;';
 
-    function des(s: Schema, target: string): string {
+    function unpack(s: Schema, target: string): string {
         switch (s.type) {
             case 'boolean':
                 return readBool(target);
@@ -978,7 +978,7 @@ function buildDes(schema: Schema): string {
                     let inner = '';
                     inner += `${target} = new Array(${s.length});`;
                     for (let i = 0; i < s.length; i++) {
-                        inner += des(s.of, `${target}[${i}]`);
+                        inner += unpack(s.of, `${target}[${i}]`);
                     }
                     return inner;
                 } else {
@@ -991,7 +991,7 @@ function buildDes(schema: Schema): string {
                     inner += readVaruint(l);
                     inner += `${target} = new Array(${l});`;
                     inner += `for (let ${i} = 0; ${i} < ${l}; ${i}++) {`;
-                    inner += des(s.of, `${target}[${i}]`);
+                    inner += unpack(s.of, `${target}[${i}]`);
                     inner += `}`;
                     return inner;
                 }
@@ -1002,14 +1002,14 @@ function buildDes(schema: Schema): string {
                 const sortedKeys = Object.keys(s.fields).sort();
                 for (const key of sortedKeys) {
                     const fieldSchema = s.fields[key];
-                    inner += des(fieldSchema, `${target}[${JSON.stringify(key)}]`);
+                    inner += unpack(fieldSchema, `${target}[${JSON.stringify(key)}]`);
                 }
                 return inner;
             }
             case 'tuple': {
                 let inner = `${target} = new Array(${s.of.length});`;
                 for (let i = 0; i < s.of.length; i++) {
-                    inner += des(s.of[i], `${target}[${i}]`);
+                    inner += unpack(s.of[i], `${target}[${i}]`);
                 }
                 return inner;
             }
@@ -1024,7 +1024,7 @@ function buildDes(schema: Schema): string {
                 inner += `${target} = {};`;
                 inner += `for (let ${i} = 0; ${i} < ${count}; ${i}++) { `;
                 inner += readString(k);
-                inner += des(s.field, `${target}[${k}]`);
+                inner += unpack(s.field, `${target}[${k}]`);
                 inner += `}`;
                 return inner;
             }
@@ -1071,7 +1071,7 @@ function buildDes(schema: Schema): string {
                 inner += `if (flag === 0) {`;
                 inner += `${target} = null;`;
                 inner += `} else {`;
-                inner += des(s.of, target);
+                inner += unpack(s.of, target);
                 inner += `}`;
 
                 return inner;
@@ -1081,7 +1081,7 @@ function buildDes(schema: Schema): string {
 
                 inner += `const flag = u8[o++];`;
                 inner += `if (flag === 1) {`;
-                inner += des(s.of, target);
+                inner += unpack(s.of, target);
                 inner += `}`;
 
                 return inner;
@@ -1093,7 +1093,7 @@ function buildDes(schema: Schema): string {
                 inner += `if (flag === 0) {`;
                 inner += `${target} = null;`;
                 inner += `} else if (flag === 2) {`;
-                inner += des(s.of, target);
+                inner += unpack(s.of, target);
                 inner += `}`;
 
                 return inner;
@@ -1108,7 +1108,7 @@ function buildDes(schema: Schema): string {
                 for (let i = 0; i < s.variants.length; i++) {
                     const variant = s.variants[i];
                     out += `case ${i}: `;
-                    out += des(variant, target);
+                    out += unpack(variant, target);
                     out += ` break;`;
                 }
                 out += `default: throw new Error('Invalid union tag: ' + ${tag});`;
@@ -1122,7 +1122,7 @@ function buildDes(schema: Schema): string {
 
     const rootAssign = 'let value;';
     code += rootAssign;
-    code += des(schema, 'value');
+    code += unpack(schema, 'value');
     code += 'return value;';
 
     return code;

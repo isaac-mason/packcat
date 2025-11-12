@@ -8,7 +8,7 @@
 
 # packcat
 
-packcat is a small library for serializing and deserializing objects to and from buffers.
+packcat is a small library for packing objects to and from buffers.
 
 ## Table Of Contents
 
@@ -16,11 +16,11 @@ packcat is a small library for serializing and deserializing objects to and from
 
 ## Overview
 
-This library takes defined schemas, and then generates efficient functions that serialize and deserialize objects fitting the schemas into compact buffers.
+This library takes defined schemas, and then generates efficient functions that pack and unpack objects fitting the schemas into compact buffers.
 
 It is great for use cases like networked games/apps where minimizing bandwidth is important, and both the client and server use javascript and can share schema definitions.
 
-Currently there is no formal specification for the serialized data format, and no guarantees are made about the stability of the format between versions. As such, the same version of packcat should be used on both the serializing and deserializing end, and it is not recommended to persist serialized data.
+Currently there is no formal specification for the packed data format, and no guarantees are made about the stability of the format between versions. As such, the same version of packcat should be used on both the packing and unpacking end, and it is not recommended to persist packed data.
 
 This library assumes the host machine is little-endian in its use of JavaScript typed arrays. While supporting big-endian is technically possible, it falls outside the practical scope and realistic use cases of this library.
 
@@ -30,7 +30,7 @@ First, define your data format with the schema utils:
 
 <Snippet source="./snippets.ts" select="schema" />
 
-Next, you can build the schema, which gives you `ser`, `des`, and `validate` functions, and use `SchemaType` to infer the TypeScript type of the schema:
+Next, you can build the schema, which gives you `pack`, `unpack`, and `validate` functions, and use `SchemaType` to infer the TypeScript type of the schema:
 
 <Snippet source="./snippets.ts" select="serdes" />
 
@@ -40,13 +40,7 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 ## API Documentation
 
-### Ser/Des
-
 <RenderType type="import('packcat').build" />
-
-### Schema
-
-#### Schema Utilities
 
 <RenderType type="import('packcat').boolean" />
 

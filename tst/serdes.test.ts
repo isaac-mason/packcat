@@ -40,61 +40,61 @@ import {
 
 describe('serDes', () => {
     test('boolean', () => {
-        const { ser, des } = build(boolean());
-        const serializedTrue = ser(true);
-        const result = des(serializedTrue);
+        const { pack, unpack } = build(boolean());
+        const serializedTrue = pack(true);
+        const result = unpack(serializedTrue);
         expect(result).toBe(true);
-        const serializedFalse = ser(false);
-        const result2 = des(serializedFalse);
+        const serializedFalse = pack(false);
+        const result2 = unpack(serializedFalse);
         expect(result2).toBe(false);
     });
 
     test('numbers', () => {
         // number (float64)
-        const { ser: serNum, des: desNum } = build(number());
+        const { pack: serNum, unpack: desNum } = build(number());
         const serializedNumber = serNum(12345.6789);
         expect(serializedNumber.byteLength).toBe(8);
         const outNum = desNum(serializedNumber);
         expect(outNum).toBeCloseTo(12345.6789);
 
         // int8
-        const { ser: serI8, des: desI8 } = build(int8());
+        const { pack: serI8, unpack: desI8 } = build(int8());
         const serializedI8 = serI8(-12);
         expect(serializedI8.byteLength).toBe(1);
         expect(desI8(serializedI8)).toBe(-12);
 
         // uint8
-        const { ser: serU8, des: desU8 } = build(uint8());
+        const { pack: serU8, unpack: desU8 } = build(uint8());
         const serializedU8 = serU8(250);
         expect(serializedU8.byteLength).toBe(1);
         expect(desU8(serializedU8)).toBe(250);
 
         // int16
-        const { ser: serI16, des: desI16 } = build(int16());
+        const { pack: serI16, unpack: desI16 } = build(int16());
         const serializedI16 = serI16(-1234);
         expect(serializedI16.byteLength).toBe(2);
         expect(desI16(serializedI16)).toBe(-1234);
 
         // uint16
-        const { ser: serU16, des: desU16 } = build(uint16());
+        const { pack: serU16, unpack: desU16 } = build(uint16());
         const serializedU16 = serU16(60000);
         expect(serializedU16.byteLength).toBe(2);
         expect(desU16(serializedU16)).toBe(60000);
 
         // int32
-        const { ser: serI32, des: desI32 } = build(int32());
+        const { pack: serI32, unpack: desI32 } = build(int32());
         const serializedI32 = serI32(-123456789);
         expect(serializedI32.byteLength).toBe(4);
         expect(desI32(serializedI32)).toBe(-123456789);
 
         // uint32
-        const { ser: serU32, des: desU32 } = build(uint32());
+        const { pack: serU32, unpack: desU32 } = build(uint32());
         const serializedU32 = serU32(4000000000);
         expect(serializedU32.byteLength).toBe(4);
         expect(desU32(serializedU32)).toBe(4000000000);
 
         // float16
-        const { ser: serF16, des: desF16 } = build(float16());
+        const { pack: serF16, unpack: desF16 } = build(float16());
         const serializedF16 = serF16(3.14159);
         expect(serializedF16.byteLength).toBe(2);
         const outF16 = desF16(serializedF16);
@@ -102,14 +102,14 @@ describe('serDes', () => {
         expect(outF16).toBeCloseTo(3.14159, 2);
 
         // float32
-        const { ser: serF32, des: desF32 } = build(float32());
+        const { pack: serF32, unpack: desF32 } = build(float32());
         const serializedF32 = serF32(3.14159);
         expect(serializedF32.byteLength).toBe(4);
         const outF32 = desF32(serializedF32);
         expect(outF32).toBeCloseTo(3.14159, 5);
 
         // float64
-        const { ser: serF64, des: desF64 } = build(float64());
+        const { pack: serF64, unpack: desF64 } = build(float64());
         const serializedF64 = serF64(2.718281828459045);
         expect(serializedF64.byteLength).toBe(8);
         const outF64 = desF64(serializedF64);
@@ -118,7 +118,7 @@ describe('serDes', () => {
 
     test('int64 and uint64', () => {
         // int64 - signed 64-bit integer
-        const { ser: serI64, des: desI64, validate: validateI64 } = build(int64());
+        const { pack: serI64, unpack: desI64, validate: validateI64 } = build(int64());
 
         // Basic positive value
         const serializedI64_1 = serI64(123456789012345n);
@@ -156,7 +156,7 @@ describe('serDes', () => {
         expect(validateI64('123' as any)).toBe(false); // not a bigint
 
         // uint64 - unsigned 64-bit integer
-        const { ser: serU64, des: desU64, validate: validateU64 } = build(uint64());
+        const { pack: serU64, unpack: desU64, validate: validateU64 } = build(uint64());
 
         // Basic value
         const serializedU64_1 = serU64(123456789012345n);
@@ -206,7 +206,7 @@ describe('serDes', () => {
 
     test('varint/varuint with expected byte lengths', () => {
         // varint tests
-        const { ser: serVarInt, des: desVarInt, validate: validateVarInt } = build(varint());
+        const { pack: serVarInt, unpack: desVarInt, validate: validateVarInt } = build(varint());
 
         // Test small positive values (1 byte)
         const small1 = serVarInt(0);
@@ -263,7 +263,7 @@ describe('serDes', () => {
         expect(validateVarInt('123')).toBe(false);
 
         // varuint tests
-        const { ser: serVarUInt, des: desVarUInt, validate: validateVarUInt } = build(varuint());
+        const { pack: serVarUInt, unpack: desVarUInt, validate: validateVarUInt } = build(varuint());
 
         // Test small values (1 byte)
         const usmall1 = serVarUInt(0);
@@ -308,38 +308,38 @@ describe('serDes', () => {
     });
 
     test('float16 precision and special values', () => {
-        const { ser, des } = build(float16());
+        const { pack, unpack } = build(float16());
 
         // Test basic values
-        expect(des(ser(0))).toBe(0);
-        expect(des(ser(1))).toBeCloseTo(1, 3);
-        expect(des(ser(-1))).toBeCloseTo(-1, 3);
-        expect(des(ser(3.14159))).toBeCloseTo(3.14159, 2);
+        expect(unpack(pack(0))).toBe(0);
+        expect(unpack(pack(1))).toBeCloseTo(1, 3);
+        expect(unpack(pack(-1))).toBeCloseTo(-1, 3);
+        expect(unpack(pack(3.14159))).toBeCloseTo(3.14159, 2);
 
         // Test max representable value (~65504)
         const maxVal = 65504;
-        expect(des(ser(maxVal))).toBeCloseTo(maxVal, -3);
+        expect(unpack(pack(maxVal))).toBeCloseTo(maxVal, -3);
 
         // Test small values
-        expect(des(ser(0.0001))).toBeCloseTo(0.0001, 4);
-        expect(des(ser(0.5))).toBeCloseTo(0.5, 3);
+        expect(unpack(pack(0.0001))).toBeCloseTo(0.0001, 4);
+        expect(unpack(pack(0.5))).toBeCloseTo(0.5, 3);
 
         // Test special values
-        expect(des(ser(Infinity))).toBe(Infinity);
-        expect(des(ser(-Infinity))).toBe(-Infinity);
-        expect(des(ser(NaN))).toBe(NaN);
+        expect(unpack(pack(Infinity))).toBe(Infinity);
+        expect(unpack(pack(-Infinity))).toBe(-Infinity);
+        expect(unpack(pack(NaN))).toBe(NaN);
 
         // Test values beyond range become infinity
-        expect(des(ser(100000))).toBe(Infinity);
-        expect(des(ser(-100000))).toBe(-Infinity);
+        expect(unpack(pack(100000))).toBe(Infinity);
+        expect(unpack(pack(-100000))).toBe(-Infinity);
 
         // Verify byte size
-        expect(ser(123.45).byteLength).toBe(2);
+        expect(pack(123.45).byteLength).toBe(2);
     });
 
     test('quantized basic ranges', () => {
         // Angle: 0-360° with 0.5° step
-        const { ser: serAngle, des: desAngle } = build(quantized(0, 360, { step: 0.5 }));
+        const { pack: serAngle, unpack: desAngle } = build(quantized(0, 360, { step: 0.5 }));
         const angle = 123.4;
         const serializedAngle = serAngle(angle);
         expect(serializedAngle.byteLength).toBe(2); // 720 steps → 10 bits → 2 bytes
@@ -347,7 +347,7 @@ describe('serDes', () => {
         expect(Math.abs(outAngle - angle)).toBeLessThanOrEqual(0.5); // Within step precision
 
         // Health: 0-100 with 1 step (whole numbers)
-        const { ser: serHealth, des: desHealth } = build(quantized(0, 100, { step: 1 }));
+        const { pack: serHealth, unpack: desHealth } = build(quantized(0, 100, { step: 1 }));
         const health = 75;
         const serializedHealth = serHealth(health);
         expect(serializedHealth.byteLength).toBe(1); // 101 steps → 7 bits → 1 byte
@@ -355,7 +355,7 @@ describe('serDes', () => {
         expect(Math.abs(outHealth - health)).toBeLessThanOrEqual(1); // Within step precision
 
         // Position: -1000 to 1000 with 0.1 step
-        const { ser: serPos, des: desPos } = build(quantized(-1000, 1000, { step: 0.1 }));
+        const { pack: serPos, unpack: desPos } = build(quantized(-1000, 1000, { step: 0.1 }));
         const pos = 456.789;
         const serializedPos = serPos(pos);
         expect(serializedPos.byteLength).toBe(2); // 20000 steps → 15 bits → 2 bytes
@@ -363,7 +363,7 @@ describe('serDes', () => {
         expect(Math.abs(outPos - pos)).toBeLessThanOrEqual(0.1); // Within step precision
 
         // Normalized: 0-1 with 0.01 step
-        const { ser: serNorm, des: desNorm } = build(quantized(0, 1, { step: 0.01 }));
+        const { pack: serNorm, unpack: desNorm } = build(quantized(0, 1, { step: 0.01 }));
         const norm = 0.567;
         const serializedNorm = serNorm(norm);
         expect(serializedNorm.byteLength).toBe(1); // 100 steps → 7 bits → 1 byte
@@ -372,61 +372,61 @@ describe('serDes', () => {
     });
 
     test('quantized edge values', () => {
-        const { ser, des } = build(quantized(0, 100, { step: 1 }));
+        const { pack, unpack } = build(quantized(0, 100, { step: 1 }));
 
         // Min value - should be exact
         const min = 0;
-        expect(des(ser(min))).toBe(0);
+        expect(unpack(pack(min))).toBe(0);
 
         // Max value - should be exact
         const max = 100;
-        expect(des(ser(max))).toBe(100);
+        expect(unpack(pack(max))).toBe(100);
 
         // Mid value - should be exact
         const mid = 50;
-        expect(des(ser(mid))).toBe(50);
+        expect(unpack(pack(mid))).toBe(50);
 
         // Fractional values get quantized to nearest step
         const frac = 50.7;
-        const outFrac = des(ser(frac));
+        const outFrac = unpack(pack(frac));
         expect(outFrac).toBe(51); // Rounds to nearest step (51)
     });
 
     test('quantized negative ranges', () => {
-        const { ser, des } = build(quantized(-50, 50, { step: 0.5 }));
+        const { pack, unpack } = build(quantized(-50, 50, { step: 0.5 }));
 
         // Negative value
         const neg = -25.3;
-        const serialized = ser(neg);
+        const serialized = pack(neg);
         expect(serialized.byteLength).toBe(1); // 200 steps → 8 bits → 1 byte
-        const out = des(serialized);
+        const out = unpack(serialized);
         expect(Math.abs(out - neg)).toBeLessThanOrEqual(0.5);
 
         // Positive value
         const pos = 30.7;
-        expect(Math.abs(des(ser(pos)) - pos)).toBeLessThanOrEqual(0.5);
+        expect(Math.abs(unpack(pack(pos)) - pos)).toBeLessThanOrEqual(0.5);
 
         // Zero should be exact
-        expect(des(ser(0))).toBe(0);
+        expect(unpack(pack(0))).toBe(0);
     });
 
     test('quantized small step sizes', () => {
         // Very fine precision
-        const { ser, des } = build(quantized(0, 10, { step: 0.01 }));
+        const { pack, unpack } = build(quantized(0, 10, { step: 0.01 }));
         const value = 5.678;
-        const serialized = ser(value);
+        const serialized = pack(value);
         expect(serialized.byteLength).toBe(2); // 1000 steps → 10 bits → 2 bytes
-        const out = des(serialized);
+        const out = unpack(serialized);
         expect(out).toBeCloseTo(value, 2);
     });
 
     test('quantized large ranges', () => {
         // Large range with coarse precision
-        const { ser, des } = build(quantized(-10000, 10000, { step: 10 }));
+        const { pack, unpack } = build(quantized(-10000, 10000, { step: 10 }));
         const value = 5432.1;
-        const serialized = ser(value);
+        const serialized = pack(value);
         expect(serialized.byteLength).toBe(2); // 2000 steps → 11 bits → 2 bytes
-        const out = des(serialized);
+        const out = unpack(serialized);
         expect(Math.abs(out - value)).toBeLessThanOrEqual(10); // Within step precision
         // Should quantize to nearest multiple of 10
         expect(out).toBe(5430); // 543.21 rounds to 543 steps * 10 = 5430
@@ -439,7 +439,7 @@ describe('serDes', () => {
             position: tuple([quantized(-1000, 1000, { step: 0.1 }), quantized(-1000, 1000, { step: 0.1 })]),
         });
 
-        const { ser, des } = build(schema);
+        const { pack, unpack } = build(schema);
 
         const data: SchemaType<typeof schema> = {
             rotation: 45.6,
@@ -447,8 +447,8 @@ describe('serDes', () => {
             position: [123.4, -567.8],
         };
 
-        const serialized = ser(data);
-        const out = des(serialized);
+        const serialized = pack(data);
+        const out = unpack(serialized);
 
         expect(Math.abs(out.rotation - data.rotation)).toBeLessThanOrEqual(0.5);
         expect(out.health).toBe(87); // Exact
@@ -457,11 +457,11 @@ describe('serDes', () => {
     });
 
     test('quantized in list', () => {
-        const { ser, des } = build(list(quantized(0, 100, { step: 0.5 })));
+        const { pack, unpack } = build(list(quantized(0, 100, { step: 0.5 })));
 
         const data = [10.2, 50.7, 99.1];
-        const serialized = ser(data);
-        const out = des(serialized);
+        const serialized = pack(data);
+        const out = unpack(serialized);
 
         expect(out.length).toBe(data.length);
         for (let i = 0; i < data.length; i++) {
@@ -507,37 +507,37 @@ describe('serDes', () => {
     });
 
     test('quantized clamping behavior', () => {
-        const { ser, des } = build(quantized(0, 100, { step: 1 }));
+        const { pack, unpack } = build(quantized(0, 100, { step: 1 }));
 
         // Values below min should clamp to min
         const belowMin = -10;
-        expect(des(ser(belowMin))).toBe(0);
+        expect(unpack(pack(belowMin))).toBe(0);
 
         // Values above max should clamp to max
         const aboveMax = 150;
-        expect(des(ser(aboveMax))).toBe(100);
+        expect(unpack(pack(aboveMax))).toBe(100);
 
         // Way out of range
-        expect(des(ser(-1000))).toBe(0);
-        expect(des(ser(1000))).toBe(100);
+        expect(unpack(pack(-1000))).toBe(0);
+        expect(unpack(pack(1000))).toBe(100);
     });
 
     test('quantized very small step sizes', () => {
         // High precision, small range
-        const { ser, des } = build(quantized(0, 1, { step: 0.001 }));
+        const { pack, unpack } = build(quantized(0, 1, { step: 0.001 }));
         const value = 0.5555;
-        const serialized = ser(value);
+        const serialized = pack(value);
         expect(serialized.byteLength).toBe(2); // 1000 steps → 10 bits → 2 bytes
-        const out = des(serialized);
+        const out = unpack(serialized);
         expect(Math.abs(out - value)).toBeLessThanOrEqual(0.001);
     });
 
     test('quantized fractional ranges', () => {
         // Range that doesn't start at 0
-        const { ser, des } = build(quantized(0.5, 1.5, { step: 0.01 }));
+        const { pack, unpack } = build(quantized(0.5, 1.5, { step: 0.01 }));
         const value = 1.234;
-        const serialized = ser(value);
-        const out = des(serialized);
+        const serialized = pack(value);
+        const out = unpack(serialized);
         expect(Math.abs(out - value)).toBeLessThanOrEqual(0.01);
         expect(out).toBeGreaterThanOrEqual(0.5);
         expect(out).toBeLessThanOrEqual(1.5);
@@ -545,11 +545,11 @@ describe('serDes', () => {
 
     test('quantized with powers of 2 steps', () => {
         // Step sizes that are powers of 2
-        const { ser: ser1, des: des1 } = build(quantized(0, 256, { step: 1 }));
+        const { pack: ser1, unpack: des1 } = build(quantized(0, 256, { step: 1 }));
         expect(des1(ser1(127))).toBe(127);
         expect(des1(ser1(128))).toBe(128);
 
-        const { ser: ser2, des: des2 } = build(quantized(0, 512, { step: 2 }));
+        const { pack: ser2, unpack: des2 } = build(quantized(0, 512, { step: 2 }));
         expect(des2(ser2(254))).toBe(254); // Exact multiple of 2
         expect(des2(ser2(255))).toBe(256); // 255 rounds to nearest multiple: 256
     });
@@ -557,49 +557,49 @@ describe('serDes', () => {
     test('quantized byte size progression', () => {
         // 1 byte: up to 256 steps (8 bits)
         const schema1 = quantized(0, 100, { step: 0.5 }); // 200 steps
-        const { ser: ser1 } = build(schema1);
+        const { pack: ser1 } = build(schema1);
         expect(ser1(50).byteLength).toBe(1);
 
         // 2 bytes: 257-65536 steps (9-16 bits)
         const schema2 = quantized(0, 1000, { step: 0.1 }); // 10000 steps
-        const { ser: ser2 } = build(schema2);
+        const { pack: ser2 } = build(schema2);
         expect(ser2(500).byteLength).toBe(2);
 
         // 3 bytes: 65537+ steps (17-24 bits)
         const schema3 = quantized(0, 100000, { step: 0.1 }); // 1000000 steps
-        const { ser: ser3 } = build(schema3);
+        const { pack: ser3 } = build(schema3);
         expect(ser3(50000).byteLength).toBe(3);
     });
 
     test('quantized roundtrip with special values', () => {
-        const { ser, des } = build(quantized(-100, 100, { step: 0.1 }));
+        const { pack, unpack } = build(quantized(-100, 100, { step: 0.1 }));
 
         // Test precise values that should roundtrip exactly
-        expect(des(ser(0))).toBe(0);
-        expect(des(ser(10))).toBe(10);
-        expect(des(ser(-10))).toBe(-10);
-        expect(des(ser(50.5))).toBe(50.5);
-        expect(des(ser(-50.5))).toBe(-50.5);
+        expect(unpack(pack(0))).toBe(0);
+        expect(unpack(pack(10))).toBe(10);
+        expect(unpack(pack(-10))).toBe(-10);
+        expect(unpack(pack(50.5))).toBe(50.5);
+        expect(unpack(pack(-50.5))).toBe(-50.5);
 
         // Test values that get quantized
-        expect(des(ser(10.12))).toBeCloseTo(10.1, 10);
-        expect(des(ser(10.18))).toBeCloseTo(10.2, 10);
-        expect(des(ser(-10.12))).toBeCloseTo(-10.1, 10);
+        expect(unpack(pack(10.12))).toBeCloseTo(10.1, 10);
+        expect(unpack(pack(10.18))).toBeCloseTo(10.2, 10);
+        expect(unpack(pack(-10.12))).toBeCloseTo(-10.1, 10);
     });
 
     test('quantized asymmetric ranges', () => {
         // Range where min and max are not symmetric around 0
-        const { ser, des } = build(quantized(10, 90, { step: 2 }));
+        const { pack, unpack } = build(quantized(10, 90, { step: 2 }));
 
-        expect(des(ser(10))).toBe(10); // Min
-        expect(des(ser(90))).toBe(90); // Max
-        expect(des(ser(50))).toBe(50); // Mid (exact multiple)
-        expect(des(ser(51))).toBe(52); // 51 rounds to 52 (20.5 steps rounds to 21)
-        expect(des(ser(52))).toBe(52); // Exact multiple
+        expect(unpack(pack(10))).toBe(10); // Min
+        expect(unpack(pack(90))).toBe(90); // Max
+        expect(unpack(pack(50))).toBe(50); // Mid (exact multiple)
+        expect(unpack(pack(51))).toBe(52); // 51 rounds to 52 (20.5 steps rounds to 21)
+        expect(unpack(pack(52))).toBe(52); // Exact multiple
     });
 
     test('quantized with nullable and optional', () => {
-        const { ser: serNull, des: desNull } = build(nullable(quantized(0, 100, { step: 1 })));
+        const { pack: serNull, unpack: desNull } = build(nullable(quantized(0, 100, { step: 1 })));
 
         // Null value
         const nullSer = serNull(null);
@@ -609,7 +609,7 @@ describe('serDes', () => {
         const normalSer = serNull(50.7);
         expect(desNull(normalSer)).toBe(51);
 
-        const { ser: serOpt, des: desOpt } = build(optional(quantized(0, 100, { step: 1 })));
+        const { pack: serOpt, unpack: desOpt } = build(optional(quantized(0, 100, { step: 1 })));
 
         // Undefined value
         const undefinedSer = serOpt(undefined);
@@ -621,76 +621,76 @@ describe('serDes', () => {
     });
 
     test('string', () => {
-        const { ser, des } = build(string());
+        const { pack, unpack } = build(string());
         const testStr = 'hello world';
-        const serialized = ser(testStr);
+        const serialized = pack(testStr);
         expect(serialized.byteLength).toBe(1 + testStr.length); // 1 byte varuint length prefix for short strings
-        const result = des(serialized);
+        const result = unpack(serialized);
         expect(result).toBe(testStr);
     });
 
     test('string (long - 2 byte varuint)', () => {
-        const { ser, des } = build(string());
+        const { pack, unpack } = build(string());
         // String with 150 chars requires 2 bytes for varuint (128-16383 range)
         const testStr = 'a'.repeat(150);
-        const serialized = ser(testStr);
+        const serialized = pack(testStr);
         expect(serialized.byteLength).toBe(2 + testStr.length); // 2 byte varuint length prefix
-        const result = des(serialized);
+        const result = unpack(serialized);
         expect(result).toBe(testStr);
     });
 
     test('arraybuffer empty and non-empty', () => {
-        const { ser, des, validate } = build(uint8Array());
+        const { pack, unpack, validate } = build(uint8Array());
 
         // Empty array - varuint(0) = 1 byte
         const empty = new Uint8Array(0);
-        const serializedEmpty = ser(empty);
+        const serializedEmpty = pack(empty);
         expect(serializedEmpty.byteLength).toBe(1); // varuint(0) = 1 byte
-        const outEmpty = des(serializedEmpty);
+        const outEmpty = unpack(serializedEmpty);
         expect(outEmpty.byteLength).toBe(0);
         expect(outEmpty.buffer).toBe(serializedEmpty.buffer); // should be a view
 
         // Small array (length < 128) - varuint = 1 byte
         const src = new Uint8Array([1, 2, 3]);
-        const serialized = ser(src);
+        const serialized = pack(src);
         expect(serialized.byteLength).toBe(1 + src.length); // varuint(3) = 1 byte + 3 bytes data
-        const out = des(serialized);
+        const out = unpack(serialized);
         expect(out).toEqual(src);
         expect(out.buffer).toBe(serialized.buffer); // should be a view
 
         // Length = 127 (edge case, still 1 byte varuint)
         const len127 = new Uint8Array(127).fill(42);
-        const ser127 = ser(len127);
+        const ser127 = pack(len127);
         expect(ser127.byteLength).toBe(1 + 127); // varuint(127) = 1 byte
-        const out127 = des(ser127);
+        const out127 = unpack(ser127);
         expect(out127).toEqual(len127);
 
         // Length = 128 (crosses threshold, 2 byte varuint)
         const len128 = new Uint8Array(128).fill(43);
-        const ser128 = ser(len128);
+        const ser128 = pack(len128);
         expect(ser128.byteLength).toBe(2 + 128); // varuint(128) = 2 bytes
-        const out128 = des(ser128);
+        const out128 = unpack(ser128);
         expect(out128).toEqual(len128);
 
         // Length = 255 (2 byte varuint)
         const len255 = new Uint8Array(255).fill(44);
-        const ser255 = ser(len255);
+        const ser255 = pack(len255);
         expect(ser255.byteLength).toBe(2 + 255); // varuint(255) = 2 bytes
-        const out255 = des(ser255);
+        const out255 = unpack(ser255);
         expect(out255).toEqual(len255);
 
         // Length = 16383 (edge case, still 2 byte varuint)
         const len16383 = new Uint8Array(16383).fill(45);
-        const ser16383 = ser(len16383);
+        const ser16383 = pack(len16383);
         expect(ser16383.byteLength).toBe(2 + 16383); // varuint(16383) = 2 bytes
-        const out16383 = des(ser16383);
+        const out16383 = unpack(ser16383);
         expect(out16383.byteLength).toBe(16383);
 
         // Length = 16384 (crosses threshold, 3 byte varuint)
         const len16384 = new Uint8Array(16384).fill(46);
-        const ser16384 = ser(len16384);
+        const ser16384 = pack(len16384);
         expect(ser16384.byteLength).toBe(3 + 16384); // varuint(16384) = 3 bytes
-        const out16384 = des(ser16384);
+        const out16384 = unpack(ser16384);
         expect(out16384.byteLength).toBe(16384);
 
         expect(validate(src)).toBe(true);
@@ -700,7 +700,7 @@ describe('serDes', () => {
 
     test('uint8array nested in object and list', () => {
         const nestedSchema = object({ id: uint8(), data: uint8Array() });
-        const { ser: s1, des: d1 } = build(nestedSchema);
+        const { pack: s1, unpack: d1 } = build(nestedSchema);
 
         const payload = new Uint8Array([9, 8, 7]);
         const obj = { id: 5, data: payload };
@@ -710,7 +710,7 @@ describe('serDes', () => {
         expect(new Uint8Array(out.data)).toEqual(payload);
 
         const listSchema = list(uint8Array());
-        const { ser: s2, des: d2 } = build(listSchema);
+        const { pack: s2, unpack: d2 } = build(listSchema);
         const arr = [new Uint8Array([1]), new Uint8Array([2, 3])];
         const serialized2 = s2(arr as any);
         const outArr = d2(serialized2);
@@ -719,27 +719,27 @@ describe('serDes', () => {
     });
 
     test('list of numbers', () => {
-        const { ser, des } = build(list(number()));
+        const { pack, unpack } = build(list(number()));
         const arr = [1.1, 2.2, 3.3];
-        const serialized = ser(arr);
+        const serialized = pack(arr);
         expect(serialized.byteLength).toBe(1 + arr.length * 8); // 1 byte varuint for length prefix + 8 bytes per number
-        const result = des(serialized);
+        const result = unpack(serialized);
         expect(result).toEqual(arr);
     });
 
     test('list of fixed-length lists (vec3)', () => {
         const vec3Schema = list(float32(), 3);
-        const { ser, des } = build(list(vec3Schema));
+        const { pack, unpack } = build(list(vec3Schema));
 
         const data: [number, number, number][] = [
             [1.1, 2.2, 3.3],
             [4.4, 5.5, 6.6],
         ];
 
-        const serialized = ser(data);
+        const serialized = pack(data);
         expect(serialized.byteLength).toBe(1 + data.length * 12); // 1 byte varuint for length prefix + 12 bytes per vec3 (3 * 4 bytes per float32)
 
-        const result = des(serialized);
+        const result = unpack(serialized);
         expect(result.length).toBe(data.length);
 
         // use approximate equality for float32
@@ -756,31 +756,31 @@ describe('serDes', () => {
     });
 
     test('nested list of numbers', () => {
-        const { ser, des } = build(list(list(number())));
+        const { pack, unpack } = build(list(list(number())));
         const arr = [
             [1, 2, 3],
             [4, 5, 6],
             [6, 7, 8],
         ];
 
-        const serialized = ser(arr);
+        const serialized = pack(arr);
         expect(serialized.byteLength).toBe(1 + arr.length * 1 + arr.reduce((sum, item) => sum + item.length * 8, 0)); // outer varuint + inner varuints
 
-        const result = des(serialized);
+        const result = unpack(serialized);
         expect(result).toEqual(arr);
     });
 
     test('large list (>127 elements, 2-byte varuint)', () => {
-        const { ser, des } = build(list(uint8()));
+        const { pack, unpack } = build(list(uint8()));
         const arr = new Array(200).fill(0).map((_, i) => i % 256);
-        const serialized = ser(arr);
+        const serialized = pack(arr);
         expect(serialized.byteLength).toBe(2 + arr.length * 1); // 2-byte varuint for length prefix + 1 byte per uint8
-        const result = des(serialized);
+        const result = unpack(serialized);
         expect(result).toEqual(arr);
     });
 
     test('object', () => {
-        const { ser, des } = build(
+        const { pack, unpack } = build(
             object({
                 a: number(),
                 b: string(),
@@ -790,26 +790,26 @@ describe('serDes', () => {
 
         const obj = { a: 123.45, b: 'test', c: true };
 
-        const serialized = ser(obj);
+        const serialized = pack(obj);
         expect(serialized.byteLength).toBe(8 + 1 + obj.b.length + 1); // number (8) + string varuint prefix (1) + string bytes + boolean (1)
 
-        const result = des(serialized);
+        const result = unpack(serialized);
         expect(result).toEqual(obj);
     });
 
     test('object (long string - 2 byte varuint)', () => {
-        const { ser, des } = build(object({ a: number(), b: string(), c: boolean() }));
+        const { pack, unpack } = build(object({ a: number(), b: string(), c: boolean() }));
         const obj = { a: 123.45, b: 'x'.repeat(200), c: true };
 
-        const serialized = ser(obj);
+        const serialized = pack(obj);
         expect(serialized.byteLength).toBe(8 + 2 + obj.b.length + 1); // number (8) + string 2-byte varuint prefix + string bytes + boolean (1)
 
-        const result = des(serialized);
+        const result = unpack(serialized);
         expect(result).toEqual(obj);
     });
 
     test('object in object', () => {
-        const { ser, des } = build(
+        const { pack, unpack } = build(
             object({
                 id: uint32(),
                 name: string(),
@@ -831,15 +831,15 @@ describe('serDes', () => {
             },
         };
 
-        const serialized = ser(obj);
+        const serialized = pack(obj);
         expect(serialized.byteLength).toBe(4 + 1 + obj.name.length + 1 + 8 + 4); // id (4) + name varuint prefix (1) + name bytes + active (1) + score (8) + level (4)
 
-        const result = des(serialized);
+        const result = unpack(serialized);
         expect(result).toEqual(obj);
     });
 
     test('object in object (long string - 2 byte varuint)', () => {
-        const { ser, des } = build(
+        const { pack, unpack } = build(
             object({
                 id: uint32(),
                 name: string(),
@@ -858,34 +858,34 @@ describe('serDes', () => {
             stats: { score: 98.5, level: 10 },
         };
 
-        const serialized = ser(obj);
+        const serialized = pack(obj);
         expect(serialized.byteLength).toBe(4 + 2 + obj.name.length + 1 + 8 + 4); // id (4) + name 2-byte varuint prefix + name bytes + active (1) + score (8) + level (4)
 
-        const result = des(serialized);
+        const result = unpack(serialized);
         expect(result).toEqual(obj);
     });
 
     test('tuple', () => {
-        const { ser, des } = build(tuple([number(), string(), boolean()]));
+        const { pack, unpack } = build(tuple([number(), string(), boolean()]));
 
         const data: [number, string, boolean] = [42.5, 'hello', true];
-        const serialized = ser(data);
+        const serialized = pack(data);
         expect(serialized.byteLength).toBe(8 + 1 + data[1].length + 1); // number (8) + string varuint prefix (1) + string bytes + boolean (1)
 
-        const out = des(serialized);
+        const out = unpack(serialized);
         expect(out[0]).toBeCloseTo(data[0]);
         expect(out[1]).toBe(data[1]);
         expect(out[2]).toBe(data[2]);
     });
 
     test('tuple (long string - 2 byte varuint)', () => {
-        const { ser, des } = build(tuple([number(), string(), boolean()]));
+        const { pack, unpack } = build(tuple([number(), string(), boolean()]));
 
         const data: [number, string, boolean] = [42.5, 'z'.repeat(250), true];
-        const serialized = ser(data);
+        const serialized = pack(data);
         expect(serialized.byteLength).toBe(8 + 2 + data[1].length + 1); // number (8) + string 2-byte varuint prefix + string bytes + boolean (1)
 
-        const out = des(serialized) as [number, string, boolean];
+        const out = unpack(serialized) as [number, string, boolean];
         expect(out[0]).toBeCloseTo(data[0]);
         expect(out[1]).toBe(data[1]);
         expect(out[2]).toBe(data[2]);
@@ -894,16 +894,16 @@ describe('serDes', () => {
     test('tuple of tuples', () => {
         const inner = tuple([number(), string()]);
         const schema = tuple([inner, inner]);
-        const { ser, des } = build(schema);
+        const { pack, unpack } = build(schema);
 
         const data: [[number, string], [number, string]] = [
             [1.5, 'a'],
             [2.5, 'b'],
         ];
 
-        const buf = ser(data);
+        const buf = pack(data);
 
-        const out = des(buf);
+        const out = unpack(buf);
 
         expect(out.length).toBe(2);
         expect(out[0][0]).toBeCloseTo(data[0][0]);
@@ -913,7 +913,7 @@ describe('serDes', () => {
     });
 
     test('list of objects', () => {
-        const { ser, des } = build(
+        const { pack, unpack } = build(
             list(
                 object({
                     id: uint32(),
@@ -925,8 +925,8 @@ describe('serDes', () => {
             { id: 1, name: 'Alice' },
             { id: 2, name: 'Bob' },
         ];
-        const serialized = ser(arr);
-        const result = des(serialized);
+        const serialized = pack(arr);
+        const result = unpack(serialized);
         expect(result).toEqual(arr);
     });
 
@@ -939,7 +939,7 @@ describe('serDes', () => {
             }),
         );
 
-        const { ser, des } = build(schema);
+        const { pack, unpack } = build(schema);
 
         const data: SchemaType<typeof schema> = [
             { id: 0, pos: [12, 24, 48] },
@@ -949,8 +949,8 @@ describe('serDes', () => {
             { id: 4, pos: [1, 2, 4] },
         ];
 
-        const buf = ser(data);
-        const out = des(buf) as Array<{ id: number; pos: number[] }>;
+        const buf = pack(data);
+        const out = unpack(buf) as Array<{ id: number; pos: number[] }>;
 
         expect(out.length).toBe(data.length);
 
@@ -964,21 +964,21 @@ describe('serDes', () => {
     });
 
     test('record (empty, simple, unicode keys)', () => {
-        const { ser, des } = build(record(uint32()));
+        const { pack, unpack } = build(record(uint32()));
 
         // empty
         const empty = {};
-        expect(des(ser(empty))).toEqual(empty);
+        expect(unpack(pack(empty))).toEqual(empty);
 
         const simple = { a: 1, b: 42, hello: 12345 };
-        expect(des(ser(simple))).toEqual(simple);
+        expect(unpack(pack(simple))).toEqual(simple);
 
         const unicode = { ключ: 7, '😊': 999 };
-        expect(des(ser(unicode))).toEqual(unicode);
+        expect(unpack(pack(unicode))).toEqual(unicode);
     });
 
     test('object keys with quotes/newlines/emoji', () => {
-        const { ser, des, validate } = build(record(uint32()));
+        const { pack, unpack, validate } = build(record(uint32()));
 
         // keys with tricky characters
         const data: Record<string, number> = {
@@ -990,30 +990,30 @@ describe('serDes', () => {
 
         expect(validate(data)).toBe(true);
 
-        const buf = ser(data);
-        const out = des(buf);
+        const buf = pack(data);
+        const out = unpack(buf);
         expect(out).toEqual(data);
     });
 
     test('record of records', () => {
-        const { ser, des } = build(record(record(uint32())));
+        const { pack, unpack } = build(record(record(uint32())));
         const data = {
             group1: { a: 1, b: 2 },
             group2: { x: 42, y: 99 },
         };
-        const serialized = ser(data);
-        const result = des(serialized);
+        const serialized = pack(data);
+        const result = unpack(serialized);
         expect(result).toEqual(data);
     });
 
     test('bitset simple', () => {
-        const { ser, des, validate } = build(bitset(['a', 'b', 'c'] as const));
+        const { pack, unpack, validate } = build(bitset(['a', 'b', 'c'] as const));
 
         const v = { a: true, b: false, c: true };
         expect(validate(v)).toBe(true);
 
-        const buf = ser(v);
-        const out = des(buf);
+        const buf = pack(v);
+        const out = unpack(buf);
         expect(out).toEqual(v);
     });
 
@@ -1025,88 +1025,88 @@ describe('serDes', () => {
         const obj: Record<string, boolean> = {};
         for (let i = 0; i < keys.length; i++) obj[keys[i]] = i % 2 === 0;
 
-        const buf = s.ser(obj);
-        const out = s.des(buf);
+        const buf = s.pack(obj);
+        const out = s.unpack(buf);
         expect(out).toEqual(obj);
     });
 
     test('literal', () => {
         const schema = literal('hello');
-        const { ser, des, validate } = build(schema);
+        const { pack, unpack, validate } = build(schema);
 
         const v = 'hello';
         expect(validate(v)).toBe(true);
 
-        const buf = ser(v);
+        const buf = pack(v);
         expect(buf.byteLength).toBe(0);
 
-        const out = des(buf);
+        const out = unpack(buf);
         expect(out).toEqual(v);
     });
 
     test('enumeration with string values', () => {
         const status = build(object({ value: enumeration(['pending', 'active', 'completed'] as const) }));
-        const { ser, des } = status;
+        const { pack, unpack } = status;
 
-        const buf = ser({ value: 'active' });
+        const buf = pack({ value: 'active' });
         expect(buf.byteLength).toBe(1); // 1 byte for varuint index 1
-        expect(des(buf)).toEqual({ value: 'active' });
+        expect(unpack(buf)).toEqual({ value: 'active' });
     });
 
     test('enumeration with numeric values', () => {
         const priority = build(object({ level: enumeration([1, 5, 10] as const) }));
-        const { ser, des } = priority;
+        const { pack, unpack } = priority;
 
-        const buf = ser({ level: 10 });
+        const buf = pack({ level: 10 });
         expect(buf.byteLength).toBe(1); // 1 byte for varuint index 2
-        expect(des(buf)).toEqual({ level: 10 });
+        expect(unpack(buf)).toEqual({ level: 10 });
     });
 
     test('enumeration with mixed values', () => {
         const mixed = build(object({ val: enumeration([0, 'auto', 1, 'manual'] as const) }));
-        const { ser, des } = mixed;
+        const { pack, unpack } = mixed;
 
-        expect(des(ser({ val: 0 }))).toEqual({ val: 0 });
-        expect(des(ser({ val: 'auto' }))).toEqual({ val: 'auto' });
-        expect(des(ser({ val: 1 }))).toEqual({ val: 1 });
-        expect(des(ser({ val: 'manual' }))).toEqual({ val: 'manual' });
+        expect(unpack(pack({ val: 0 }))).toEqual({ val: 0 });
+        expect(unpack(pack({ val: 'auto' }))).toEqual({ val: 'auto' });
+        expect(unpack(pack({ val: 1 }))).toEqual({ val: 1 });
+        expect(unpack(pack({ val: 'manual' }))).toEqual({ val: 'manual' });
     });
 
     test('optional', () => {
         const schema = optional(string());
-        const { ser, des } = build(schema);
+        const { pack, unpack } = build(schema);
 
         const present = 'hi';
-        const bufPresent = ser(present);
-        expect(des(bufPresent)).toBe(present);
+        const bufPresent = pack(present);
+        expect(unpack(bufPresent)).toBe(present);
 
-        const bufAbsent = ser(undefined);
-        expect(des(bufAbsent)).toBeUndefined();
+        const bufAbsent = pack(undefined);
+        expect(unpack(bufAbsent)).toBeUndefined();
     });
 
     test('nullable', () => {
         const schema = nullable(string());
-        const { ser, des } = build(schema);
+        const { pack, unpack } = build(schema);
 
-        const bufNull = ser(null);
-        expect(des(bufNull)).toBeNull();
+        const bufNull = pack(null);
+        expect(unpack(bufNull)).toBeNull();
 
-        const bufVal = ser('hi');
-        expect(des(bufVal)).toBe('hi');
+        const bufVal = pack('hi');
+        expect(unpack(bufVal)).toBe('hi');
     });
 
     test('nullish', () => {
         const schema = nullish(string());
-        const { ser, des } = build(schema);
+        const { pack, unpack } = build(schema);
 
-        const bufNull = ser(null);
-        expect(des(bufNull)).toBeNull();
+        const bufNull = pack(null);
+        expect(unpack(bufNull)).toBeNull();
 
-        const bufUndef = ser(undefined);
-        expect(des(bufUndef)).toBeUndefined();
+        const bufUndef = pack(undefined);
+        expect(unpack(bufUndef)).toBeUndefined();
 
-        const bufVal = ser('val');
-        expect(des(bufVal)).toBe('val');
+        const bufVal = pack('val');
+        expect(unpack(bufVal)).toBe('val');
     });
 
     test('complex structure', () => {
@@ -1155,8 +1155,8 @@ describe('serDes', () => {
         const s = build(complexSchema);
         expect(s.validate(data)).toBe(true);
 
-        const buf = s.ser(data);
-        const out = s.des(buf);
+        const buf = s.pack(data);
+        const out = s.unpack(buf);
 
         // basic checks
         expect(out.id).toBe(data.id);
@@ -1194,7 +1194,7 @@ describe('serDes', () => {
             object({ type: literal('cat'), name: string(), lives: uint8() }),
         ]);
 
-        const { ser, des, validate } = build(pet);
+        const { pack, unpack, validate } = build(pet);
 
         const dog = { type: 'dog', name: 'Rex', bark: 5 } as const;
         const cat = { type: 'cat', name: 'Mittens', lives: 9 } as const;
@@ -1202,12 +1202,12 @@ describe('serDes', () => {
         expect(validate(dog)).toBe(true);
         expect(validate(cat)).toBe(true);
 
-        const bufDog = ser(dog);
-        const outDog = des(bufDog);
+        const bufDog = pack(dog);
+        const outDog = unpack(bufDog);
         expect(outDog).toEqual(dog);
 
-        const bufCat = ser(cat);
-        const outCat = des(bufCat);
+        const bufCat = pack(cat);
+        const outCat = unpack(bufCat);
         expect(outCat).toEqual(cat);
     });
 
@@ -1215,150 +1215,150 @@ describe('serDes', () => {
         // Create 300 variants to test varuint encoding
         const variants = Array.from({ length: 300 }, (_, i) => object({ type: literal(`type${i}`), value: uint8() }));
         const schema = union('type', variants as any);
-        const { ser, des, validate } = build(schema);
+        const { pack, unpack, validate } = build(schema);
 
         // Test first variant (1-byte varuint: 0)
         const first = { type: 'type0', value: 42 };
         expect(validate(first)).toBe(true);
-        const bufFirst = ser(first);
+        const bufFirst = pack(first);
         expect(bufFirst.byteLength).toBe(2); // 1 byte varuint tag + 1 byte value
-        expect(des(bufFirst)).toEqual(first);
+        expect(unpack(bufFirst)).toEqual(first);
 
         // Test variant at 127 (1-byte varuint boundary)
         const at127 = { type: 'type127', value: 100 };
         expect(validate(at127)).toBe(true);
-        const buf127 = ser(at127);
+        const buf127 = pack(at127);
         expect(buf127.byteLength).toBe(2); // 1 byte varuint tag + 1 byte value
-        expect(des(buf127)).toEqual(at127);
+        expect(unpack(buf127)).toEqual(at127);
 
         // Test variant at 128 (2-byte varuint)
         const at128 = { type: 'type128', value: 50 };
         expect(validate(at128)).toBe(true);
-        const buf128 = ser(at128);
+        const buf128 = pack(at128);
         expect(buf128.byteLength).toBe(3); // 2 byte varuint tag + 1 byte value
-        expect(des(buf128)).toEqual(at128);
+        expect(unpack(buf128)).toEqual(at128);
 
         // Test variant at 200 (2-byte varuint)
         const at200 = { type: 'type200', value: 75 };
         expect(validate(at200)).toBe(true);
-        const buf200 = ser(at200);
+        const buf200 = pack(at200);
         expect(buf200.byteLength).toBe(3); // 2 byte varuint tag + 1 byte value
-        expect(des(buf200)).toEqual(at200);
+        expect(unpack(buf200)).toEqual(at200);
 
         // Test last variant
         const last = { type: 'type299', value: 99 };
         expect(validate(last)).toBe(true);
-        const bufLast = ser(last);
+        const bufLast = pack(last);
         expect(bufLast.byteLength).toBe(3); // 2 byte varuint tag + 1 byte value
-        expect(des(bufLast)).toEqual(last);
+        expect(unpack(bufLast)).toEqual(last);
     });
 
     test('empty string', () => {
-        const { ser, des } = build(string());
+        const { pack, unpack } = build(string());
         const empty = '';
-        const serialized = ser(empty);
+        const serialized = pack(empty);
         expect(serialized.byteLength).toBe(1); // just the varuint length prefix (0)
-        expect(des(serialized)).toBe(empty);
+        expect(unpack(serialized)).toBe(empty);
     });
 
     test('string with emoji', () => {
-        const { ser, des } = build(string());
+        const { pack, unpack } = build(string());
 
         // Simple emoji (4 bytes in UTF-8)
         const simple = '😊';
-        expect(des(ser(simple))).toBe(simple);
+        expect(unpack(pack(simple))).toBe(simple);
 
         // Emoji with zero-width joiner (family emoji)
         const family = '👨‍👩‍👧‍👦';
-        expect(des(ser(family))).toBe(family);
+        expect(unpack(pack(family))).toBe(family);
 
         // Various emoji
         const multi = '🌍🔥💧🌊⚡';
-        expect(des(ser(multi))).toBe(multi);
+        expect(unpack(pack(multi))).toBe(multi);
     });
 
     test('string with CJK characters', () => {
-        const { ser, des } = build(string());
+        const { pack, unpack } = build(string());
 
         const japanese = 'こんにちは世界';
-        expect(des(ser(japanese))).toBe(japanese);
+        expect(unpack(pack(japanese))).toBe(japanese);
 
         const chinese = '你好世界';
-        expect(des(ser(chinese))).toBe(chinese);
+        expect(unpack(pack(chinese))).toBe(chinese);
 
         const korean = '안녕하세요';
-        expect(des(ser(korean))).toBe(korean);
+        expect(unpack(pack(korean))).toBe(korean);
     });
 
     test('string with mixed unicode', () => {
-        const { ser, des } = build(string());
+        const { pack, unpack } = build(string());
 
         const mixed = 'Hello 世界 🌍!';
-        expect(des(ser(mixed))).toBe(mixed);
+        expect(unpack(pack(mixed))).toBe(mixed);
 
         const complex = 'Test: 测试 🧪 тест';
-        expect(des(ser(complex))).toBe(complex);
+        expect(unpack(pack(complex))).toBe(complex);
     });
 
     test('string with surrogate pairs', () => {
-        const { ser, des } = build(string());
+        const { pack, unpack } = build(string());
 
         // Mathematical alphanumeric symbols (surrogate pairs)
         const math = '𝕳𝖊𝖑𝖑𝖔';
-        expect(des(ser(math))).toBe(math);
+        expect(unpack(pack(math))).toBe(math);
 
         // Musical symbols
         const music = '𝄞𝄢𝄫';
-        expect(des(ser(music))).toBe(music);
+        expect(unpack(pack(music))).toBe(music);
     });
 
     test('string with combining characters', () => {
-        const { ser, des } = build(string());
+        const { pack, unpack } = build(string());
 
         // Combining diacritical marks
         const accents = 'café'; // é is one codepoint
-        expect(des(ser(accents))).toBe(accents);
+        expect(unpack(pack(accents))).toBe(accents);
 
         const combining = 'cafe\u0301'; // e + combining acute accent
-        expect(des(ser(combining))).toBe(combining);
+        expect(unpack(pack(combining))).toBe(combining);
     });
 
     test('string with special whitespace', () => {
-        const { ser, des } = build(string());
+        const { pack, unpack } = build(string());
 
         const withNewline = 'hello\nworld';
-        expect(des(ser(withNewline))).toBe(withNewline);
+        expect(unpack(pack(withNewline))).toBe(withNewline);
 
         const withTab = 'hello\tworld';
-        expect(des(ser(withTab))).toBe(withTab);
+        expect(unpack(pack(withTab))).toBe(withTab);
 
         const withCarriageReturn = 'hello\r\nworld';
-        expect(des(ser(withCarriageReturn))).toBe(withCarriageReturn);
+        expect(unpack(pack(withCarriageReturn))).toBe(withCarriageReturn);
     });
 
     test('empty list', () => {
-        const { ser, des } = build(list(number()));
+        const { pack, unpack } = build(list(number()));
         const empty: number[] = [];
-        const serialized = ser(empty);
+        const serialized = pack(empty);
         expect(serialized.byteLength).toBe(1); // just varuint length prefix (0)
-        expect(des(serialized)).toEqual(empty);
+        expect(unpack(serialized)).toEqual(empty);
     });
 
     test('empty nested list', () => {
-        const { ser, des } = build(list(list(string())));
+        const { pack, unpack } = build(list(list(string())));
         const empty: string[][] = [];
-        expect(des(ser(empty))).toEqual(empty);
+        expect(unpack(pack(empty))).toEqual(empty);
 
         const withEmptyInner: string[][] = [[], []];
-        expect(des(ser(withEmptyInner))).toEqual(withEmptyInner);
+        expect(unpack(pack(withEmptyInner))).toEqual(withEmptyInner);
     });
 
     test('empty record', () => {
-        const { ser, des } = build(record(number()));
+        const { pack, unpack } = build(record(number()));
         const empty: Record<string, number> = {};
-        const serialized = ser(empty);
+        const serialized = pack(empty);
         expect(serialized.byteLength).toBe(1); // just varuint length prefix (0)
-        expect(des(serialized)).toEqual(empty);
+        expect(unpack(serialized)).toEqual(empty);
     });
 
     test('object with empty nested collections', () => {
@@ -1366,43 +1366,43 @@ describe('serDes', () => {
             items: list(string()),
             metadata: record(number()),
         });
-        const { ser, des } = build(schema);
+        const { pack, unpack } = build(schema);
 
         const data = {
             items: [],
             metadata: {},
         };
 
-        expect(des(ser(data))).toEqual(data);
+        expect(unpack(pack(data))).toEqual(data);
     });
 
     test('record with empty string key', () => {
-        const { ser, des } = build(record(number()));
+        const { pack, unpack } = build(record(number()));
 
         const emptyKey = { '': 42 };
-        expect(des(ser(emptyKey))).toEqual(emptyKey);
+        expect(unpack(pack(emptyKey))).toEqual(emptyKey);
 
         const mixed = { '': 1, normal: 2, another: 3 };
-        expect(des(ser(mixed))).toEqual(mixed);
+        expect(unpack(pack(mixed))).toEqual(mixed);
     });
 
     test('record with very long keys', () => {
-        const { ser, des } = build(record(number()));
+        const { pack, unpack } = build(record(number()));
 
         const longKey = 'x'.repeat(1000);
         const data = { [longKey]: 99 };
-        expect(des(ser(data))).toEqual(data);
+        expect(unpack(pack(data))).toEqual(data);
 
         // Multiple long keys
         const multiLong = {
             ['a'.repeat(500)]: 1,
             ['b'.repeat(500)]: 2,
         };
-        expect(des(ser(multiLong))).toEqual(multiLong);
+        expect(unpack(pack(multiLong))).toEqual(multiLong);
     });
 
     test('record with unicode keys', () => {
-        const { ser, des } = build(record(string()));
+        const { pack, unpack } = build(record(string()));
 
         const unicodeKeys = {
             ключ: 'Russian',
@@ -1410,11 +1410,11 @@ describe('serDes', () => {
             你好: 'Chinese',
             '🌍': 'Earth',
         };
-        expect(des(ser(unicodeKeys))).toEqual(unicodeKeys);
+        expect(unpack(pack(unicodeKeys))).toEqual(unicodeKeys);
     });
 
     test('record with special character keys', () => {
-        const { ser, des } = build(record(number()));
+        const { pack, unpack } = build(record(number()));
 
         const specialKeys = {
             'with"quote': 1,
@@ -1423,88 +1423,88 @@ describe('serDes', () => {
             'with\ttab': 4,
             'with\\backslash': 5,
         };
-        expect(des(ser(specialKeys))).toEqual(specialKeys);
+        expect(unpack(pack(specialKeys))).toEqual(specialKeys);
     });
 
     test('nested record with special keys', () => {
-        const { ser, des } = build(record(record(number())));
+        const { pack, unpack } = build(record(record(number())));
 
         const longKey = 'x'.repeat(100);
         const data = {
             '': { inner: 1 },
             '😊': { '': 2, [longKey]: 3 },
         };
-        expect(des(ser(data))).toEqual(data);
+        expect(unpack(pack(data))).toEqual(data);
     });
 
     test('bitset with all true', () => {
-        const { ser, des } = build(bitset(['a', 'b', 'c', 'd', 'e'] as const));
+        const { pack, unpack } = build(bitset(['a', 'b', 'c', 'd', 'e'] as const));
 
         const allTrue = { a: true, b: true, c: true, d: true, e: true };
-        expect(des(ser(allTrue))).toEqual(allTrue);
+        expect(unpack(pack(allTrue))).toEqual(allTrue);
     });
 
     test('bitset with all false', () => {
-        const { ser, des } = build(bitset(['a', 'b', 'c', 'd', 'e'] as const));
+        const { pack, unpack } = build(bitset(['a', 'b', 'c', 'd', 'e'] as const));
 
         const allFalse = { a: false, b: false, c: false, d: false, e: false };
-        expect(des(ser(allFalse))).toEqual(allFalse);
+        expect(unpack(pack(allFalse))).toEqual(allFalse);
     });
 
     test('bitset with exactly 8 keys (1 byte)', () => {
         const keys8 = Array.from({ length: 8 }, (_, i) => `k${i}`);
-        const { ser, des } = build(bitset(keys8));
+        const { pack, unpack } = build(bitset(keys8));
 
         const allTrue = Object.fromEntries(keys8.map((k) => [k, true]));
-        const serialized = ser(allTrue);
+        const serialized = pack(allTrue);
         expect(serialized.byteLength).toBe(1);
-        expect(des(serialized)).toEqual(allTrue);
+        expect(unpack(serialized)).toEqual(allTrue);
 
         const allFalse = Object.fromEntries(keys8.map((k) => [k, false]));
-        expect(des(ser(allFalse))).toEqual(allFalse);
+        expect(unpack(pack(allFalse))).toEqual(allFalse);
 
         const alternating = Object.fromEntries(keys8.map((k, i) => [k, i % 2 === 0]));
-        expect(des(ser(alternating))).toEqual(alternating);
+        expect(unpack(pack(alternating))).toEqual(alternating);
     });
 
     test('bitset with 9 keys (2 bytes)', () => {
         const keys9 = Array.from({ length: 9 }, (_, i) => `k${i}`);
-        const { ser, des } = build(bitset(keys9));
+        const { pack, unpack } = build(bitset(keys9));
 
         const mixed = Object.fromEntries(keys9.map((k, i) => [k, i % 2 === 0]));
-        const serialized = ser(mixed);
+        const serialized = pack(mixed);
         expect(serialized.byteLength).toBe(2);
-        expect(des(serialized)).toEqual(mixed);
+        expect(unpack(serialized)).toEqual(mixed);
     });
 
     test('bitset with 16 keys (2 bytes)', () => {
         const keys16 = Array.from({ length: 16 }, (_, i) => `k${i}`);
-        const { ser, des } = build(bitset(keys16));
+        const { pack, unpack } = build(bitset(keys16));
 
         const pattern = Object.fromEntries(keys16.map((k, i) => [k, i < 8]));
-        const serialized = ser(pattern);
+        const serialized = pack(pattern);
         expect(serialized.byteLength).toBe(2);
-        expect(des(serialized)).toEqual(pattern);
+        expect(unpack(serialized)).toEqual(pattern);
     });
 
     test('bitset with 17 keys (3 bytes)', () => {
         const keys17 = Array.from({ length: 17 }, (_, i) => `k${i}`);
-        const { ser, des } = build(bitset(keys17));
+        const { pack, unpack } = build(bitset(keys17));
 
         const pattern = Object.fromEntries(keys17.map((k, i) => [k, i === 16]));
-        const serialized = ser(pattern);
+        const serialized = pack(pattern);
         expect(serialized.byteLength).toBe(3);
-        expect(des(serialized)).toEqual(pattern);
+        expect(unpack(serialized)).toEqual(pattern);
     });
 
     test('bitset with 24 keys (3 bytes)', () => {
         const keys24 = Array.from({ length: 24 }, (_, i) => `k${i}`);
-        const { ser, des } = build(bitset(keys24));
+        const { pack, unpack } = build(bitset(keys24));
 
         const checker = Object.fromEntries(keys24.map((k, i) => [k, (Math.floor(i / 8) + i) % 2 === 0]));
-        const serialized = ser(checker);
+        const serialized = pack(checker);
         expect(serialized.byteLength).toBe(3);
-        expect(des(serialized)).toEqual(checker);
+        expect(unpack(serialized)).toEqual(checker);
     });
 
     test('bitset nested in object', () => {
@@ -1512,7 +1512,7 @@ describe('serDes', () => {
             id: uint32(),
             flags: bitset(['flag1', 'flag2', 'flag3', 'flag4', 'flag5', 'flag6', 'flag7', 'flag8', 'flag9'] as const),
         });
-        const { ser, des } = build(schema);
+        const { pack, unpack } = build(schema);
 
         const data = {
             id: 123,
@@ -1529,16 +1529,16 @@ describe('serDes', () => {
             },
         };
 
-        expect(des(ser(data))).toEqual(data);
+        expect(unpack(pack(data))).toEqual(data);
     });
 
     test('quaternion basic encoding', () => {
-        const { ser, des } = build(quat());
+        const { pack, unpack } = build(quat());
 
         // Identity quaternion (no rotation) [x, y, z, w]
         const identity: [number, number, number, number] = [0, 0, 0, 1];
-        expect(ser(identity).byteLength).toBe(7); // 1 metadata byte + 6 component bytes (10 bits needs 2 bytes per component)
-        const outIdentity = des(ser(identity));
+        expect(pack(identity).byteLength).toBe(7); // 1 metadata byte + 6 component bytes (10 bits needs 2 bytes per component)
+        const outIdentity = unpack(pack(identity));
         expect(outIdentity[0]).toBeCloseTo(identity[0], 2);
         expect(outIdentity[1]).toBeCloseTo(identity[1], 2);
         expect(outIdentity[2]).toBeCloseTo(identity[2], 2);
@@ -1546,7 +1546,7 @@ describe('serDes', () => {
 
         // 90° rotation around Y axis [x, y, z, w]
         const rot90Y: [number, number, number, number] = [0, Math.sin(Math.PI / 4), 0, Math.cos(Math.PI / 4)];
-        const outRot90Y = des(ser(rot90Y));
+        const outRot90Y = unpack(pack(rot90Y));
         expect(outRot90Y[0]).toBeCloseTo(rot90Y[0], 2);
         expect(outRot90Y[1]).toBeCloseTo(rot90Y[1], 2);
         expect(outRot90Y[2]).toBeCloseTo(rot90Y[2], 2);
@@ -1561,20 +1561,20 @@ describe('serDes', () => {
         const q: [number, number, number, number] = [0.1, 0.2, 0.3, Math.sqrt(1 - 0.1 ** 2 - 0.2 ** 2 - 0.3 ** 2)];
 
         // 0.002 step (lower precision, smaller size)
-        const { ser: ser002, des: des002 } = build(quat({ step: 0.002 }));
+        const { pack: ser002, unpack: des002 } = build(quat({ step: 0.002 }));
         expect(ser002(q).byteLength).toBe(7); // ~10 bits per component, 1 metadata + 6 component bytes
         const out002 = des002(ser002(q));
         expect(out002[0]).toBeCloseTo(q[0], 2);
 
         // 0.0002 step (higher precision, larger size)
-        const { ser: ser0002, des: des0002 } = build(quat({ step: 0.0002 }));
+        const { pack: ser0002, unpack: des0002 } = build(quat({ step: 0.0002 }));
         expect(ser0002(q).byteLength).toBe(7); // 1 metadata + 6 component bytes
         const out0002 = des0002(ser0002(q));
         expect(out0002[0]).toBeCloseTo(q[0], 3);
     });
 
     test('quaternion edge cases', () => {
-        const { ser, des } = build(quat());
+        const { pack, unpack } = build(quat());
 
         // Test all four components as largest [x, y, z, w]
         const testCases: [number, number, number, number][] = [
@@ -1585,7 +1585,7 @@ describe('serDes', () => {
         ];
 
         for (const q of testCases) {
-            const out = des(ser(q));
+            const out = unpack(pack(q));
             expect(out[0]).toBeCloseTo(q[0], 2);
             expect(out[1]).toBeCloseTo(q[1], 2);
             expect(out[2]).toBeCloseTo(q[2], 2);
@@ -1594,30 +1594,30 @@ describe('serDes', () => {
 
         // Negative components
         const negQ: [number, number, number, number] = [-0.5, -0.5, 0.5, 0.5];
-        const outNeg = des(ser(negQ));
+        const outNeg = unpack(pack(negQ));
         expect(outNeg[0]).toBeCloseTo(negQ[0], 1);
         expect(outNeg[1]).toBeCloseTo(negQ[1], 1);
     });
 
     test('uv2 basic encoding', () => {
-        const { ser, des } = build(uv2());
+        const { pack, unpack } = build(uv2());
 
         // Right [x, y] = [1, 0]
         const right: [number, number] = [1, 0];
-        expect(ser(right).byteLength).toBe(2); // 12 bits → 2 bytes
-        const outRight = des(ser(right));
+        expect(pack(right).byteLength).toBe(2); // 12 bits → 2 bytes
+        const outRight = unpack(pack(right));
         expect(outRight[0]).toBeCloseTo(right[0], 2);
         expect(outRight[1]).toBeCloseTo(right[1], 2);
 
         // Up [x, y] = [0, 1]
         const up: [number, number] = [0, 1];
-        const outUp = des(ser(up));
+        const outUp = unpack(pack(up));
         expect(outUp[0]).toBeCloseTo(up[0], 2);
         expect(outUp[1]).toBeCloseTo(up[1], 2);
 
         // 45° angle
         const angle45: [number, number] = [Math.cos(Math.PI / 4), Math.sin(Math.PI / 4)];
-        const out45 = des(ser(angle45));
+        const out45 = unpack(pack(angle45));
         expect(out45[0]).toBeCloseTo(angle45[0], 2);
         expect(out45[1]).toBeCloseTo(angle45[1], 2);
 
@@ -1630,56 +1630,56 @@ describe('serDes', () => {
         const v: [number, number] = [Math.cos(0.5), Math.sin(0.5)];
 
         // 0.006 step (lower precision, ~0.35°)
-        const { ser: ser006, des: des006 } = build(uv2({ step: 0.006 }));
+        const { pack: ser006, unpack: des006 } = build(uv2({ step: 0.006 }));
         expect(ser006(v).byteLength).toBe(2);
         const out006 = des006(ser006(v));
         expect(out006[0]).toBeCloseTo(v[0], 2);
 
         // 0.0001 step (higher precision, ~0.006°)
-        const { ser: ser0001, des: des0001 } = build(uv2({ step: 0.0001 }));
+        const { pack: ser0001, unpack: des0001 } = build(uv2({ step: 0.0001 }));
         expect(ser0001(v).byteLength).toBe(2);
         const out0001 = des0001(ser0001(v));
         expect(out0001[0]).toBeCloseTo(v[0], 3);
     });
 
     test('uv2 all quadrants', () => {
-        const { ser, des } = build(uv2());
+        const { pack, unpack } = build(uv2());
 
         // Test vectors in all four quadrants
         const angles = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2, 2 * Math.PI - 0.1];
 
         for (const angle of angles) {
             const v: [number, number] = [Math.cos(angle), Math.sin(angle)];
-            const out = des(ser(v));
+            const out = unpack(pack(v));
             expect(out[0]).toBeCloseTo(v[0], 2);
             expect(out[1]).toBeCloseTo(v[1], 2);
         }
     });
 
     test('uv3 basic encoding', () => {
-        const { ser, des } = build(uv3());
+        const { pack, unpack } = build(uv3());
 
         // Unit X [x, y, z]
         const unitX: [number, number, number] = [1, 0, 0];
-        expect(ser(unitX).byteLength).toBe(4); // 11*2 + 3 = 25 bits → 4 bytes
-        const outX = des(ser(unitX));
+        expect(pack(unitX).byteLength).toBe(4); // 11*2 + 3 = 25 bits → 4 bytes
+        const outX = unpack(pack(unitX));
         expect(outX[0]).toBeCloseTo(unitX[0], 2);
         expect(outX[1]).toBeCloseTo(unitX[1], 2);
         expect(outX[2]).toBeCloseTo(unitX[2], 2);
 
         // Unit Y
         const unitY: [number, number, number] = [0, 1, 0];
-        const outY = des(ser(unitY));
+        const outY = unpack(pack(unitY));
         expect(outY[1]).toBeCloseTo(unitY[1], 2);
 
         // Unit Z
         const unitZ: [number, number, number] = [0, 0, 1];
-        const outZ = des(ser(unitZ));
+        const outZ = unpack(pack(unitZ));
         expect(outZ[2]).toBeCloseTo(unitZ[2], 2);
 
         // Arbitrary direction
         const dir: [number, number, number] = [1 / Math.sqrt(3), 1 / Math.sqrt(3), 1 / Math.sqrt(3)];
-        const outDir = des(ser(dir));
+        const outDir = unpack(pack(dir));
         expect(outDir[0]).toBeCloseTo(dir[0], 2);
         expect(outDir[1]).toBeCloseTo(dir[1], 2);
         expect(outDir[2]).toBeCloseTo(dir[2], 2);
@@ -1693,20 +1693,20 @@ describe('serDes', () => {
         const v: [number, number, number] = [0.267, 0.535, 0.802];
 
         // 0.002 step (lower precision)
-        const { ser: ser002, des: des002 } = build(uv3({ step: 0.002 }));
+        const { pack: ser002, unpack: des002 } = build(uv3({ step: 0.002 }));
         expect(ser002(v).byteLength).toBe(3);
         const out002 = des002(ser002(v));
         expect(out002[0]).toBeCloseTo(v[0], 1);
 
         // 0.0002 step (higher precision)
-        const { ser: ser0002, des: des0002 } = build(uv3({ step: 0.0002 }));
+        const { pack: ser0002, unpack: des0002 } = build(uv3({ step: 0.0002 }));
         expect(ser0002(v).byteLength).toBe(4);
         const out0002 = des0002(ser0002(v));
         expect(out0002[0]).toBeCloseTo(v[0], 2);
     });
 
     test('uv3 negative components', () => {
-        const { ser, des } = build(uv3());
+        const { pack, unpack } = build(uv3());
 
         const testVecs: [number, number, number][] = [
             [-1, 0, 0],
@@ -1716,7 +1716,7 @@ describe('serDes', () => {
         ];
 
         for (const v of testVecs) {
-            const out = des(ser(v));
+            const out = unpack(pack(v));
             expect(out[0]).toBeCloseTo(v[0], 2);
             expect(out[1]).toBeCloseTo(v[1], 2);
             expect(out[2]).toBeCloseTo(v[2], 2);
@@ -1724,39 +1724,39 @@ describe('serDes', () => {
     });
 
     test('uint8Array variable length', () => {
-        const { ser, des } = build(uint8Array());
+        const { pack, unpack } = build(uint8Array());
 
         // Basic array
         const data1 = new Uint8Array([1, 2, 3, 4, 5]);
-        expect(ser(data1).byteLength).toBe(6); // 1 byte varuint + 5 bytes
-        expect(des(ser(data1))).toEqual(data1);
+        expect(pack(data1).byteLength).toBe(6); // 1 byte varuint + 5 bytes
+        expect(unpack(pack(data1))).toEqual(data1);
 
         // Empty array
         const data2 = new Uint8Array([]);
-        expect(ser(data2).byteLength).toBe(1); // 1 byte varuint (length=0)
-        expect(des(ser(data2))).toEqual(data2);
+        expect(pack(data2).byteLength).toBe(1); // 1 byte varuint (length=0)
+        expect(unpack(pack(data2))).toEqual(data2);
 
         // Large array (>127 = 2-byte varuint)
         const data3 = new Uint8Array(300).map((_, i) => i % 256);
-        expect(ser(data3).byteLength).toBe(302); // 2 bytes varuint + 300 bytes
-        expect(des(ser(data3))).toEqual(data3);
+        expect(pack(data3).byteLength).toBe(302); // 2 bytes varuint + 300 bytes
+        expect(unpack(pack(data3))).toEqual(data3);
     });
 
     test('uint8Array fixed length', () => {
         // 5 bytes - no varuint prefix
-        const { ser: ser5, des: des5 } = build(uint8Array(5));
+        const { pack: ser5, unpack: des5 } = build(uint8Array(5));
         const data5 = new Uint8Array([10, 20, 30, 40, 50]);
         expect(ser5(data5).byteLength).toBe(5);
         expect(des5(ser5(data5))).toEqual(data5);
 
         // 0 bytes
-        const { ser: ser0, des: des0 } = build(uint8Array(0));
+        const { pack: ser0, unpack: des0 } = build(uint8Array(0));
         const data0 = new Uint8Array([]);
         expect(ser0(data0).byteLength).toBe(0);
         expect(des0(ser0(data0))).toEqual(data0);
 
         // 1 byte
-        const { ser: ser1, des: des1 } = build(uint8Array(1));
+        const { pack: ser1, unpack: des1 } = build(uint8Array(1));
         const data1 = new Uint8Array([255]);
         expect(ser1(data1).byteLength).toBe(1);
         expect(des1(ser1(data1))).toEqual(data1);
@@ -1859,7 +1859,7 @@ describe('validate', () => {
         expect(schemaSerDes.validate({ key: 'hello', value: 123 })).toBe(false);
     });
 
-    test('object field order independence - cross-schema ser/des', () => {
+    test('object field order independence - cross-schema pack/unpack', () => {
         // Create two schemas with the same fields but different definition order
         const schema1 = object({
             name: string(),
@@ -1875,8 +1875,8 @@ describe('validate', () => {
             id: uint32(),
         });
 
-        const { ser: ser1, des: des1 } = build(schema1);
-        const { ser: ser2, des: des2 } = build(schema2);
+        const { pack: ser1, unpack: des1 } = build(schema1);
+        const { pack: ser2, unpack: des2 } = build(schema2);
 
         const data = {
             name: 'Player1',
@@ -1942,8 +1942,8 @@ describe('validate', () => {
             outer1: string(),
         });
 
-        const { ser: ser1, des: des1 } = build(schema1);
-        const { ser: ser2, des: des2 } = build(schema2);
+        const { pack: ser1, unpack: des1 } = build(schema1);
+        const { pack: ser2, unpack: des2 } = build(schema2);
 
         const data = {
             outer1: 'test',
@@ -1955,7 +1955,7 @@ describe('validate', () => {
             outer2: 999,
         };
 
-        // Cross-schema ser/des
+        // Cross-schema pack/unpack
         const buf1 = ser1(data);
         const out2 = des2(buf1);
 
