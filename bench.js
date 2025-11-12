@@ -37,17 +37,17 @@ function bench(name, fn, iterations) {
 }
 
 function benchSchema(name, schema, val) {
-    const { ser, des, source } = build(schema);
+    const { pack, unpack, source } = build(schema);
 
     const N = 100_000;
 
-    bench(`ser ${name}`, () => ser(val), N);
-    const serVal = ser(val);
-    bench(`des ${name}`, () => des(serVal), N);
+    bench(`pack ${name}`, () => pack(val), N);
+    const serVal = pack(val);
+    bench(`unpack ${name}`, () => unpack(serVal), N);
 
     console.log('serVal:', serVal);
     console.log('serVal byteLength:', serVal.byteLength);
-    console.log('desVal:', des(serVal));
+    console.log('desVal:', unpack(serVal));
 
     // Convert BigInt to string for JSON serialization
     const jsonReplacer = (key, value) => typeof value === 'bigint' ? value.toString() : value;
