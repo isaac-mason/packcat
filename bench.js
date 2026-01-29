@@ -1,5 +1,4 @@
 import {
-    bitset,
     boolean,
     build,
     enumeration,
@@ -114,7 +113,11 @@ benchSchema('positions', positionsSchema, positionsVal);
 const playerInputSchema = object({
     frame: uint32(),
     nipple: list(float32(), 2),
-    buttons: bitset(['jump', 'sprint', 'crouch']),
+    buttons: object({
+        jump: boolean(),
+        sprint: boolean(),
+        crouch: boolean(),
+    }),
     cmd: list(
         union('type', [
             object({ type: literal('interact') }),

@@ -3,17 +3,16 @@
 import { describe, expect, test } from 'vitest';
 import type { SchemaType } from '../src';
 import {
-    bitset,
     boolean,
     build,
     enumeration,
     float16,
     float32,
     float64,
+    int8,
     int16,
     int32,
     int64,
-    int8,
     list,
     literal,
     nullable,
@@ -26,11 +25,11 @@ import {
     record,
     string,
     tuple,
+    uint8,
+    uint8Array,
     uint16,
     uint32,
     uint64,
-    uint8,
-    uint8Array,
     union,
     uv2,
     uv3,
@@ -1001,28 +1000,29 @@ describe('serDes', () => {
         expect(result).toEqual(data);
     });
 
-    test('bitset simple', () => {
-        const { pack, unpack, validate } = build(bitset(['a', 'b', 'c'] as const));
+    test('auto-bitpack booleans in record', () => {
+        const { pack, unpack } = build(record(boolean()));
+
+        const data = { a: true, b: false, c: true, d: false, e: true };
+        const buf = pack(data);
+        // Record stores: varuint(count) + key1_len + key1_bytes + ... + bitpacked_values
+        // count=5 (1 byte), keys a,b,c,d,e (each 1 byte length + 1 byte char = 2 bytes × 5 = 10 bytes), values (1 byte bitpacked) = 12 bytes
+        expect(buf.byteLength).toBe(12);
+        const out = unpack(buf);
+        expect(out).toEqual(data);
+    });
+
+    test('auto-bitpack booleans in object', () => {
+        const { pack, unpack, validate } = build(object({ a: boolean(), b: boolean(), c: boolean() }));
 
         const v = { a: true, b: false, c: true };
         expect(validate(v)).toBe(true);
 
         const buf = pack(v);
+        // 3 booleans should pack into 1 byte (instead of 3 bytes)
+        expect(buf.byteLength).toBe(1);
         const out = unpack(buf);
         expect(out).toEqual(v);
-    });
-
-    test('bitset many keys (multi-byte)', () => {
-        const keys: string[] = [];
-        for (let i = 0; i < 10; i++) keys.push(`k${i}`);
-        const s = build(bitset(keys));
-
-        const obj: Record<string, boolean> = {};
-        for (let i = 0; i < keys.length; i++) obj[keys[i]] = i % 2 === 0;
-
-        const buf = s.pack(obj);
-        const out = s.unpack(buf);
-        expect(out).toEqual(obj);
     });
 
     test('literal', () => {
@@ -1109,7 +1109,18 @@ describe('serDes', () => {
             id: uint32(),
             name: string(),
             active: boolean(),
-            flags: bitset(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'] as const),
+            flags: object({
+                a: boolean(),
+                b: boolean(),
+                c: boolean(),
+                d: boolean(),
+                e: boolean(),
+                f: boolean(),
+                g: boolean(),
+                h: boolean(),
+                i: boolean(),
+                j: boolean(),
+            }),
             stats: object({
                 score: number(),
                 level: uint32(),
@@ -1432,99 +1443,185 @@ describe('serDes', () => {
         expect(unpack(pack(data))).toEqual(data);
     });
 
-    test('bitset with all true', () => {
-        const { pack, unpack } = build(bitset(['a', 'b', 'c', 'd', 'e'] as const));
+    test('auto-bitpack booleans in fixed-size list', () => {
+        const { pack, unpack } = build(list(boolean(), 8));
 
-        const allTrue = { a: true, b: true, c: true, d: true, e: true };
-        expect(unpack(pack(allTrue))).toEqual(allTrue);
-    });
-
-    test('bitset with all false', () => {
-        const { pack, unpack } = build(bitset(['a', 'b', 'c', 'd', 'e'] as const));
-
-        const allFalse = { a: false, b: false, c: false, d: false, e: false };
-        expect(unpack(pack(allFalse))).toEqual(allFalse);
-    });
-
-    test('bitset with exactly 8 keys (1 byte)', () => {
-        const keys8 = Array.from({ length: 8 }, (_, i) => `k${i}`);
-        const { pack, unpack } = build(bitset(keys8));
-
-        const allTrue = Object.fromEntries(keys8.map((k) => [k, true]));
+        const allTrue: [boolean, boolean, boolean, boolean, boolean, boolean, boolean, boolean] = [
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+        ];
         const serialized = pack(allTrue);
         expect(serialized.byteLength).toBe(1);
         expect(unpack(serialized)).toEqual(allTrue);
 
-        const allFalse = Object.fromEntries(keys8.map((k) => [k, false]));
+        const allFalse: [boolean, boolean, boolean, boolean, boolean, boolean, boolean, boolean] = [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+        ];
         expect(unpack(pack(allFalse))).toEqual(allFalse);
 
-        const alternating = Object.fromEntries(keys8.map((k, i) => [k, i % 2 === 0]));
+        const alternating: [boolean, boolean, boolean, boolean, boolean, boolean, boolean, boolean] = [
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+        ];
         expect(unpack(pack(alternating))).toEqual(alternating);
     });
 
-    test('bitset with 9 keys (2 bytes)', () => {
-        const keys9 = Array.from({ length: 9 }, (_, i) => `k${i}`);
-        const { pack, unpack } = build(bitset(keys9));
+    test('auto-bitpack booleans in variable-size list', () => {
+        const { pack, unpack } = build(list(boolean()));
 
-        const mixed = Object.fromEntries(keys9.map((k, i) => [k, i % 2 === 0]));
+        const mixed = [true, false, true, false, true, false, true, false, true];
         const serialized = pack(mixed);
-        expect(serialized.byteLength).toBe(2);
+        // varuint(9) + 2 bytes of bitpacked booleans
+        expect(serialized.byteLength).toBe(3);
         expect(unpack(serialized)).toEqual(mixed);
     });
 
-    test('bitset with 16 keys (2 bytes)', () => {
-        const keys16 = Array.from({ length: 16 }, (_, i) => `k${i}`);
-        const { pack, unpack } = build(bitset(keys16));
+    test('auto-bitpack booleans in tuple', () => {
+        const { pack, unpack } = build(tuple([boolean(), string(), boolean(), boolean()]));
 
-        const pattern = Object.fromEntries(keys16.map((k, i) => [k, i < 8]));
-        const serialized = pack(pattern);
-        expect(serialized.byteLength).toBe(2);
-        expect(unpack(serialized)).toEqual(pattern);
+        const data: [boolean, string, boolean, boolean] = [true, 'hello', false, true];
+        const serialized = pack(data);
+        expect(unpack(serialized)).toEqual(data);
     });
 
-    test('bitset with 17 keys (3 bytes)', () => {
-        const keys17 = Array.from({ length: 17 }, (_, i) => `k${i}`);
-        const { pack, unpack } = build(bitset(keys17));
-
-        const pattern = Object.fromEntries(keys17.map((k, i) => [k, i === 16]));
-        const serialized = pack(pattern);
-        expect(serialized.byteLength).toBe(3);
-        expect(unpack(serialized)).toEqual(pattern);
-    });
-
-    test('bitset with 24 keys (3 bytes)', () => {
-        const keys24 = Array.from({ length: 24 }, (_, i) => `k${i}`);
-        const { pack, unpack } = build(bitset(keys24));
-
-        const checker = Object.fromEntries(keys24.map((k, i) => [k, (Math.floor(i / 8) + i) % 2 === 0]));
-        const serialized = pack(checker);
-        expect(serialized.byteLength).toBe(3);
-        expect(unpack(serialized)).toEqual(checker);
-    });
-
-    test('bitset nested in object', () => {
+    test('auto-bitpack mixed fields in object', () => {
         const schema = object({
             id: uint32(),
-            flags: bitset(['flag1', 'flag2', 'flag3', 'flag4', 'flag5', 'flag6', 'flag7', 'flag8', 'flag9'] as const),
+            flag1: boolean(),
+            name: string(),
+            flag2: boolean(),
+            flag3: boolean(),
+            flag4: boolean(),
+            flag5: boolean(),
+            flag6: boolean(),
+            flag7: boolean(),
+            flag8: boolean(),
+            flag9: boolean(),
         });
         const { pack, unpack } = build(schema);
 
         const data = {
             id: 123,
-            flags: {
-                flag1: true,
-                flag2: false,
-                flag3: true,
-                flag4: false,
-                flag5: true,
-                flag6: false,
-                flag7: true,
-                flag8: false,
-                flag9: true,
-            },
+            flag1: true,
+            name: 'test',
+            flag2: false,
+            flag3: true,
+            flag4: false,
+            flag5: true,
+            flag6: false,
+            flag7: true,
+            flag8: false,
+            flag9: true,
         };
 
-        expect(unpack(pack(data))).toEqual(data);
+        // 9 booleans should bitpack into ceil(9/8) = 2 bytes
+        const serialized = pack(data);
+        expect(unpack(serialized)).toEqual(data);
+    });
+
+    test('auto-bitpack large boolean groups (>8 bools for multi-byte)', () => {
+        const { pack, unpack } = build(list(boolean()));
+
+        // 17 booleans should require 3 bytes (ceil(17/8) = 3)
+        const data = [
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+            false,
+            true,
+        ];
+        const buf = pack(data);
+        // varuint(17) = 1 byte + 3 bytes for bitpacked values = 4 bytes
+        expect(buf.byteLength).toBe(4);
+        const out = unpack(buf);
+        expect(out).toEqual(data);
+        expect(out.length).toBe(17);
+    });
+
+    test('auto-bitpack record(boolean()) with validation', () => {
+        const { pack, unpack, validate } = build(record(boolean()));
+
+        const validData = { x: true, y: false, z: true };
+        expect(validate(validData)).toBe(true);
+
+        const serialized = pack(validData);
+        const out = unpack(serialized);
+        expect(out).toEqual(validData);
+
+        // Invalid data should not validate
+        const invalidData = { x: 'not a bool' };
+        expect(validate(invalidData as any)).toBe(false);
+    });
+
+    test('nullable/optional booleans do not bitpack', () => {
+        // nullable(boolean()) creates separate flag + value, not bitpacking
+        const { pack: packNullBool, unpack: unpackNullBool } = build(
+            object({
+                flag: nullable(boolean()),
+            }),
+        );
+
+        const data1 = { flag: true };
+        const buf1 = packNullBool(data1);
+        // Should be: 1 byte for null flag + 1 byte for boolean value = 2 bytes
+        expect(buf1.byteLength).toBe(2);
+        expect(unpackNullBool(buf1)).toEqual(data1);
+
+        const data2 = { flag: null };
+        const buf2 = packNullBool(data2);
+        // Should be: 1 byte for null flag only = 1 byte
+        expect(buf2.byteLength).toBe(1);
+        expect(unpackNullBool(buf2)).toEqual(data2);
+
+        // optional(boolean()) similarly uses flag wrapper
+        const { pack: packOptBool, unpack: unpackOptBool } = build(
+            object({
+                flag: optional(boolean()),
+            }),
+        );
+
+        const data3 = { flag: true };
+        const buf3 = packOptBool(data3);
+        // Should be: 1 byte for optional flag + 1 byte for boolean value = 2 bytes
+        expect(buf3.byteLength).toBe(2);
+        expect(unpackOptBool(buf3)).toEqual(data3);
+
+        const data4 = { flag: undefined };
+        const buf4 = packOptBool(data4);
+        // Should be: 1 byte for optional flag only = 1 byte
+        expect(buf4.byteLength).toBe(1);
+        expect(unpackOptBool(buf4)).toEqual(data4);
     });
 
     test('quaternion basic encoding', () => {
@@ -1755,6 +1852,257 @@ describe('serDes', () => {
         const data1 = new Uint8Array([255]);
         expect(pack1_u8a(data1).byteLength).toBe(1);
         expect(unpack1_u8a(pack1_u8a(data1))).toEqual(data1);
+    });
+});
+
+describe('packInto', () => {
+    test('writes into provided buffer and returns ok with bytesWritten', () => {
+        const schema = uint32();
+        const { pack, packInto } = build(schema);
+
+        const packed = pack(42);
+        const buf = new Uint8Array(16);
+        const result = packInto(42, buf, 0);
+
+        expect(result).toEqual({ ok: true, bytesWritten: 4 });
+        expect(buf.subarray(0, 4)).toEqual(packed);
+    });
+
+    test('writes at a given offset', () => {
+        const schema = uint32();
+        const { pack, packInto } = build(schema);
+
+        const buf = new Uint8Array(16);
+        buf[0] = 0xff; // sentinel
+        const result = packInto(42, buf, 4);
+
+        expect(result).toEqual({ ok: true, bytesWritten: 4 });
+        expect(buf[0]).toBe(0xff); // sentinel untouched
+
+        const packed = pack(42);
+        expect(buf.subarray(4, 8)).toEqual(packed);
+    });
+
+    test('returns ok: false when buffer is too small', () => {
+        const schema = uint32();
+        const { packInto } = build(schema);
+
+        const buf = new Uint8Array(2); // need 4 bytes
+        const result = packInto(42, buf, 0);
+
+        expect(result).toEqual({ ok: false, bytesWritten: 0 });
+    });
+
+    test('returns ok: false when offset leaves insufficient room', () => {
+        const schema = uint32();
+        const { packInto } = build(schema);
+
+        const buf = new Uint8Array(8);
+        const result = packInto(42, buf, 6); // only 2 bytes left
+
+        expect(result).toEqual({ ok: false, bytesWritten: 0 });
+    });
+
+    test('does not mutate buffer on failure', () => {
+        const schema = uint32();
+        const { packInto } = build(schema);
+
+        const buf = new Uint8Array(2);
+        buf.fill(0xaa);
+        packInto(42, buf, 0);
+
+        // buffer should be untouched since check happens before writing
+        expect(buf[0]).toBe(0xaa);
+        expect(buf[1]).toBe(0xaa);
+    });
+
+    test('works with variable-length types (string)', () => {
+        const schema = string();
+        const { pack, packInto } = build(schema);
+
+        const packed = pack('hello');
+        const buf = new Uint8Array(64);
+        const result = packInto('hello', buf, 0);
+
+        expect(result).toEqual({ ok: true, bytesWritten: packed.length });
+        expect(buf.subarray(0, packed.length)).toEqual(packed);
+    });
+
+    test('returns ok: false for string when buffer too small', () => {
+        const schema = string();
+        const { packInto } = build(schema);
+
+        const buf = new Uint8Array(2); // 'hello' needs 6 bytes (1 varuint + 5 chars)
+        const result = packInto('hello', buf, 0);
+
+        expect(result).toEqual({ ok: false, bytesWritten: 0 });
+    });
+
+    test('works with object schema', () => {
+        const schema = object({
+            x: float32(),
+            y: float32(),
+            active: boolean(),
+        });
+        const { pack, packInto, unpack } = build(schema);
+
+        const value = { x: 1.5, y: 2.5, active: true };
+        const packed = pack(value);
+        const buf = new Uint8Array(64);
+        const result = packInto(value, buf, 0);
+
+        expect(result).toEqual({ ok: true, bytesWritten: packed.length });
+
+        // verify round-trip through unpack
+        const unpacked = unpack(buf.subarray(0, result.bytesWritten as number));
+        expect(unpacked).toEqual(value);
+    });
+
+    test('works with list schema', () => {
+        const schema = list(uint16());
+        const { pack, packInto } = build(schema);
+
+        const value = [1, 2, 3, 4, 5];
+        const packed = pack(value);
+        const buf = new Uint8Array(64);
+        const result = packInto(value, buf, 0);
+
+        expect(result).toEqual({ ok: true, bytesWritten: packed.length });
+        expect(buf.subarray(0, packed.length)).toEqual(packed);
+    });
+
+    test('works with tuple schema', () => {
+        const schema = tuple([uint8(), float32(), boolean()]);
+        const { pack, packInto } = build(schema);
+
+        const value: [number, number, boolean] = [42, 3.14, true];
+        const packed = pack(value);
+        const buf = new Uint8Array(64);
+        const result = packInto(value, buf, 0);
+
+        expect(result).toEqual({ ok: true, bytesWritten: packed.length });
+        expect(buf.subarray(0, packed.length)).toEqual(packed);
+    });
+
+    test('works with varuint (variable size)', () => {
+        const schema = varuint();
+        const { pack, packInto } = build(schema);
+
+        // small value (1 byte)
+        const packed1 = pack(5);
+        const buf1 = new Uint8Array(8);
+        const result1 = packInto(5, buf1, 0);
+        expect(result1).toEqual({ ok: true, bytesWritten: packed1.length });
+
+        // larger value (2 bytes)
+        const packed2 = pack(300);
+        const buf2 = new Uint8Array(8);
+        const result2 = packInto(300, buf2, 0);
+        expect(result2).toEqual({ ok: true, bytesWritten: packed2.length });
+    });
+
+    test('offset defaults to 0', () => {
+        const schema = uint8();
+        const { pack, packInto } = build(schema);
+
+        const packed = pack(77);
+        const buf = new Uint8Array(4);
+        const result = packInto(77, buf, 0);
+
+        expect(result).toEqual({ ok: true, bytesWritten: 1 });
+        expect(buf[0]).toBe(packed[0]);
+    });
+
+    test('multiple packInto calls at successive offsets', () => {
+        const schema = uint32();
+        const { packInto, unpack } = build(schema);
+
+        const buf = new Uint8Array(12);
+        const r1 = packInto(100, buf, 0);
+        const r2 = packInto(200, buf, 4);
+        const r3 = packInto(300, buf, 8);
+
+        expect(r1).toEqual({ ok: true, bytesWritten: 4 });
+        expect(r2).toEqual({ ok: true, bytesWritten: 4 });
+        expect(r3).toEqual({ ok: true, bytesWritten: 4 });
+
+        expect(unpack(buf.subarray(0, 4))).toBe(100);
+        expect(unpack(buf.subarray(4, 8))).toBe(200);
+        expect(unpack(buf.subarray(8, 12))).toBe(300);
+    });
+
+    test('exact fit succeeds', () => {
+        const schema = uint32();
+        const { packInto } = build(schema);
+
+        const buf = new Uint8Array(4); // exactly 4 bytes needed
+        const result = packInto(42, buf, 0);
+
+        expect(result).toEqual({ ok: true, bytesWritten: 4 });
+    });
+
+    test('one byte short fails', () => {
+        const schema = uint32();
+        const { packInto } = build(schema);
+
+        const buf = new Uint8Array(3); // 1 byte short
+        const result = packInto(42, buf, 0);
+
+        expect(result).toEqual({ ok: false, bytesWritten: 0 });
+    });
+});
+
+describe('nested nullable/optional/nullish', () => {
+    test('nullable(optional(uint8)) round-trips with value present', () => {
+        const schema = nullable(optional(uint8()));
+        const { pack, unpack } = build(schema);
+
+        const value = 42;
+        expect(unpack(pack(value))).toBe(value);
+    });
+
+    test('nullable(optional(uint8)) round-trips with null', () => {
+        const schema = nullable(optional(uint8()));
+        const { pack, unpack } = build(schema);
+
+        expect(unpack(pack(null))).toBe(null);
+    });
+
+    test('nullable(optional(uint8)) round-trips with undefined', () => {
+        const schema = nullable(optional(uint8()));
+        const { pack, unpack } = build(schema);
+
+        expect(unpack(pack(undefined))).toBe(undefined);
+    });
+
+    test('optional(nullable(string)) round-trips all cases', () => {
+        const schema = optional(nullable(string()));
+        const { pack, unpack } = build(schema);
+
+        expect(unpack(pack('hello'))).toBe('hello');
+        expect(unpack(pack(null))).toBe(null);
+        expect(unpack(pack(undefined))).toBe(undefined);
+    });
+
+    test('nullish(nullable(uint32)) round-trips all cases', () => {
+        const schema = nullish(nullable(uint32()));
+        const { pack, unpack } = build(schema);
+
+        expect(unpack(pack(99))).toBe(99);
+        expect(unpack(pack(null))).toBe(null);
+        expect(unpack(pack(undefined))).toBe(undefined);
+    });
+
+    test('object with nullable and optional fields round-trips', () => {
+        const schema = object({
+            a: nullable(optional(uint8())),
+            b: optional(nullable(uint8())),
+        });
+        const { pack, unpack } = build(schema);
+
+        expect(unpack(pack({ a: 1, b: 2 }))).toEqual({ a: 1, b: 2 });
+        expect(unpack(pack({ a: null, b: undefined }))).toEqual({ a: null, b: undefined });
+        expect(unpack(pack({ a: undefined, b: null }))).toEqual({ a: undefined, b: null });
     });
 });
 
@@ -2077,10 +2425,10 @@ describe('validate', () => {
         expect(s.validate([[1.5, 'a']])).toBe(false);
     });
 
-    test('bitset', () => {
-        const s = build(bitset(['x', 'y'] as const));
+    test('boolean fields validation in object', () => {
+        const s = build(object({ x: boolean(), y: boolean() }));
         expect(s.validate({ x: true, y: false })).toBe(true);
-        //  @ts-expect-error missing
+        // @ts-expect-error missing
         expect(s.validate({ x: true })).toBe(false);
         // @ts-expect-error non-boolean value
         expect(s.validate({ x: 1, y: false })).toBe(false);

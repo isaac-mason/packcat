@@ -110,11 +110,6 @@ export type Uint8ArraySchema = {
     length?: number;
 };
 
-export type BitSetSchema = {
-    type: 'bitset';
-    keys: string[];
-};
-
 export type LiteralSchema = {
     type: 'literal';
     value: SchemaType<PrimitiveSchema>;
@@ -183,7 +178,6 @@ export type Schema =
     | ObjectSchema
     | RecordSchema
     | Uint8ArraySchema
-    | BitSetSchema
     | UnionSchema
     | LiteralSchema
     | EnumerationSchema
@@ -271,7 +265,6 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
     S extends ObjectSchema ? Simplify<{ [K in keyof S['fields']]: SchemaType<S['fields'][K], DecrementDepth<Depth>> }> :
     S extends RecordSchema ? Record<string, SchemaType<S['field'], DecrementDepth<Depth>>> :
     S extends Uint8ArraySchema ? Uint8Array :
-    S extends BitSetSchema ? Record<S['keys'][number], boolean> :
     S extends LiteralSchema ? S['value'] :
     S extends EnumerationSchema ? S['values'][number] :
     S extends NullableSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | null :
@@ -585,23 +578,6 @@ export const record = <F extends Schema>(field: F): { type: 'record'; field: F }
  */
 export const uint8Array = (length?: number) => 
     length === undefined ? { type: 'uint8Array' as const } : { type: 'uint8Array' as const, length };
-
-/**
- * Bitset schema - compact storage for boolean flags.
- * 
- * Each key uses 1 bit. Stored as a variable number of bytes based on key count.
- * More efficient than storing individual booleans for multiple flags.
- * 
- * @param keys Array of flag names
- * @returns A bitset schema definition
- * 
- * @example
- * bitset(['hasShield', 'isInvincible', 'canFly', 'isGrounded'])
- * // Stores 4 flags in 1 byte
- */
-export const bitset = <Keys extends string[]>(keys: [...Keys]): { type: 'bitset'; keys: [...Keys] } => {
-    return { type: 'bitset', keys };
-};
 
 /**
  * Literal schema - constant value that doesn't need to be serialized.
