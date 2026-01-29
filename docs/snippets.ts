@@ -1,11 +1,15 @@
 /* SNIPPET_START: schema */
 import type { SchemaType } from 'packcat';
-import { boolean, bitset, float32, list, literal, object, uint32, union } from 'packcat';
+import { boolean, float32, list, literal, object, uint32, union } from 'packcat';
 
 const playerInputSchema = object({
     frame: uint32(),
     nipple: list(float32(), 2),
-    buttons: bitset(['jump', 'sprint', 'crouch'] as const),
+    buttons: object({
+        jump: boolean(),
+        sprint: boolean(),
+        crouch: boolean(),
+    }),
     cmd: list(
         union('type', [
             // literals are not included in the serialised data, only used for discrimination
@@ -22,7 +26,7 @@ type PlayerInputType = SchemaType<typeof playerInputSchema>;
 /* SNIPPET_START: serdes */
 import { build } from 'packcat';
 
-const { pack, unpack, validate } = build(playerInputSchema);
+const { pack, packInto, unpack, validate } = build(playerInputSchema);
 
 const playerInput: PlayerInputType = {
     frame: 1,
@@ -46,3 +50,14 @@ console.log(validate(playerInput)); // true
 // @ts-expect-error this doesn't conform to the schema type!
 console.log(validate({ foo: 'bar' })); // false
 /* SNIPPET_END: validate */
+
+/* SNIPPET_START: packInto */
+const buf = new Uint8Array(128);
+const result = packInto(playerInput, buf, 0);
+
+if (result.ok) {
+    console.log(`Packed ${result.bytesWritten} bytes into existing buffer`);
+} else {
+    console.log('Failed to pack into existing buffer');
+}
+/* SNIPPET_END: packInto */
