@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 0.2.0 (Unreleased)
+## 0.2.0
 
 - feat: re-worked schema pack and unpack code generation
 - feat: removed `bitset` schema type, replaced with automatic boolean bitpacking
