@@ -1,5 +1,157 @@
 import type { Schema, SchemaType } from './schema';
 
+export type PackIntoResult = { ok: true; bytesWritten: number } | { ok: false; bytesWritten: 0 };
+
+export function build<S extends Schema>(
+    schema: S,
+): {
+    pack: (value: SchemaType<S>) => Uint8Array;
+    packInto: (value: SchemaType<S>, u8: Uint8Array, offset: number) => PackIntoResult;
+    unpack: (u8: Uint8Array) => SchemaType<S>;
+    validate: (value: SchemaType<S>) => boolean;
+    source: { pack: string; unpack: string; validate: string; packInto: string };
+} {
+    const { pack: packSource, packInto: packIntoSource } = buildPack(schema);
+
+    const pack = new Function(
+        'textEncoder',
+        'f16',
+        'f16_u8',
+        'f32',
+        'f32_u8',
+        'f64',
+        'f64_u8',
+        'i64',
+        'i64_u8',
+        'u64',
+        'u64_u8',
+        'utf8Length',
+        'value',
+        packSource,
+    ).bind(null, textEncoder, f16, f16_u8, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8, utf8Length) as (
+        value: SchemaType<S>,
+    ) => Uint8Array;
+
+    const packInto = new Function(
+        'textEncoder',
+        'f16',
+        'f16_u8',
+        'f32',
+        'f32_u8',
+        'f64',
+        'f64_u8',
+        'i64',
+        'i64_u8',
+        'u64',
+        'u64_u8',
+        'utf8Length',
+        'value',
+        'u8',
+        'offset',
+        packIntoSource,
+    ).bind(null, textEncoder, f16, f16_u8, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8, utf8Length) as (
+        value: SchemaType<S>,
+        u8: Uint8Array,
+        offset: number,
+    ) => PackIntoResult;
+
+    const unpackSource = buildUnpack(schema);
+
+    const unpack = new Function(
+        'textDecoder',
+        'f16',
+        'f16_u8',
+        'f32',
+        'f32_u8',
+        'f64',
+        'f64_u8',
+        'i64',
+        'i64_u8',
+        'u64',
+        'u64_u8',
+        'u8',
+        unpackSource,
+    ).bind(null, textDecoder, f16, f16_u8, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8) as (
+        u8: Uint8Array,
+    ) => SchemaType<S>;
+
+    const validateSource = buildValidate(schema);
+
+    const validate = new Function('value', validateSource) as (value: SchemaType<S>) => boolean;
+
+    return {
+        pack,
+        packInto,
+        unpack,
+        validate,
+        source: { pack: packSource, unpack: unpackSource, validate: validateSource, packInto: packIntoSource },
+    };
+}
+
+function buildPack(schema: Schema): { pack: string; packInto: string } {
+    const ctx = createCtx();
+
+    let preamble = '';
+    preamble += 'let len = 0;';
+    preamble += 'let vint = 0;';
+    preamble += 'let vuint = 0;';
+    preamble += 'let keys;';
+    preamble += 'let val = 0;';
+
+    const calc = size(ctx, schema, 'value');
+    preamble += `let size = ${calc.fixed};`;
+    preamble += calc.code;
+
+    const body = pack(ctx, schema, 'value');
+
+    const packSource =
+        preamble +
+        'const arrayBuffer = new ArrayBuffer(size);' +
+        'let o = 0;' +
+        'const u8 = new Uint8Array(arrayBuffer); ' +
+        body +
+        'return u8;';
+
+    const packIntoSource =
+        preamble +
+        'let o = offset;' +
+        'if (o + size > u8.length) return { ok: false, bytesWritten: 0 };' +
+        body +
+        'return { ok: true, bytesWritten: size };';
+
+    return {
+        pack: packSource,
+        packInto: packIntoSource,
+    };
+}
+
+function buildUnpack(schema: Schema): string {
+    const ctx = createCtx();
+
+    let code = '';
+    code += 'let o = 0;';
+    code += 'let len = 0;';
+    code += 'let val = 0;';
+    code += 'let shift = 0;';
+    code += 'let byte = 0;';
+
+    code += 'let value;';
+    code += unpack(ctx, schema, 'value');
+    code += 'return value;';
+
+    return code;
+}
+
+function buildValidate(schema: Schema): string {
+    const ctx = createCtx();
+
+    let code = '';
+    code += validate(ctx, schema, 'value');
+    code += 'return true;';
+
+    return code;
+}
+
 const f16_buffer = new ArrayBuffer(2);
 const f16 = new Float16Array(f16_buffer);
 const f16_u8 = new Uint8Array(f16_buffer);
@@ -22,8 +174,6 @@ const u64_u8 = new Uint8Array(u64_buffer);
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
-
-let variableCounter = 0;
 
 function utf8Length(s: string) {
     let l = 0;
@@ -49,1280 +199,1114 @@ function utf8Length(s: string) {
     return l;
 }
 
-export function build<S extends Schema>(
-    schema: S,
-): {
-    pack: (value: SchemaType<S>) => Uint8Array;
-    unpack: (u8: Uint8Array) => SchemaType<S>;
-    validate: (value: SchemaType<S>) => boolean;
-    source: { pack: string; unpack: string; validate: string };
-} {
-    const packSource = buildPack(schema);
+type Context = {
+    counter: number;
+};
 
-    const pack = new Function('textEncoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'utf8Length', 'value', packSource).bind(
-        null,
-        textEncoder,
-        f16,
-        f16_u8,
-        f32,
-        f32_u8,
-        f64,
-        f64_u8,
-        i64,
-        i64_u8,
-        u64,
-        u64_u8,
-        utf8Length,
-    ) as (value: SchemaType<S>) => Uint8Array;
-
-    const unpackSource = buildUnpack(schema);
-
-    const unpack = new Function('textDecoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'u8', unpackSource).bind(
-        null,
-        textDecoder,
-        f16,
-        f16_u8,
-        f32,
-        f32_u8,
-        f64,
-        f64_u8,
-        i64,
-        i64_u8,
-        u64,
-        u64_u8,
-    ) as (u8: Uint8Array) => SchemaType<S>;
-
-    const validateSource = buildValidate(schema);
-
-    const validate = new Function('value', validateSource) as (value: SchemaType<S>) => boolean;
-
-    return { pack, unpack, validate, source: { pack: packSource, unpack: unpackSource, validate: validateSource } };
+function createCtx(): Context {
+    return { counter: 1 };
 }
 
-function buildPack(schema: Schema): string {
-    variableCounter = 1;
-    
-    let code = '';
+function variable(ctx: Context, str: string): string {
+    return str + ctx.counter++;
+}
 
-    code += 'let len = 0;';
-    code += 'let vint = 0;';
-    code += 'let vuint = 0;';
-    code += 'let keys;';
-    code += 'let val = 0;';
-    code += 'let textEncoderResult;';
-
-    type SizeCalc = { code: string; fixed: number };
-
-    function size(s: Schema, v: string): SizeCalc {
-        switch (s.type) {
-            case 'boolean':
-            case 'int8':
-            case 'uint8':
-                return { code: '', fixed: 1 };
-            case 'int16':
-            case 'uint16':
-            case 'float16':
-                return { code: '', fixed: 2 };
-            case 'int32':
-            case 'uint32':
-            case 'float32':
-                return { code: '', fixed: 4 };
-            case 'int64':
-            case 'uint64':
-            case 'float64':
-                return { code: '', fixed: 8 };
-            case 'quantized': {
-                // Calculate bits needed, round up to bytes
-                const steps = Math.ceil((s.max - s.min) / s.step);
-                const bits = Math.ceil(Math.log2(steps));
-                const bytes = Math.ceil(bits / 8);
-                return { code: '', fixed: bytes };
-            }
-            case 'quat': {
-                // Calculate bits from step, range is -1/√2 to 1/√2 (√2 total range)
-                const steps = Math.ceil(Math.SQRT2 / s.step);
-                const bits = Math.ceil(Math.log2(steps));
-                
-                // 1 byte metadata + component bytes
-                let bytes = 1; // metadata byte
-                if (bits <= 8) {
-                    bytes += 3; // 3 components x 1 byte each
-                } else if (bits <= 16) {
-                    bytes += 6; // 3 components x 2 bytes each
-                } else {
-                    bytes += 12; // 3 components x 4 bytes each
-                }
-                return { code: '', fixed: bytes };
-            }
-            case 'uv2': {
-                // Calculate bits from step, range is 0 to 2π
-                const steps = Math.ceil((Math.PI * 2) / s.step);
-                const bits = Math.ceil(Math.log2(steps));
-                const bytes = Math.ceil(bits / 8);
-                return { code: '', fixed: bytes };
-            }
-            case 'uv3': {
-                // Calculate bits from step, range is -1/√2 to 1/√2 (√2 total range)
-                const steps = Math.ceil(Math.SQRT2 / s.step);
-                const bits = Math.ceil(Math.log2(steps));
-                
-                // 2 bits for index + 1 bit for sign + (bits * 2) for components
-                const totalBits = 2 + 1 + bits * 2;
-                const bytes = Math.ceil(totalBits / 8);
-                return { code: '', fixed: bytes };
-            }
-            case 'string': {
-                const strVar = variable('str');
-                const code = `const ${strVar} = ${v}; len = utf8Length(${strVar}); ${varuintSize('len')} size += len;`;
-                return { code, fixed: 0 };
-            }
-            case 'varint': {
-                return { code: varintSize(v), fixed: 0 };
-            }
-            case 'varuint': {
-                return { code: varuintSize(v), fixed: 0 };
-            }
-            case 'uint8Array': {
-                if ('length' in s && typeof s.length === 'number') {
-                    // fixed-length: just the bytes
-                    return { code: '', fixed: s.length };
-                }
-                // variable-length: varuint length prefix followed by raw bytes
-                const lenVar = variable('len');
-                return { code: `const ${lenVar} = ${v}.length; ${varuintSize(lenVar)} size += ${lenVar};`, fixed: 0 };
-            }
-            case 'list': {
-                if ('length' in s && typeof s.length === 'number') {
-                    // fixed-length list: each element exists at compile time
-                    const i = variable('i');
-                    const elem = size(s.of, `${v}[${i}]`);
-                    // if the element is fully fixed-size, we can compute total size at compile time
-                    if (elem.code === '' && elem.fixed > 0) {
-                        return { code: '', fixed: elem.fixed * s.length };
-                    }
-                    // element-wise computation at runtime for dynamic parts
-                    const inner = `for (let ${i} = 0; ${i} < ${s.length}; ${i}++) { ${elem.code} }`;
-                    return { code: inner, fixed: 0 };
-                } else {
-                    // variable-length list: include varuint length prefix and per-element dynamic parts
-                    const i = variable('i');
-                    const lenVar = variable('len');
-                    const elem = size(s.of, `${v}[${i}]`);
-
-                    let parts = '';
-                    parts += `const ${lenVar} = ${v}.length;`;
-                    parts += varuintSize(lenVar);
-                    if (elem.fixed > 0) {
-                        // account for unconditional fixed bytes per element
-                        parts += `size += ${elem.fixed} * ${lenVar};`;
-                    }
-                    if (elem.code && elem.code !== '') {
-                        parts += `for (let ${i} = 0; ${i} < ${lenVar}; ${i}++) { ${elem.code} }`;
-                    }
-
-                    return { code: parts, fixed: 0 };
-                }
-            }
-            case 'literal': {
-                // literal values are known ahead-of-time and are not serialized at all.
-                // they contribute zero bytes to the encoded form and when deserialising
-                // we simply inject the known value.
-                return { code: '', fixed: 0 };
-            }
-            case 'object': {
-                // sum all unconditional fixed child sizes into fixed; collect dynamic parts separately.
-                let fixed = 0;
-                const parts: string[] = [];
-                // Sort keys for deterministic serialization order
-                const sortedKeys = Object.keys(s.fields).sort();
-                for (const k of sortedKeys) {
-                    const f = s.fields[k];
-                    const child = size(f, `${v}[${JSON.stringify(k)}]`);
-                    // always accumulate unconditional fixed bytes
-                    fixed += child.fixed;
-                    if (child.code !== '') {
-                        parts.push(child.code);
-                    }
-                }
-                return { code: parts.join(' '), fixed };
-            }
-            case 'tuple': {
-                let fixed = 0;
-                const parts: string[] = [];
-                for (let i = 0; i < s.of.length; i++) {
-                    const child = size(s.of[i], `${v}[${i}]`);
-                    fixed += child.fixed;
-                    if (child.code !== '') {
-                        parts.push(child.code);
-                    }
-                }
-                return { code: parts.join(' '), fixed };
-            }
-            case 'record': {
-                const i = variable('i');
-                const keys = variable('keys');
-                const keysLen = variable('keysLen');
-
-                const childSize = size(s.field, `${v}[k]`);
-
-                let inner = '';
-                inner += `if (${v} && typeof ${v} === 'object') {`;
-                inner += `const ${keys} = Object.keys(${v});`;
-                inner += `const ${keysLen} = ${keys}.length;`;
-                inner += `${varuintSize(keysLen)}`;
-                if (childSize.fixed > 0) {
-                    inner += ` size += ${childSize.fixed} * ${keysLen}; `;
-                }
-                const strVar = variable('str');
-                inner += `for (let ${i} = 0; ${i} < ${keysLen}; ${i}++) { const k = ${keys}[${i}]; const ${strVar} = k; len = utf8Length(${strVar}); ${varuintSize('len')} size += len; `;
-                if (childSize.code !== '') {
-                    inner += childSize.code;
-                }
-                inner += `}}`;
-                return { code: inner, fixed: 0 };
-            }
-            case 'bitset': {
-                const bytes = Math.ceil(s.keys.length / 8);
-                return { code: '', fixed: bytes };
-            }
-            case 'nullable': {
-                const child = size(s.of, v);
-
-                let inner = '';
-                inner += `if (${v} !== null) {`;
-                inner += child.code;
-                inner += `size += ${child.fixed};`;
-                inner += `}`;
-
-                return { code: inner, fixed: 1 };
-            }
-            case 'optional': {
-                const child = size(s.of, v);
-
-                let inner = '';
-                inner += `if (${v} !== undefined) {`;
-                inner += child.code;
-                inner += `size += ${child.fixed};`;
-                inner += `}`;
-
-                return { code: inner, fixed: 1 };
-            }
-            case 'nullish': {
-                const child = size(s.of, v);
-
-                let inner = '';
-                inner += `if (${v} !== null && ${v} !== undefined) {`;
-                inner += child.code;
-                inner += `size += ${child.fixed};`;
-                inner += `}`;
-
-                return { code: inner, fixed: 1 };
-            }
-            case 'union': {
-                // discriminated union: each variant MUST have a literal
-                // discriminant in the field `s.key`. At runtime we compare the
-                // object's discriminant value against those literals and add
-                // the size for the matching variant. We encode a varuint tag
-                // (the variant index) followed by the variant data.
-                const keyVar = variable('keyVal');
-
-                let inner = '';
-                inner += `const ${keyVar} = ${v}[${JSON.stringify(s.key)}];`;
-
-                // build an if/else chain comparing the discriminant to each
-                // variant's literal value. Throw at runtime if no variant
-                // matches.
-                for (let i = 0; i < s.variants.length; i++) {
-                    const variant = s.variants[i];
-                    const disc = variant.fields[s.key];
-
-                    if (disc.type !== 'literal') {
-                        throw new Error('Union discriminant must be a literal in every variant');
-                    }
-
-                    const discriminant = disc.value;
-                    const elem = size(variant, v);
-
-                    inner += ` ${i !== 0 ? 'else' : ''} if (${keyVar} === ${JSON.stringify(discriminant)}) { ${varuintSize(i.toString())} size += ${elem.fixed}; ${elem.code} }`;
-                }
-
-                inner += ` else { throw new Error('Invalid discriminant for union key: ' + ${keyVar}); }`;
-
-                return { code: inner, fixed: 0 };
-            }
-            case 'enumeration': {
-                // find value index and calculate varuint size
-                let inner = '';
-                for (let i = 0; i < s.values.length; i++) {
-                    const prefix = i === 0 ? 'if' : ' else if';
-                    inner += `${prefix} (${v} === ${JSON.stringify(s.values[i])}) { ${varuintSize(i.toString())} }`;
-                }
-                inner += ` else { throw new Error('Invalid enum value: ' + ${v}); }`;
-                return { code: inner, fixed: 0 };
-            }
-            default: {
-                return {
-                    code: `throw new Error('Unsupported schema: ${s}');`,
-                    fixed: 0,
-                };
-            }
-        }
+function partition<T>(items: T[], pred: (item: T) => boolean): [T[], T[]] {
+    const yes: T[] = [];
+    const no: T[] = [];
+    for (const item of items) {
+        if (pred(item)) yes.push(item);
+        else no.push(item);
     }
+    return [yes, no];
+}
 
-    const calc = size(schema, 'value');
-
-    code += `let size = ${calc.fixed};`;
-    code += calc.code;
-
-    code += 'const arrayBuffer = new ArrayBuffer(size);';
-    code += 'let o = 0;';
-
-    code += 'const u8 = new Uint8Array(arrayBuffer); ';
-
-    function pack(s: Schema, v: string): string {
-        switch (s.type) {
-            case 'boolean':
-                return writeBool(v);
-            case 'int8':
-                return writeI8(v);
-            case 'uint8':
-                return writeU8(v);
-            case 'int16':
-                return writeI16(v);
-            case 'uint16':
-                return writeU16(v);
-            case 'int32':
-                return writeI32(v);
-            case 'uint32':
-                return writeU32(v);
-            case 'int64':
-                return writeI64(v);
-            case 'uint64':
-                return writeU64(v);
-            case 'float16':
-                return writeF16(v);
-            case 'float32':
-                return writeF32(v);
-            case 'float64':
-                return writeF64(v);
-            case 'quantized': {
-                // quantize value to discrete steps
-                const steps = Math.ceil((s.max - s.min) / s.step);
-                const bits = Math.ceil(Math.log2(steps));
-                const bytes = Math.ceil(bits / 8);
-                const maxVal = (1 << bits) - 1;
-                
-                const clampedVar = variable('clamped');
-                const quantVar = variable('quant');
-                
-                // clamp input value to [min, max] range, then quantize to step index
-                let code = `const ${clampedVar} = Math.max(${s.min}, Math.min(${s.max}, ${v}));`;
-                code += `const ${quantVar} = Math.max(0, Math.min(${maxVal}, Math.round((${clampedVar} - ${s.min}) / ${s.step})));`;
-                
-                if (bytes === 1) {
-                    code += writeU8(quantVar);
-                } else if (bytes === 2) {
-                    code += writeU16(quantVar);
-                } else if (bytes <= 4) {
-                    code += writeU32(quantVar);
-                } else {
-                    code += writeVaruint(quantVar);
-                }
-                
-                return code;
-            }
-            case 'quat': {
-                // Smallest-three encoding
-                // Calculate bits from step
-                const steps = Math.ceil(Math.SQRT2 / s.step);
-                const bits = Math.ceil(Math.log2(steps));
-                const maxVal = (1 << bits) - 1;
-                const scale = maxVal / Math.sqrt(2); // max component value is 1/√2
-                
-                const qx = `${v}[0]`;
-                const qy = `${v}[1]`;
-                const qz = `${v}[2]`;
-                const qw = `${v}[3]`;
-                
-                const ax = variable('ax');
-                const ay = variable('ay');
-                const az = variable('az');
-                const aw = variable('aw');
-                const maxIdx = variable('maxIdx');
-                const c0 = variable('c0');
-                const c1 = variable('c1');
-                const c2 = variable('c2');
-                const sign = variable('sign');
-                
-                let code = '';
-                // Find largest component by absolute value
-                code += `const ${ax} = Math.abs(${qx}), ${ay} = Math.abs(${qy}), ${az} = Math.abs(${qz}), ${aw} = Math.abs(${qw});`;
-                code += `let ${maxIdx} = 0;`;
-                code += `if (${ay} > ${ax}) ${maxIdx} = 1;`;
-                code += `if (${az} > (${maxIdx} === 0 ? ${ax} : ${ay})) ${maxIdx} = 2;`;
-                code += `if (${aw} > (${maxIdx} === 0 ? ${ax} : ${maxIdx} === 1 ? ${ay} : ${az})) ${maxIdx} = 3;`;
-                
-                // Get the three smallest components and the sign of largest
-                code += `let ${c0}, ${c1}, ${c2}, ${sign};`;
-                code += `if (${maxIdx} === 0) { ${c0} = ${qy}; ${c1} = ${qz}; ${c2} = ${qw}; ${sign} = ${qx} < 0 ? 1 : 0; }`;
-                code += `else if (${maxIdx} === 1) { ${c0} = ${qx}; ${c1} = ${qz}; ${c2} = ${qw}; ${sign} = ${qy} < 0 ? 1 : 0; }`;
-                code += `else if (${maxIdx} === 2) { ${c0} = ${qx}; ${c1} = ${qy}; ${c2} = ${qw}; ${sign} = ${qz} < 0 ? 1 : 0; }`;
-                code += `else { ${c0} = ${qx}; ${c1} = ${qy}; ${c2} = ${qz}; ${sign} = ${qw} < 0 ? 1 : 0; }`;
-                
-                // Quantize components
-                code += `${c0} = Math.max(0, Math.min(${maxVal}, Math.round((${c0} + ${1 / Math.sqrt(2)}) * ${scale})));`;
-                code += `${c1} = Math.max(0, Math.min(${maxVal}, Math.round((${c1} + ${1 / Math.sqrt(2)}) * ${scale})));`;
-                code += `${c2} = Math.max(0, Math.min(${maxVal}, Math.round((${c2} + ${1 / Math.sqrt(2)}) * ${scale})));`;
-                
-                // Write metadata byte (2 bits index + 1 bit sign)
-                code += `u8[o++] = (${maxIdx} << 1) | ${sign};`;
-                
-                // Write components based on bit size
-                if (bits <= 8) {
-                    // Components fit in 1 byte each
-                    code += `u8[o++] = ${c0};`;
-                    code += `u8[o++] = ${c1};`;
-                    code += `u8[o++] = ${c2};`;
-                } else if (bits <= 16) {
-                    // Components need 2 bytes each
-                    code += writeU16(c0);
-                    code += writeU16(c1);
-                    code += writeU16(c2);
-                } else {
-                    // Fallback: write as 32-bit
-                    code += writeU32(c0);
-                    code += writeU32(c1);
-                    code += writeU32(c2);
-                }
-                
-                return code;
-            }
-            case 'uv2': {
-                // Encode as angle
-                // Calculate bits from step
-                const steps = Math.ceil((Math.PI * 2) / s.step);
-                const bits = Math.ceil(Math.log2(steps));
-                const maxVal = (1 << bits) - 1;
-                const angle = variable('angle');
-                const quantized = variable('quant');
-                
-                let code = '';
-                // atan2 returns [-π, π], normalize to [0, 2π]
-                code += `let ${angle} = Math.atan2(${v}[1], ${v}[0]);`;
-                code += `if (${angle} < 0) ${angle} += ${Math.PI * 2};`;
-                code += `const ${quantized} = Math.round(${angle} / ${Math.PI * 2} * ${maxVal}) & ${maxVal};`;
-                
-                const bytes = Math.ceil(bits / 8);
-                if (bytes === 1) {
-                    code += writeU8(quantized);
-                } else if (bytes === 2) {
-                    code += writeU16(quantized);
-                } else {
-                    code += writeU32(quantized);
-                }
-                
-                return code;
-            }
-            case 'uv3': {
-                // Smallest-two encoding (similar to quaternion)
-                // Calculate bits from step
-                const steps = Math.ceil(Math.SQRT2 / s.step);
-                const bits = Math.ceil(Math.log2(steps));
-                const maxVal = (1 << bits) - 1;
-                const scale = maxVal / Math.sqrt(2);
-                
-                const vx = `${v}[0]`;
-                const vy = `${v}[1]`;
-                const vz = `${v}[2]`;
-                
-                const ax = variable('ax');
-                const ay = variable('ay');
-                const az = variable('az');
-                const maxIdx = variable('maxIdx');
-                const c0 = variable('c0');
-                const c1 = variable('c1');
-                const sign = variable('sign');
-                const packed = variable('packed');
-                
-                let code = '';
-                // Find largest component
-                code += `const ${ax} = Math.abs(${vx}), ${ay} = Math.abs(${vy}), ${az} = Math.abs(${vz});`;
-                code += `let ${maxIdx} = 0;`;
-                code += `if (${ay} > ${ax}) ${maxIdx} = 1;`;
-                code += `if (${az} > (${maxIdx} === 0 ? ${ax} : ${ay})) ${maxIdx} = 2;`;
-                
-                // Get two smallest components and sign of largest
-                code += `let ${c0}, ${c1}, ${sign};`;
-                code += `if (${maxIdx} === 0) { ${c0} = ${vy}; ${c1} = ${vz}; ${sign} = ${vx} < 0 ? 1 : 0; }`;
-                code += `else if (${maxIdx} === 1) { ${c0} = ${vx}; ${c1} = ${vz}; ${sign} = ${vy} < 0 ? 1 : 0; }`;
-                code += `else { ${c0} = ${vx}; ${c1} = ${vy}; ${sign} = ${vz} < 0 ? 1 : 0; }`;
-                
-                // Quantize
-                code += `${c0} = Math.max(0, Math.min(${maxVal}, Math.round((${c0} + ${1 / Math.sqrt(2)}) * ${scale})));`;
-                code += `${c1} = Math.max(0, Math.min(${maxVal}, Math.round((${c1} + ${1 / Math.sqrt(2)}) * ${scale})));`;
-                
-                // Pack
-                const totalBits = 2 + 1 + bits * 2;
-                const bytes = Math.ceil(totalBits / 8);
-                code += `let ${packed} = (${maxIdx} << ${totalBits - 2}) | (${sign} << ${totalBits - 3}) | (${c0} << ${bits}) | ${c1};`;
-                
-                // Write bytes
-                for (let i = bytes - 1; i >= 0; i--) {
-                    code += `u8[o++] = (${packed} >> ${i * 8}) & 0xFF;`;
-                }
-                
-                return code;
-            }
-            case 'string': 
-                return writeString(v);
-            case 'varint': 
-                return writeVarint(v);
-            case 'varuint':
-                return writeVaruint(v);
-            case 'uint8Array': {
-                if ('length' in s && typeof s.length === 'number') {
-                    // fixed-length: direct byte copy
-                    return `u8.set(${v}, o); o += ${s.length};`;
-                }
-                // variable-length: write varuint length then copy raw bytes
-                const lenVar = variable('len');
-                let inner = '';
-                inner += `const ${lenVar} = ${v}.length;`;
-                inner += writeVaruint(lenVar);
-                inner += `u8.set(${v}, o); o += ${lenVar};`;
-                return inner;
-            }
-            case 'list': {
-                if (s.length !== undefined) {
-                    // generate unrolled fixed-length list serialization
-                    let inner = '';
-                    for (let i = 0; i < s.length; i++) {
-                        inner += pack(s.of, `${v}[${i}]`);
-                    }
-                    return inner;
-                } else {
-                    // generate dynamic list serialization
-                    const i = variable('i');
-                    const lenVar = variable('len');
-
-                    let inner = '';
-                    inner += `const ${lenVar} = ${v}.length;`;
-                    inner += writeVaruint(lenVar);
-                    inner += `for (let ${i} = 0; ${i} < ${lenVar}; ${i}++) {`;
-                    inner += pack(s.of, `${v}[${i}]`);
-                    inner += '}';
-                    return inner;
-                }
-            }
-            case 'object': {
-                let out = '';
-                // Sort keys for deterministic serialization order
-                const sortedKeys = Object.keys(s.fields).sort();
-                for (const k of sortedKeys) {
-                    const f = s.fields[k];
-                    out += pack(f, `${v}[${JSON.stringify(k)}]`);
-                }
-                return out;
-            }
-            case 'literal': {
-                return ''; // do not write anything for literal - it's known
-            }
-            case 'tuple': {
-                let out = '';
-                for (let i = 0; i < s.of.length; i++) {
-                    out += pack(s.of[i], `${v}[${i}]`);
-                }
-                return out;
-            }
-            case 'record': {
-                const i = variable('i');
-                const keys = variable('keys');
-                const keysLen = variable('keysLen');
-                const keyVar = variable('key');
-                const valVar = variable('val');
-
-                let inner = '';
-                inner += `${keys} = Object.keys(${v});`;
-                inner += `${keysLen} = ${keys}.length;`;
-                inner += writeVaruint(keysLen);
-                inner += `for (let ${i} = 0; ${i} < ${keysLen}; ${i}++) {`;
-                inner += `const ${keyVar} = ${keys}[${i}];`;
-                inner += writeString(keyVar);
-                inner += `const ${valVar} = ${v}[${keyVar}];`;
-                inner += pack(s.field, valVar);
-                inner += `}`;
-                return inner;
-            }
-            case 'union': {
-                // write varuint tag followed by variant payload
-                const discriminant = variable('discriminant');
-                let inner = '';
-                inner += `const ${discriminant} = ${v}[${JSON.stringify(s.key)}];`;
-
-                for (let i = 0; i < s.variants.length; i++) {
-                    const variant = s.variants[i];
-                    const disc = variant.fields[s.key];
-                    if (!disc || (disc as any).type !== 'literal') {
-                        throw new Error('Union discriminant must be a literal in every variant');
-                    }
-                    const lit = (disc as any).value;
-
-                    if (i === 0) {
-                        inner += `if (${discriminant} === ${JSON.stringify(lit)}) { ${writeVaruint(i.toString())} ${pack(variant, v)} }`;
-                    } else {
-                        inner += ` else if (${discriminant} === ${JSON.stringify(lit)}) { ${writeVaruint(i.toString())} ${pack(variant, v)} }`;
-                    }
-                }
-
-                inner += ` else { throw new Error('Invalid discriminant for union key at serialize: ' + ${discriminant}); }`;
-
-                return inner;
-            }
-            case 'bitset': {
-                // pack keys into bitset, unrolled per-output-byte to avoid per-iteration modulo
-                const byteVar = variable('byte');
-                const objVar = variable('obj');
-
-                const total = s.keys.length;
-                const bytes = Math.ceil(total / 8);
-
-                let inner = '';
-                // hoist object reference to avoid repeated property chain lookups
-                inner += `const ${objVar} = ${v};`;
-                // declare the byte variable once to avoid redeclaration when unrolling bytes
-                inner += `let ${byteVar};`;
-                // for each output byte, check up to 8 keys and set bits accordingly
-                for (let b = 0; b < bytes; b++) {
-                    inner += `${byteVar} = 0;`;
-                    for (let bit = 0; bit < 8; bit++) {
-                        const idx = b * 8 + bit;
-                        if (idx >= total) break;
-                        // inline the static key name directly instead of referencing a runtime keys array
-                        inner += `if (${objVar}[${JSON.stringify(s.keys[idx])}]) ${byteVar} |= ${1 << bit};`;
-                    }
-                    inner += `u8[o++] = ${byteVar};`;
-                }
-
-                return inner;
-            }
-            case 'enumeration': {
-                // match value and write index as varuint
-                let inner = '';
-                for (let i = 0; i < s.values.length; i++) {
-                    const prefix = i === 0 ? 'if' : ' else if';
-                    inner += `${prefix} (${v} === ${JSON.stringify(s.values[i])}) { ${writeVaruint(i.toString())} }`;
-                }
-                inner += ` else { throw new Error('Invalid enum value at serialize: ' + ${v}); }`;
-                return inner;
-            }
-            case 'nullable': {
-                let inner = '';
-
-                inner += `if (${v} === null) {`;
-                inner += `u8[o++] = 0;`;
-                inner += `} else {`;
-                inner += `u8[o++] = 1;`;
-                inner += pack(s.of, v);
-                inner += `}`;
-
-                return inner;
-            }
-            case 'optional': {
-                let inner = '';
-
-                inner += `if (${v} === undefined) {`;
-                inner += `u8[o++] = 0;`;
-                inner += `} else {`;
-                inner += `u8[o++] = 1;`;
-                inner += pack(s.of, v);
-                inner += `}`;
-
-                return inner;
-            }
-            case 'nullish': {
-                let inner = '';
-
-                inner += `if (${v} === null) {`;
-                inner += `u8[o++] = 0;`;
-                inner += `} else if (${v} === undefined) {`;
-                inner += `u8[o++] = 1;`;
-                inner += `} else {`;
-                inner += `u8[o++] = 2;`;
-                inner += pack(s.of, v);
-                inner += `}`;
-
-                return inner;
-            }
-            default:
-                return `throw new Error('Unsupported schema: ${s}');`;
+/** static bitpack: compile-time known boolean refs */
+function emitBitPack(ctx: Context, boolRefs: Array<{ varRef: string }>): string {
+    if (boolRefs.length === 0) return '';
+    const bytes = Math.ceil(boolRefs.length / 8);
+    const byteVar = variable(ctx, 'byte');
+    let code = `let ${byteVar};`;
+    for (let b = 0; b < bytes; b++) {
+        code += `${byteVar} = 0;`;
+        for (let bit = 0; bit < 8; bit++) {
+            const idx = b * 8 + bit;
+            if (idx >= boolRefs.length) break;
+            code += `if (${boolRefs[idx].varRef}) ${byteVar} |= ${1 << bit};`;
         }
+        code += `u8[o++] = ${byteVar};`;
     }
-
-    code += pack(schema, 'value');
-
-    code += 'return u8;';
-
     return code;
 }
 
-function buildUnpack(schema: Schema): string {
-    variableCounter = 1;
-    
+/** static bitunpack: compile-time known boolean targets */
+function emitBitUnpack(ctx: Context, boolTargets: Array<{ target: string }>): string {
+    if (boolTargets.length === 0) return '';
+    const bytes = Math.ceil(boolTargets.length / 8);
     let code = '';
+    for (let b = 0; b < bytes; b++) {
+        const byteIdx = variable(ctx, 'bval');
+        code += `const ${byteIdx} = u8[o++];`;
+        for (let bit = 0; bit < 8; bit++) {
+            const idx = b * 8 + bit;
+            if (idx >= boolTargets.length) break;
+            code += `${boolTargets[idx].target} = (${byteIdx} & ${1 << bit}) !== 0;`;
+        }
+    }
+    return code;
+}
 
-    code += 'let o = 0;';
-    code += 'let len = 0;';
-    code += 'let val = 0;';
-    code += 'let shift = 0;';
-    code += 'let byte = 0;';
+type SizeCalc = { code: string; fixed: number };
 
-    function unpack(s: Schema, target: string): string {
-        switch (s.type) {
-            case 'boolean':
-                return readBool(target);
-            case 'int8':
-                return readI8(target);
-            case 'uint8':
-                return readU8(target);
-            case 'int16':
-                return readI16(target);
-            case 'uint16':
-                return readU16(target);
-            case 'int32':
-                return readI32(target);
-            case 'uint32':
-                return readU32(target);
-            case 'int64':
-                return readI64(target);
-            case 'uint64':
-                return readU64(target);
-            case 'float16':
-                return readF16(target);
-            case 'float32':
-                return readF32(target);
-            case 'float64':
-                return readF64(target);
-            case 'quantized': {
-                // read quantized value and dequantize
-                const steps = Math.ceil((s.max - s.min) / s.step);
-                const bits = Math.ceil(Math.log2(steps));
-                const bytes = Math.ceil(bits / 8);
-                
-                const quantVar = variable('quant');
-                let code = '';
-                
-                // read based on byte size
-                if (bytes === 1) {
-                    code += readU8(quantVar);
-                } else if (bytes === 2) {
-                    code += readU16(quantVar);
-                } else if (bytes <= 4) {
-                    code += readU32(quantVar);
-                } else {
-                    code += readVaruint(quantVar);
+type SchemaHandler<S> = {
+    size: (ctx: Context, s: S, v: string) => SizeCalc;
+    pack: (ctx: Context, s: S, v: string) => string;
+    unpack: (ctx: Context, s: S, target: string) => string;
+    validate: (ctx: Context, s: S, v: string) => string;
+};
+
+type Handlers = {
+    [K in Schema['type']]: SchemaHandler<Extract<Schema, { type: K }>>;
+};
+
+function size(ctx: Context, s: Schema, v: string): SizeCalc {
+    return (handlers[s.type] as SchemaHandler<Schema>).size(ctx, s, v);
+}
+
+function pack(ctx: Context, s: Schema, v: string): string {
+    return (handlers[s.type] as SchemaHandler<Schema>).pack(ctx, s, v);
+}
+
+function unpack(ctx: Context, s: Schema, target: string): string {
+    return (handlers[s.type] as SchemaHandler<Schema>).unpack(ctx, s, target);
+}
+
+function validate(ctx: Context, s: Schema, v: string): string {
+    return (handlers[s.type] as SchemaHandler<Schema>).validate(ctx, s, v);
+}
+
+/** creates a handler for a fixed-size numeric type */
+function fixedHandler<S>(
+    bytes: number,
+    packFn: (v: string) => string,
+    unpackFn: (t: string) => string,
+    validateCode: (v: string) => string,
+): SchemaHandler<S> {
+    return {
+        size: () => ({ code: '', fixed: bytes }),
+        pack: (_ctx, _s, v) => packFn(v),
+        unpack: (_ctx, _s, t) => unpackFn(t),
+        validate: (_ctx, _s, v) => validateCode(v),
+    };
+}
+
+const handlers: Handlers = {
+    boolean: fixedHandler(1, writeBool, readBool, (v) => `if (typeof ${v} !== 'boolean') return false;`),
+    int8: fixedHandler(
+        1,
+        writeI8,
+        readI8,
+        (v) => `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < -128 || ${v} > 127) return false;`,
+    ),
+    uint8: fixedHandler(
+        1,
+        writeU8,
+        readU8,
+        (v) => `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < 0 || ${v} > 255) return false;`,
+    ),
+    int16: fixedHandler(
+        2,
+        writeI16,
+        readI16,
+        (v) => `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < -32768 || ${v} > 32767) return false;`,
+    ),
+    uint16: fixedHandler(
+        2,
+        writeU16,
+        readU16,
+        (v) => `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < 0 || ${v} > 65535) return false;`,
+    ),
+    int32: fixedHandler(
+        4,
+        writeI32,
+        readI32,
+        (v) =>
+            `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < -2147483648 || ${v} > 2147483647) return false;`,
+    ),
+    uint32: fixedHandler(
+        4,
+        writeU32,
+        readU32,
+        (v) => `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < 0 || ${v} > 4294967295) return false;`,
+    ),
+    int64: fixedHandler(
+        8,
+        writeI64,
+        readI64,
+        (v) => `if (typeof ${v} !== 'bigint' || ${v} < -9223372036854775808n || ${v} > 9223372036854775807n) return false;`,
+    ),
+    uint64: fixedHandler(
+        8,
+        writeU64,
+        readU64,
+        (v) => `if (typeof ${v} !== 'bigint' || ${v} < 0n || ${v} > 18446744073709551615n) return false;`,
+    ),
+    float16: fixedHandler(2, writeF16, readF16, (v) => `if (typeof ${v} !== 'number') return false;`),
+    float32: fixedHandler(4, writeF32, readF32, (v) => `if (typeof ${v} !== 'number') return false;`),
+    float64: fixedHandler(8, writeF64, readF64, (v) => `if (typeof ${v} !== 'number') return false;`),
+
+    // quantize value to discrete steps, round up bits to bytes
+    quantized: {
+        size: (_ctx, s) => {
+            const steps = Math.ceil((s.max - s.min) / s.step);
+            const bits = Math.ceil(Math.log2(steps));
+            const bytes = Math.ceil(bits / 8);
+            return { code: '', fixed: bytes };
+        },
+        pack: (ctx, s, v) => {
+            const steps = Math.ceil((s.max - s.min) / s.step);
+            const bits = Math.ceil(Math.log2(steps));
+            const bytes = Math.ceil(bits / 8);
+            const maxVal = (1 << bits) - 1;
+            const clampedVar = variable(ctx, 'clamped');
+            const quantVar = variable(ctx, 'quant');
+            // clamp to [min, max], then quantize to step index
+            let code = `const ${clampedVar} = Math.max(${s.min}, Math.min(${s.max}, ${v}));`;
+            code += `const ${quantVar} = Math.max(0, Math.min(${maxVal}, Math.round((${clampedVar} - ${s.min}) / ${s.step})));`;
+            if (bytes === 1) code += writeU8(quantVar);
+            else if (bytes === 2) code += writeU16(quantVar);
+            else if (bytes <= 4) code += writeU32(quantVar);
+            else code += writeVaruint(quantVar);
+            return code;
+        },
+        unpack: (ctx, s, target) => {
+            const steps = Math.ceil((s.max - s.min) / s.step);
+            const bits = Math.ceil(Math.log2(steps));
+            const bytes = Math.ceil(bits / 8);
+            const quantVar = variable(ctx, 'quant');
+            let code = '';
+            if (bytes === 1) code += readU8(quantVar);
+            else if (bytes === 2) code += readU16(quantVar);
+            else if (bytes <= 4) code += readU32(quantVar);
+            else code += readVaruint(quantVar);
+            // dequantize: convert step index back to value
+            code += `${target} = ${s.min} + ${quantVar} * ${s.step};`;
+            return code;
+        },
+        validate: (_ctx, s, v) => `if (typeof ${v} !== 'number' || ${v} < ${s.min} || ${v} > ${s.max}) return false;`,
+    },
+
+    // smallest-three quaternion encoding: range is -1/sqrt(2) to 1/sqrt(2)
+    quat: {
+        size: (_ctx, s) => {
+            const steps = Math.ceil(Math.SQRT2 / s.step);
+            const bits = Math.ceil(Math.log2(steps));
+            // 1 byte metadata + 3 components
+            let bytes = 1;
+            if (bits <= 8) bytes += 3;
+            else if (bits <= 16) bytes += 6;
+            else bytes += 12;
+            return { code: '', fixed: bytes };
+        },
+        pack: (ctx, s, v) => {
+            const steps = Math.ceil(Math.SQRT2 / s.step);
+            const bits = Math.ceil(Math.log2(steps));
+            const maxVal = (1 << bits) - 1;
+            const scale = maxVal / Math.sqrt(2); // max component value is 1/sqrt(2)
+            const qx = `${v}[0]`;
+            const qy = `${v}[1]`;
+            const qz = `${v}[2]`;
+            const qw = `${v}[3]`;
+            const ax = variable(ctx, 'ax');
+            const ay = variable(ctx, 'ay');
+            const az = variable(ctx, 'az');
+            const aw = variable(ctx, 'aw');
+            const maxIdx = variable(ctx, 'maxIdx');
+            const c0 = variable(ctx, 'c0');
+            const c1 = variable(ctx, 'c1');
+            const c2 = variable(ctx, 'c2');
+            const sign = variable(ctx, 'sign');
+            let code = '';
+            // find largest component by absolute value
+            code += `const ${ax} = Math.abs(${qx}), ${ay} = Math.abs(${qy}), ${az} = Math.abs(${qz}), ${aw} = Math.abs(${qw});`;
+            code += `let ${maxIdx} = 0;`;
+            code += `if (${ay} > ${ax}) ${maxIdx} = 1;`;
+            code += `if (${az} > (${maxIdx} === 0 ? ${ax} : ${ay})) ${maxIdx} = 2;`;
+            code += `if (${aw} > (${maxIdx} === 0 ? ${ax} : ${maxIdx} === 1 ? ${ay} : ${az})) ${maxIdx} = 3;`;
+            // get three smallest components and sign of largest
+            code += `let ${c0}, ${c1}, ${c2}, ${sign};`;
+            code += `if (${maxIdx} === 0) { ${c0} = ${qy}; ${c1} = ${qz}; ${c2} = ${qw}; ${sign} = ${qx} < 0 ? 1 : 0; }`;
+            code += `else if (${maxIdx} === 1) { ${c0} = ${qx}; ${c1} = ${qz}; ${c2} = ${qw}; ${sign} = ${qy} < 0 ? 1 : 0; }`;
+            code += `else if (${maxIdx} === 2) { ${c0} = ${qx}; ${c1} = ${qy}; ${c2} = ${qw}; ${sign} = ${qz} < 0 ? 1 : 0; }`;
+            code += `else { ${c0} = ${qx}; ${c1} = ${qy}; ${c2} = ${qz}; ${sign} = ${qw} < 0 ? 1 : 0; }`;
+            // quantize components
+            code += `${c0} = Math.max(0, Math.min(${maxVal}, Math.round((${c0} + ${1 / Math.sqrt(2)}) * ${scale})));`;
+            code += `${c1} = Math.max(0, Math.min(${maxVal}, Math.round((${c1} + ${1 / Math.sqrt(2)}) * ${scale})));`;
+            code += `${c2} = Math.max(0, Math.min(${maxVal}, Math.round((${c2} + ${1 / Math.sqrt(2)}) * ${scale})));`;
+            // metadata byte: 2 bits index + 1 bit sign
+            code += `u8[o++] = (${maxIdx} << 1) | ${sign};`;
+            if (bits <= 8) {
+                code += `u8[o++] = ${c0}; u8[o++] = ${c1}; u8[o++] = ${c2};`;
+            } else if (bits <= 16) {
+                code += writeU16(c0) + writeU16(c1) + writeU16(c2);
+            } else {
+                code += writeU32(c0) + writeU32(c1) + writeU32(c2);
+            }
+            return code;
+        },
+        unpack: (ctx, s, target) => {
+            const steps = Math.ceil(Math.SQRT2 / s.step);
+            const bits = Math.ceil(Math.log2(steps));
+            const maxVal = (1 << bits) - 1;
+            const scale = maxVal / Math.sqrt(2);
+            const metaByte = variable(ctx, 'meta');
+            const maxIdx = variable(ctx, 'maxIdx');
+            const sign = variable(ctx, 'sign');
+            const c0 = variable(ctx, 'c0'),
+                c1 = variable(ctx, 'c1'),
+                c2 = variable(ctx, 'c2'),
+                c3 = variable(ctx, 'c3');
+            let code = '';
+            // read metadata byte (2 bits index + 1 bit sign)
+            code += `const ${metaByte} = u8[o++];`;
+            code += `const ${maxIdx} = ${metaByte} >> 1;`;
+            code += `const ${sign} = ${metaByte} & 0x1;`;
+            if (bits <= 8) {
+                code += `let ${c0} = u8[o++]; let ${c1} = u8[o++]; let ${c2} = u8[o++];`;
+            } else if (bits <= 16) {
+                code += readU16(c0) + readU16(c1) + readU16(c2);
+            } else {
+                code += readU32(c0) + readU32(c1) + readU32(c2);
+            }
+            // dequantize
+            code += `${c0} = ${c0} / ${scale} - ${1 / Math.sqrt(2)};`;
+            code += `${c1} = ${c1} / ${scale} - ${1 / Math.sqrt(2)};`;
+            code += `${c2} = ${c2} / ${scale} - ${1 / Math.sqrt(2)};`;
+            // reconstruct largest component
+            code += `let ${c3} = Math.sqrt(Math.max(0, 1 - ${c0}*${c0} - ${c1}*${c1} - ${c2}*${c2}));`;
+            code += `if (${sign}) ${c3} = -${c3};`;
+            // assign based on which component was dropped (as [x, y, z, w])
+            code += `if (${maxIdx} === 0) ${target} = [${c3}, ${c0}, ${c1}, ${c2}];`;
+            code += `else if (${maxIdx} === 1) ${target} = [${c0}, ${c3}, ${c1}, ${c2}];`;
+            code += `else if (${maxIdx} === 2) ${target} = [${c0}, ${c1}, ${c3}, ${c2}];`;
+            code += `else ${target} = [${c0}, ${c1}, ${c2}, ${c3}];`;
+            return code;
+        },
+        validate: (_ctx, _s, v) =>
+            `if (!Array.isArray(${v}) || ${v}.length !== 4 || typeof ${v}[0] !== 'number' || typeof ${v}[1] !== 'number' || typeof ${v}[2] !== 'number' || typeof ${v}[3] !== 'number') return false;`,
+    },
+
+    // unit vector 2d: encode as angle, range is 0 to 2pi
+    uv2: {
+        size: (_ctx, s) => {
+            const steps = Math.ceil((Math.PI * 2) / s.step);
+            const bits = Math.ceil(Math.log2(steps));
+            const bytes = Math.ceil(bits / 8);
+            return { code: '', fixed: bytes };
+        },
+        pack: (ctx, s, v) => {
+            const steps = Math.ceil((Math.PI * 2) / s.step);
+            const bits = Math.ceil(Math.log2(steps));
+            const maxVal = (1 << bits) - 1;
+            const angle = variable(ctx, 'angle');
+            const quantized = variable(ctx, 'quant');
+            const bytes = Math.ceil(bits / 8);
+            let code = '';
+            // atan2 returns [-pi, pi], normalize to [0, 2pi]
+            code += `let ${angle} = Math.atan2(${v}[1], ${v}[0]);`;
+            code += `if (${angle} < 0) ${angle} += ${Math.PI * 2};`;
+            code += `const ${quantized} = Math.round(${angle} / ${Math.PI * 2} * ${maxVal}) & ${maxVal};`;
+            if (bytes === 1) code += writeU8(quantized);
+            else if (bytes === 2) code += writeU16(quantized);
+            else code += writeU32(quantized);
+            return code;
+        },
+        unpack: (ctx, s, target) => {
+            const steps = Math.ceil((Math.PI * 2) / s.step);
+            const bits = Math.ceil(Math.log2(steps));
+            const maxVal = (1 << bits) - 1;
+            const quantized = variable(ctx, 'quant');
+            const angle = variable(ctx, 'angle');
+            const bytes = Math.ceil(bits / 8);
+            let code = '';
+            if (bytes === 1) code += readU8(quantized);
+            else if (bytes === 2) code += readU16(quantized);
+            else code += readU32(quantized);
+            code += `const ${angle} = ${quantized} / ${maxVal} * ${Math.PI * 2};`;
+            code += `${target} = [Math.cos(${angle}), Math.sin(${angle})];`;
+            return code;
+        },
+        validate: (_ctx, _s, v) =>
+            `if (!Array.isArray(${v}) || ${v}.length !== 2 || typeof ${v}[0] !== 'number' || typeof ${v}[1] !== 'number') return false;`,
+    },
+
+    // unit vector 3d: smallest-two encoding (similar to quaternion)
+    uv3: {
+        size: (_ctx, s) => {
+            const steps = Math.ceil(Math.SQRT2 / s.step);
+            const bits = Math.ceil(Math.log2(steps));
+            // 2 bits for index + 1 bit for sign + (bits * 2) for components
+            const totalBits = 2 + 1 + bits * 2;
+            const bytes = Math.ceil(totalBits / 8);
+            return { code: '', fixed: bytes };
+        },
+        pack: (ctx, s, v) => {
+            const steps = Math.ceil(Math.SQRT2 / s.step);
+            const bits = Math.ceil(Math.log2(steps));
+            const maxVal = (1 << bits) - 1;
+            const scale = maxVal / Math.sqrt(2);
+            const vx = `${v}[0]`;
+            const vy = `${v}[1]`;
+            const vz = `${v}[2]`;
+            const ax = variable(ctx, 'ax');
+            const ay = variable(ctx, 'ay');
+            const az = variable(ctx, 'az');
+            const maxIdx = variable(ctx, 'maxIdx');
+            const c0 = variable(ctx, 'c0');
+            const c1 = variable(ctx, 'c1');
+            const sign = variable(ctx, 'sign');
+            const packed = variable(ctx, 'packed');
+            const totalBits = 2 + 1 + bits * 2;
+            const bytes = Math.ceil(totalBits / 8);
+            let code = '';
+            code += `const ${ax} = Math.abs(${vx}), ${ay} = Math.abs(${vy}), ${az} = Math.abs(${vz});`;
+            code += `let ${maxIdx} = 0;`;
+            code += `if (${ay} > ${ax}) ${maxIdx} = 1;`;
+            code += `if (${az} > (${maxIdx} === 0 ? ${ax} : ${ay})) ${maxIdx} = 2;`;
+            code += `let ${c0}, ${c1}, ${sign};`;
+            code += `if (${maxIdx} === 0) { ${c0} = ${vy}; ${c1} = ${vz}; ${sign} = ${vx} < 0 ? 1 : 0; }`;
+            code += `else if (${maxIdx} === 1) { ${c0} = ${vx}; ${c1} = ${vz}; ${sign} = ${vy} < 0 ? 1 : 0; }`;
+            code += `else { ${c0} = ${vx}; ${c1} = ${vy}; ${sign} = ${vz} < 0 ? 1 : 0; }`;
+            code += `${c0} = Math.max(0, Math.min(${maxVal}, Math.round((${c0} + ${1 / Math.sqrt(2)}) * ${scale})));`;
+            code += `${c1} = Math.max(0, Math.min(${maxVal}, Math.round((${c1} + ${1 / Math.sqrt(2)}) * ${scale})));`;
+            code += `let ${packed} = (${maxIdx} << ${totalBits - 2}) | (${sign} << ${totalBits - 3}) | (${c0} << ${bits}) | ${c1};`;
+            for (let i = bytes - 1; i >= 0; i--) {
+                code += `u8[o++] = (${packed} >> ${i * 8}) & 0xFF;`;
+            }
+            return code;
+        },
+        unpack: (ctx, s, target) => {
+            const steps = Math.ceil(Math.SQRT2 / s.step);
+            const bits = Math.ceil(Math.log2(steps));
+            const maxVal = (1 << bits) - 1;
+            const scale = maxVal / Math.sqrt(2);
+            const packed = variable(ctx, 'packed');
+            const maxIdx = variable(ctx, 'maxIdx');
+            const sign = variable(ctx, 'sign');
+            const c0 = variable(ctx, 'c0');
+            const c1 = variable(ctx, 'c1');
+            const c2 = variable(ctx, 'c2');
+            const totalBits = 2 + 1 + bits * 2;
+            const bytes = Math.ceil(totalBits / 8);
+            let code = '';
+            code += `let ${packed} = 0;`;
+            for (let i = bytes - 1; i >= 0; i--) {
+                code += `${packed} |= u8[o++] << ${i * 8};`;
+            }
+            code += `const ${maxIdx} = (${packed} >> ${totalBits - 2}) & 0x3;`;
+            code += `const ${sign} = (${packed} >> ${totalBits - 3}) & 0x1;`;
+            code += `let ${c0} = (${packed} >> ${bits}) & ${maxVal};`;
+            code += `let ${c1} = ${packed} & ${maxVal};`;
+            code += `${c0} = ${c0} / ${scale} - ${1 / Math.sqrt(2)};`;
+            code += `${c1} = ${c1} / ${scale} - ${1 / Math.sqrt(2)};`;
+            code += `let ${c2} = Math.sqrt(Math.max(0, 1 - ${c0}*${c0} - ${c1}*${c1}));`;
+            code += `if (${sign}) ${c2} = -${c2};`;
+            code += `if (${maxIdx} === 0) ${target} = [${c2}, ${c0}, ${c1}];`;
+            code += `else if (${maxIdx} === 1) ${target} = [${c0}, ${c2}, ${c1}];`;
+            code += `else ${target} = [${c0}, ${c1}, ${c2}];`;
+            return code;
+        },
+        validate: (_ctx, _s, v) =>
+            `if (!Array.isArray(${v}) || ${v}.length !== 3 || typeof ${v}[0] !== 'number' || typeof ${v}[1] !== 'number' || typeof ${v}[2] !== 'number') return false;`,
+    },
+
+    string: {
+        size: (ctx, _s, v) => {
+            const strVar = variable(ctx, 'str');
+            const code = `const ${strVar} = ${v}; len = utf8Length(${strVar}); ${varuintSize('len')} size += len;`;
+            return { code, fixed: 0 };
+        },
+        pack: (ctx, _s, v) => writeString(ctx, v),
+        unpack: (_ctx, _s, target) => readString(target),
+        validate: (_ctx, _s, v) => `if (typeof ${v} !== 'string') return false;`,
+    },
+
+    varint: {
+        size: (_ctx, _s, v) => ({ code: varintSize(v), fixed: 0 }),
+        pack: (_ctx, _s, v) => writeVarint(v),
+        unpack: (_ctx, _s, target) => readVarint(target),
+        validate: (_ctx, _s, v) => `if (typeof ${v} !== 'number' || !Number.isInteger(${v})) return false;`,
+    },
+
+    varuint: {
+        size: (_ctx, _s, v) => ({ code: varuintSize(v), fixed: 0 }),
+        pack: (_ctx, _s, v) => writeVaruint(v),
+        unpack: (_ctx, _s, target) => readVaruint(target),
+        validate: (_ctx, _s, v) => `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < 0) return false;`,
+    },
+
+    // literals are not serialized; the known value is injected on unpack
+    literal: {
+        size: () => ({ code: '', fixed: 0 }),
+        pack: () => '',
+        unpack: (_ctx, s, target) => `${target} = ${JSON.stringify(s.value)};`,
+        validate: (_ctx, s, v) => `if (${JSON.stringify(s.value)} !== ${v}) return false;`,
+    },
+
+    // enum values are mapped to varuint indices
+    enumeration: {
+        size: (_ctx, s, v) => {
+            let inner = '';
+            for (let i = 0; i < s.values.length; i++) {
+                const prefix = i === 0 ? 'if' : ' else if';
+                inner += `${prefix} (${v} === ${JSON.stringify(s.values[i])}) { ${varuintSize(i.toString())} }`;
+            }
+            inner += ` else { throw new Error('Invalid enum value: ' + ${v}); }`;
+            return { code: inner, fixed: 0 };
+        },
+        pack: (_ctx, s, v) => {
+            let inner = '';
+            for (let i = 0; i < s.values.length; i++) {
+                const prefix = i === 0 ? 'if' : ' else if';
+                inner += `${prefix} (${v} === ${JSON.stringify(s.values[i])}) { ${writeVaruint(i.toString())} }`;
+            }
+            inner += ` else { throw new Error('Invalid enum value at serialize: ' + ${v}); }`;
+            return inner;
+        },
+        unpack: (ctx, s, target) => {
+            const tag = variable(ctx, 'enumTag');
+            let out = '';
+            out += `let ${tag};`;
+            out += readVaruint(tag);
+            for (let i = 0; i < s.values.length; i++) {
+                const prefix = i === 0 ? 'if' : ' else if';
+                out += `${prefix} (${tag} === ${i}) { ${target} = ${JSON.stringify(s.values[i])}; }`;
+            }
+            out += ` else { throw new Error('Invalid enum index: ' + ${tag}); }`;
+            return out;
+        },
+        validate: (_ctx, s, v) => {
+            const checks = s.values.map((val: string | number) => `${v} === ${JSON.stringify(val)}`).join(' || ');
+            return `if (!(${checks})) return false;`;
+        },
+    },
+
+    // raw bytes: fixed-length (no prefix) or variable-length (varuint prefix)
+    uint8Array: {
+        size: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return { code: '', fixed: s.length };
+            }
+            const lenVar = variable(ctx, 'len');
+            return { code: `const ${lenVar} = ${v}.length; ${varuintSize(lenVar)} size += ${lenVar};`, fixed: 0 };
+        },
+        pack: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return `u8.set(${v}, o); o += ${s.length};`;
+            }
+            const lenVar = variable(ctx, 'len');
+            let inner = '';
+            inner += `const ${lenVar} = ${v}.length;`;
+            inner += writeVaruint(lenVar);
+            inner += `u8.set(${v}, o); o += ${lenVar};`;
+            return inner;
+        },
+        unpack: (_ctx, s, target) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return `${target} = u8.subarray(o, o + ${s.length}); o += ${s.length};`;
+            }
+            let inner = '';
+            inner += readVaruint('len');
+            inner += `${target} = u8.subarray(o, o + len); o += len;`;
+            return inner;
+        },
+        validate: (_ctx, s, v) => {
+            let inner = `if (!(${v} instanceof Uint8Array)) return false;`;
+            if ('length' in s && typeof s.length === 'number') {
+                inner += ` if (${v}.length !== ${s.length}) return false;`;
+            }
+            return inner;
+        },
+    },
+
+    // fixed-length lists omit the length prefix; variable-length use varuint
+    // booleans are bitpacked (8 per byte)
+    list: {
+        size: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                if (s.of.type === 'boolean') {
+                    return { code: '', fixed: Math.ceil(s.length / 8) };
                 }
-                
-                // dequantize: convert step index back to value
-                code += `${target} = ${s.min} + ${quantVar} * ${s.step};`;
-                
-                return code;
-            }
-            case 'quat': {
-                // Decode smallest-three quaternion
-                // Calculate bits from step
-                const steps = Math.ceil(Math.SQRT2 / s.step);
-                const bits = Math.ceil(Math.log2(steps));
-                const maxVal = (1 << bits) - 1;
-                const scale = maxVal / Math.sqrt(2);
-                
-                const metaByte = variable('meta');
-                const maxIdx = variable('maxIdx');
-                const sign = variable('sign');
-                const c0 = variable('c0');
-                const c1 = variable('c1');
-                const c2 = variable('c2');
-                const c3 = variable('c3');
-                
-                let code = '';
-                // Read metadata byte (2 bits index + 1 bit sign)
-                code += `const ${metaByte} = u8[o++];`;
-                code += `const ${maxIdx} = ${metaByte} >> 1;`;
-                code += `const ${sign} = ${metaByte} & 0x1;`;
-                
-                // Read components based on bit size
-                if (bits <= 8) {
-                    code += `let ${c0} = u8[o++];`;
-                    code += `let ${c1} = u8[o++];`;
-                    code += `let ${c2} = u8[o++];`;
-                } else if (bits <= 16) {
-                    code += readU16(c0);
-                    code += readU16(c1);
-                    code += readU16(c2);
-                } else {
-                    code += readU32(c0);
-                    code += readU32(c1);
-                    code += readU32(c2);
+                const i = variable(ctx, 'i');
+                const elem = size(ctx, s.of, `${v}[${i}]`);
+                if (elem.code === '' && elem.fixed > 0) {
+                    return { code: '', fixed: elem.fixed * s.length };
                 }
-                
-                // Dequantize
-                code += `${c0} = ${c0} / ${scale} - ${1 / Math.sqrt(2)};`;
-                code += `${c1} = ${c1} / ${scale} - ${1 / Math.sqrt(2)};`;
-                code += `${c2} = ${c2} / ${scale} - ${1 / Math.sqrt(2)};`;
-                
-                // Reconstruct largest component
-                code += `let ${c3} = Math.sqrt(Math.max(0, 1 - ${c0}*${c0} - ${c1}*${c1} - ${c2}*${c2}));`;
-                code += `if (${sign}) ${c3} = -${c3};`;
-                
-                // Assign based on which was dropped (as tuple [x, y, z, w])
-                code += `if (${maxIdx} === 0) ${target} = [${c3}, ${c0}, ${c1}, ${c2}];`;
-                code += `else if (${maxIdx} === 1) ${target} = [${c0}, ${c3}, ${c1}, ${c2}];`;
-                code += `else if (${maxIdx} === 2) ${target} = [${c0}, ${c1}, ${c3}, ${c2}];`;
-                code += `else ${target} = [${c0}, ${c1}, ${c2}, ${c3}];`;
-                
-                return code;
-            }
-            case 'uv2': {
-                // Decode angle
-                // Calculate bits from step
-                const steps = Math.ceil((Math.PI * 2) / s.step);
-                const bits = Math.ceil(Math.log2(steps));
-                const maxVal = (1 << bits) - 1;
-                const quantized = variable('quant');
-                const angle = variable('angle');
-                
-                const bytes = Math.ceil(bits / 8);
-                
-                let code = '';
-                if (bytes === 1) {
-                    code += readU8(quantized);
-                } else if (bytes === 2) {
-                    code += readU16(quantized);
-                } else {
-                    code += readU32(quantized);
+                const inner = `for (let ${i} = 0; ${i} < ${s.length}; ${i}++) { ${elem.code} }`;
+                return { code: inner, fixed: 0 };
+            } else {
+                const i = variable(ctx, 'i');
+                const lenVar = variable(ctx, 'len');
+                if (s.of.type === 'boolean') {
+                    let parts = '';
+                    parts += `const ${lenVar} = ${v}.length;`;
+                    parts += varuintSize(lenVar);
+                    const bytesVar = variable(ctx, 'bytes');
+                    parts += `const ${bytesVar} = Math.ceil(${lenVar} / 8); size += ${bytesVar};`;
+                    return { code: parts, fixed: 0 };
                 }
-                
-                code += `const ${angle} = ${quantized} / ${maxVal} * ${Math.PI * 2};`;
-                code += `${target} = [Math.cos(${angle}), Math.sin(${angle})];`;
-                
-                return code;
-            }
-            case 'uv3': {
-                // Decode smallest-two
-                // Calculate bits from step
-                const steps = Math.ceil(Math.SQRT2 / s.step);
-                const bits = Math.ceil(Math.log2(steps));
-                const maxVal = (1 << bits) - 1;
-                const scale = maxVal / Math.sqrt(2);
-                
-                const packed = variable('packed');
-                const maxIdx = variable('maxIdx');
-                const sign = variable('sign');
-                const c0 = variable('c0');
-                const c1 = variable('c1');
-                const c2 = variable('c2');
-                
-                const totalBits = 2 + 1 + bits * 2;
-                const bytes = Math.ceil(totalBits / 8);
-                
-                let code = '';
-                // Read bytes
-                code += `let ${packed} = 0;`;
-                for (let i = bytes - 1; i >= 0; i--) {
-                    code += `${packed} |= u8[o++] << ${i * 8};`;
+                const elem = size(ctx, s.of, `${v}[${i}]`);
+                let parts = '';
+                parts += `const ${lenVar} = ${v}.length;`;
+                parts += varuintSize(lenVar);
+                if (elem.fixed > 0) parts += `size += ${elem.fixed} * ${lenVar};`;
+                if (elem.code && elem.code !== '') {
+                    parts += `for (let ${i} = 0; ${i} < ${lenVar}; ${i}++) { ${elem.code} }`;
                 }
-                
-                // Unpack
-                code += `const ${maxIdx} = (${packed} >> ${totalBits - 2}) & 0x3;`;
-                code += `const ${sign} = (${packed} >> ${totalBits - 3}) & 0x1;`;
-                code += `let ${c0} = (${packed} >> ${bits}) & ${maxVal};`;
-                code += `let ${c1} = ${packed} & ${maxVal};`;
-                
-                // Dequantize
-                code += `${c0} = ${c0} / ${scale} - ${1 / Math.sqrt(2)};`;
-                code += `${c1} = ${c1} / ${scale} - ${1 / Math.sqrt(2)};`;
-                
-                // Reconstruct largest
-                code += `let ${c2} = Math.sqrt(Math.max(0, 1 - ${c0}*${c0} - ${c1}*${c1}));`;
-                code += `if (${sign}) ${c2} = -${c2};`;
-                
-                // Assign (as tuple [x, y, z])
-                code += `if (${maxIdx} === 0) ${target} = [${c2}, ${c0}, ${c1}];`;
-                code += `else if (${maxIdx} === 1) ${target} = [${c0}, ${c2}, ${c1}];`;
-                code += `else ${target} = [${c0}, ${c1}, ${c2}];`;
-                
-                return code;
+                return { code: parts, fixed: 0 };
             }
-            case 'string': {
-                return readString(target);
-            }
-            case 'varint': {
-                return readVarint(target);
-            }
-            case 'varuint': {
-                return readVaruint(target);
-            }
-            case 'uint8Array': {
-                if ('length' in s && typeof s.length === 'number') {
-                    // fixed-length: direct subarray slice
-                    return `${target} = u8.subarray(o, o + ${s.length}); o += ${s.length};`;
+        },
+        pack: (ctx, s, v) => {
+            if (s.length !== undefined) {
+                if (s.of.type === 'boolean') {
+                    const boolRefs = Array.from({ length: s.length }, (_, i) => ({ varRef: `${v}[${i}]` }));
+                    return emitBitPack(ctx, boolRefs);
                 }
-                // variable-length: read varuint length then create a view on the main buffer
                 let inner = '';
-                inner += readVaruint('len');
-                inner += `${target} = u8.subarray(o, o + len); o += len;`;
+                for (let i = 0; i < s.length; i++) {
+                    inner += pack(ctx, s.of, `${v}[${i}]`);
+                }
+                return inner;
+            } else {
+                if (s.of.type === 'boolean') {
+                    const lenVar = variable(ctx, 'len');
+                    let inner = '';
+                    inner += `const ${lenVar} = ${v}.length;`;
+                    inner += writeVaruint(lenVar);
+                    const byteVar = variable(ctx, 'byte');
+                    const bIdx = variable(ctx, 'bIdx');
+                    const bitIdx = variable(ctx, 'bitIdx');
+                    inner += `for (let ${bIdx} = 0; ${bIdx} < Math.ceil(${lenVar} / 8); ${bIdx}++) {`;
+                    inner += `let ${byteVar} = 0;`;
+                    inner += `for (let bit = 0; bit < 8; bit++) {`;
+                    inner += `const ${bitIdx} = ${bIdx} * 8 + bit;`;
+                    inner += `if (${bitIdx} >= ${lenVar}) break;`;
+                    inner += `if (${v}[${bitIdx}]) ${byteVar} |= (1 << bit);`;
+                    inner += `}`;
+                    inner += `u8[o++] = ${byteVar};`;
+                    inner += `}`;
+                    return inner;
+                }
+                const i = variable(ctx, 'i');
+                const lenVar = variable(ctx, 'len');
+                let inner = '';
+                inner += `const ${lenVar} = ${v}.length;`;
+                inner += writeVaruint(lenVar);
+                inner += `for (let ${i} = 0; ${i} < ${lenVar}; ${i}++) {`;
+                inner += pack(ctx, s.of, `${v}[${i}]`);
+                inner += '}';
                 return inner;
             }
-            case 'list': {
-                if ('length' in s && typeof s.length === 'number') {
-                    // fixed-length list: generate unrolled reads
-                    let inner = '';
-                    inner += `${target} = new Array(${s.length});`;
-                    for (let i = 0; i < s.length; i++) {
-                        inner += unpack(s.of, `${target}[${i}]`);
-                    }
+        },
+        unpack: (ctx, s, target) => {
+            if ('length' in s && typeof s.length === 'number') {
+                if (s.of.type === 'boolean') {
+                    let inner = `${target} = new Array(${s.length});`;
+                    const boolTargets = Array.from({ length: s.length }, (_, i) => ({ target: `${target}[${i}]` }));
+                    inner += emitBitUnpack(ctx, boolTargets);
                     return inner;
-                } else {
-                    // variable-length list: read length then loop
-                    const i = variable('i');
-                    const l = variable('l');
-
+                }
+                let inner = `${target} = new Array(${s.length});`;
+                for (let i = 0; i < s.length; i++) {
+                    inner += unpack(ctx, s.of, `${target}[${i}]`);
+                }
+                return inner;
+            } else {
+                if (s.of.type === 'boolean') {
+                    const l = variable(ctx, 'l');
                     let inner = '';
                     inner += `let ${l};`;
                     inner += readVaruint(l);
                     inner += `${target} = new Array(${l});`;
-                    inner += `for (let ${i} = 0; ${i} < ${l}; ${i}++) {`;
-                    inner += unpack(s.of, `${target}[${i}]`);
+                    const bIdx = variable(ctx, 'bIdx');
+                    const bitIdx = variable(ctx, 'bitIdx');
+                    const byteIdx = variable(ctx, 'bval');
+                    inner += `for (let ${bIdx} = 0; ${bIdx} < Math.ceil(${l} / 8); ${bIdx}++) {`;
+                    inner += `const ${byteIdx} = u8[o++];`;
+                    inner += `for (let bit = 0; bit < 8; bit++) {`;
+                    inner += `const ${bitIdx} = ${bIdx} * 8 + bit;`;
+                    inner += `if (${bitIdx} >= ${l}) break;`;
+                    inner += `${target}[${bitIdx}] = (${byteIdx} & (1 << bit)) !== 0;`;
+                    inner += `}`;
                     inner += `}`;
                     return inner;
                 }
-            }
-            case 'object': {
-                let inner = `${target} = {};`;
-                // Sort keys for deterministic deserialization order (must match serialization)
-                const sortedKeys = Object.keys(s.fields).sort();
-                for (const key of sortedKeys) {
-                    const fieldSchema = s.fields[key];
-                    inner += unpack(fieldSchema, `${target}[${JSON.stringify(key)}]`);
-                }
-                return inner;
-            }
-            case 'tuple': {
-                let inner = `${target} = new Array(${s.of.length});`;
-                for (let i = 0; i < s.of.length; i++) {
-                    inner += unpack(s.of[i], `${target}[${i}]`);
-                }
-                return inner;
-            }
-            case 'record': {
-                const i = variable('i');
-                const k = variable('k');
-                const count = variable('count');
-
+                const i = variable(ctx, 'i');
+                const l = variable(ctx, 'l');
                 let inner = '';
-                inner += `let ${k}, ${count};`;
-                inner += readVaruint(count);
-                inner += `${target} = {};`;
-                inner += `for (let ${i} = 0; ${i} < ${count}; ${i}++) { `;
-                inner += readString(k);
-                inner += unpack(s.field, `${target}[${k}]`);
+                inner += `let ${l};`;
+                inner += readVaruint(l);
+                inner += `${target} = new Array(${l});`;
+                inner += `for (let ${i} = 0; ${i} < ${l}; ${i}++) {`;
+                inner += unpack(ctx, s.of, `${target}[${i}]`);
                 inner += `}`;
                 return inner;
             }
-            case 'bitset': {
-                // unpack bitset into object, unrolled per-output-byte and inline keys
-                const total = s.keys.length;
-                const bytes = Math.ceil(total / 8);
-
-                let out = '';
-                out += `${target} = {};`;
-
-                // read one byte per output byte and assign up to 8 keys each
-                for (let b = 0; b < bytes; b++) {
-                    const byteIdx = variable('bval');
-                    out += `const ${byteIdx} = u8[o++];`;
-                    for (let bit = 0; bit < 8; bit++) {
-                        const idx = b * 8 + bit;
-                        if (idx >= total) break;
-                        out += `${target}[${JSON.stringify(s.keys[idx])}] = (${byteIdx} & ${1 << bit}) !== 0;`;
-                    }
-                }
-                return out;
-            }
-            case 'literal': {
-                return `${target} = ${JSON.stringify(s.value)};`;
-            }
-            case 'enumeration': {
-                // read varuint index and map back to value
-                const tag = variable('enumTag');
-                let out = '';
-                out += `let ${tag};`;
-                out += readVaruint(tag);
-                for (let i = 0; i < s.values.length; i++) {
-                    const prefix = i === 0 ? 'if' : ' else if';
-                    out += `${prefix} (${tag} === ${i}) { ${target} = ${JSON.stringify(s.values[i])}; }`;
-                }
-                out += ` else { throw new Error('Invalid enum index: ' + ${tag}); }`;
-                return out;
-            }
-            case 'nullable': {
-                let inner = '';
-
-                inner += `const flag = u8[o++];`;
-                inner += `if (flag === 0) {`;
-                inner += `${target} = null;`;
-                inner += `} else {`;
-                inner += unpack(s.of, target);
-                inner += `}`;
-
-                return inner;
-            }
-            case 'optional': {
-                let inner = '';
-
-                inner += `const flag = u8[o++];`;
-                inner += `if (flag === 1) {`;
-                inner += unpack(s.of, target);
-                inner += `}`;
-
-                return inner;
-            }
-            case 'nullish': {
-                let inner = '';
-
-                inner += `const flag = u8[o++];`;
-                inner += `if (flag === 0) {`;
-                inner += `${target} = null;`;
-                inner += `} else if (flag === 2) {`;
-                inner += unpack(s.of, target);
-                inner += `}`;
-
-                return inner;
-            }
-            case 'union': {
-                const tag = variable('tag');
-                let out = '';
-                out += `let ${tag};`;
-                out += readVaruint(tag);
-                out += `${target} = {};`;
-                out += `switch (${tag}) {`;
-                for (let i = 0; i < s.variants.length; i++) {
-                    const variant = s.variants[i];
-                    out += `case ${i}: `;
-                    out += unpack(variant, target);
-                    out += ` break;`;
-                }
-                out += `default: throw new Error('Invalid union tag: ' + ${tag});`;
-                out += `}`;
-                return out;
-            }
-            default:
-                return `throw new Error('Unsupported schema: ${s}');`;
-        }
-    }
-
-    const rootAssign = 'let value;';
-    code += rootAssign;
-    code += unpack(schema, 'value');
-    code += 'return value;';
-
-    return code;
-}
-
-function buildValidate(schema: Schema): string {
-    variableCounter = 1;
-    
-    let code = '';
-
-    function validate(s: Schema, v: string): string {
-        switch (s.type) {
-            case 'boolean':
-                return `if (typeof ${v} !== 'boolean') return false;`;
-            case 'varint':
-                return `if (typeof ${v} !== 'number' || !Number.isInteger(${v})) return false;`;
-            case 'varuint':
-                return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < 0) return false;`;
-            case 'int8':
-                return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < -128 || ${v} > 127) return false;`;
-            case 'uint8':
-                return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < 0 || ${v} > 255) return false;`;
-            case 'int16':
-                return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < -32768 || ${v} > 32767) return false;`;
-            case 'uint16':
-                return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < 0 || ${v} > 65535) return false;`;
-            case 'int32':
-                return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < -2147483648 || ${v} > 2147483647) return false;`;
-            case 'uint32':
-                return `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < 0 || ${v} > 4294967295) return false;`;
-            case 'int64':
-                return `if (typeof ${v} !== 'bigint' || ${v} < -9223372036854775808n || ${v} > 9223372036854775807n) return false;`;
-            case 'uint64':
-                return `if (typeof ${v} !== 'bigint' || ${v} < 0n || ${v} > 18446744073709551615n) return false;`;
-            case 'float16':
-                return `if (typeof ${v} !== 'number') return false;`;
-            case 'float32':
-                return `if (typeof ${v} !== 'number') return false;`;
-            case 'float64':
-                return `if (typeof ${v} !== 'number') return false;`;
-            case 'quantized':
-                return `if (typeof ${v} !== 'number' || ${v} < ${s.min} || ${v} > ${s.max}) return false;`;
-            case 'quat':
-                return `if (!Array.isArray(${v}) || ${v}.length !== 4 || typeof ${v}[0] !== 'number' || typeof ${v}[1] !== 'number' || typeof ${v}[2] !== 'number' || typeof ${v}[3] !== 'number') return false;`;
-            case 'uv2':
-                return `if (!Array.isArray(${v}) || ${v}.length !== 2 || typeof ${v}[0] !== 'number' || typeof ${v}[1] !== 'number') return false;`;
-            case 'uv3':
-                return `if (!Array.isArray(${v}) || ${v}.length !== 3 || typeof ${v}[0] !== 'number' || typeof ${v}[1] !== 'number' || typeof ${v}[2] !== 'number') return false;`;
-            case 'string': {
-                return `if (typeof ${v} !== 'string') return false;`;
-            }
-            case 'list': {
-                if (s.length !== undefined) {
-                    let inner = '';
-                    inner += `if (!Array.isArray(${v})) return false;`;
-                    inner += `if (${v}.length !== ${s.length}) return false;`;
-
-                    for (let i = 0; i < s.length; i++) {
-                        inner += validate(s.of, `${v}[${i}]`);
-                    }
-
-                    return inner;
-                } else {
-                    const i = variable('i');
-
-                    let inner = '';
-                    inner += `if (!Array.isArray(${v})) return false;`;
-                    inner += `for (let ${i} = 0; ${i} < ${v}.length; ${i}++) {`;
-                    inner += validate(s.of, `${v}[${i}]`);
-                    inner += '}';
-                    return inner;
-                }
-            }
-            case 'object': {
-                let inner = '';
-
-                inner += `if (typeof (${v}) !== "object") return false;`;
-
-                // Sort keys for consistency (though order doesn't matter for validation)
-                const sortedKeys = Object.keys(s.fields).sort();
-                for (const k of sortedKeys) {
-                    const f = s.fields[k];
-                    const key = JSON.stringify(k);
-
-                    inner += `if (!(${key} in ${v})) return false;`;
-                    inner += validate(f, `${v}[${key}]`);
-                }
-
-                return inner;
-            }
-            case 'tuple': {
+        },
+        validate: (ctx, s, v) => {
+            if (s.length !== undefined) {
                 let inner = '';
                 inner += `if (!Array.isArray(${v})) return false;`;
-                inner += `if (${v}.length !== ${s.of.length}) return false;`;
-                for (let i = 0; i < s.of.length; i++) {
-                    inner += validate(s.of[i], `${v}[${i}]`);
+                inner += `if (${v}.length !== ${s.length}) return false;`;
+                for (let i = 0; i < s.length; i++) {
+                    inner += validate(ctx, s.of, `${v}[${i}]`);
                 }
                 return inner;
-            }
-            case 'record': {
-                const i = variable('i');
-                const keys = variable('keys');
-
+            } else {
+                const i = variable(ctx, 'i');
                 let inner = '';
-                inner += `if (typeof (${v}) !== "object") return false;`;
-                inner += `${keys} = Object.keys(${v});`;
-                inner += `for (let ${i} = 0; ${i} < ${keys}.length; ${i}++) {`;
-                inner += validate(s.field, `${v}[${keys}[${i}]]`);
+                inner += `if (!Array.isArray(${v})) return false;`;
+                inner += `for (let ${i} = 0; ${i} < ${v}.length; ${i}++) {`;
+                inner += validate(ctx, s.of, `${v}[${i}]`);
+                inner += '}';
+                return inner;
+            }
+        },
+    },
+
+    // booleans are separated and bitpacked, non-booleans written in order
+    tuple: {
+        size: (ctx, s, v) => {
+            let fixed = 0;
+            const parts: string[] = [];
+            const indexed = s.of.map((schema: Schema, i: number) => ({ schema, i }));
+            const [bools, nonBools] = partition(indexed, (x: { schema: Schema; i: number }) => x.schema.type === 'boolean');
+            if (bools.length > 0) fixed += Math.ceil(bools.length / 8);
+            for (const { schema, i } of nonBools) {
+                const child = size(ctx, schema, `${v}[${i}]`);
+                fixed += child.fixed;
+                if (child.code !== '') parts.push(child.code);
+            }
+            return { code: parts.join(' '), fixed };
+        },
+        pack: (ctx, s, v) => {
+            let out = '';
+            const indexed = s.of.map((schema: Schema, i: number) => ({ schema, i }));
+            const [bools, nonBools] = partition(indexed, (x: { schema: Schema; i: number }) => x.schema.type === 'boolean');
+            if (bools.length > 0) {
+                out += emitBitPack(
+                    ctx,
+                    bools.map((x) => ({ varRef: `${v}[${x.i}]` })),
+                );
+            }
+            for (const { schema, i } of nonBools) {
+                out += pack(ctx, schema, `${v}[${i}]`);
+            }
+            return out;
+        },
+        unpack: (ctx, s, target) => {
+            let inner = `${target} = new Array(${s.of.length});`;
+            const indexed = s.of.map((schema: Schema, i: number) => ({ schema, i }));
+            const [bools, nonBools] = partition(indexed, (x: { schema: Schema; i: number }) => x.schema.type === 'boolean');
+            if (bools.length > 0) {
+                inner += emitBitUnpack(
+                    ctx,
+                    bools.map((x) => ({ target: `${target}[${x.i}]` })),
+                );
+            }
+            for (const { schema, i } of nonBools) {
+                inner += unpack(ctx, schema, `${target}[${i}]`);
+            }
+            return inner;
+        },
+        validate: (ctx, s, v) => {
+            let inner = '';
+            inner += `if (!Array.isArray(${v})) return false;`;
+            inner += `if (${v}.length !== ${s.of.length}) return false;`;
+            for (let i = 0; i < s.of.length; i++) {
+                inner += validate(ctx, s.of[i], `${v}[${i}]`);
+            }
+            return inner;
+        },
+    },
+
+    // keys are sorted for deterministic order; booleans bitpacked separately
+    object: {
+        size: (ctx, s, v) => {
+            let fixed = 0;
+            const parts: string[] = [];
+            const sortedKeys = Object.keys(s.fields).sort();
+            const [boolKeys, nonBoolKeys] = partition(sortedKeys, (k) => s.fields[k].type === 'boolean');
+            if (boolKeys.length > 0) fixed += Math.ceil(boolKeys.length / 8);
+            for (const k of nonBoolKeys) {
+                const child = size(ctx, s.fields[k], `${v}[${JSON.stringify(k)}]`);
+                fixed += child.fixed;
+                if (child.code !== '') parts.push(child.code);
+            }
+            return { code: parts.join(' '), fixed };
+        },
+        pack: (ctx, s, v) => {
+            let out = '';
+            const sortedKeys = Object.keys(s.fields).sort();
+            const [boolKeys, nonBoolKeys] = partition(sortedKeys, (k) => s.fields[k].type === 'boolean');
+            if (boolKeys.length > 0) {
+                out += emitBitPack(
+                    ctx,
+                    boolKeys.map((k) => ({ varRef: `${v}[${JSON.stringify(k)}]` })),
+                );
+            }
+            for (const k of nonBoolKeys) {
+                out += pack(ctx, s.fields[k], `${v}[${JSON.stringify(k)}]`);
+            }
+            return out;
+        },
+        unpack: (ctx, s, target) => {
+            let inner = `${target} = {};`;
+            const sortedKeys = Object.keys(s.fields).sort();
+            const [boolKeys, nonBoolKeys] = partition(sortedKeys, (k) => s.fields[k].type === 'boolean');
+            if (boolKeys.length > 0) {
+                inner += emitBitUnpack(
+                    ctx,
+                    boolKeys.map((k) => ({ target: `${target}[${JSON.stringify(k)}]` })),
+                );
+            }
+            for (const key of nonBoolKeys) {
+                inner += unpack(ctx, s.fields[key], `${target}[${JSON.stringify(key)}]`);
+            }
+            return inner;
+        },
+        validate: (ctx, s, v) => {
+            let inner = '';
+            inner += `if (typeof (${v}) !== "object") return false;`;
+            const sortedKeys = Object.keys(s.fields).sort();
+            for (const k of sortedKeys) {
+                const key = JSON.stringify(k);
+                inner += `if (!(${key} in ${v})) return false;`;
+                inner += validate(ctx, s.fields[k], `${v}[${key}]`);
+            }
+            return inner;
+        },
+    },
+
+    // varuint key count, then all keys (as strings), then all values
+    // boolean values are bitpacked; keys accessed by index for value lookup
+    record: {
+        size: (ctx, s, v) => {
+            const i = variable(ctx, 'i');
+            const keys = variable(ctx, 'keys');
+            const keysLen = variable(ctx, 'keysLen');
+            let inner = '';
+            inner += `if (${v} && typeof ${v} === 'object') {`;
+            inner += `const ${keys} = Object.keys(${v});`;
+            inner += `const ${keysLen} = ${keys}.length;`;
+            inner += `${varuintSize(keysLen)}`;
+            const strVar = variable(ctx, 'str');
+            inner += `for (let ${i} = 0; ${i} < ${keysLen}; ${i}++) { const k = ${keys}[${i}]; const ${strVar} = k; len = utf8Length(${strVar}); ${varuintSize('len')} size += len; }`;
+            if (s.field.type === 'boolean') {
+                const bytesVar = variable(ctx, 'bytes');
+                inner += `const ${bytesVar} = Math.ceil(${keysLen} / 8); size += ${bytesVar};`;
+            } else {
+                const childSize = size(ctx, s.field, `${v}[k]`);
+                if (childSize.fixed > 0) inner += ` size += ${childSize.fixed} * ${keysLen}; `;
+                if (childSize.code !== '') {
+                    const i2 = variable(ctx, 'i');
+                    inner += `for (let ${i2} = 0; ${i2} < ${keysLen}; ${i2}++) { const k = ${keys}[${i2}]; ${childSize.code} }`;
+                }
+            }
+            inner += `}`;
+            return { code: inner, fixed: 0 };
+        },
+        pack: (ctx, s, v) => {
+            const i = variable(ctx, 'i');
+            const keys = variable(ctx, 'keys');
+            const keysLen = variable(ctx, 'keysLen');
+            const keyVar = variable(ctx, 'key');
+            let inner = '';
+            inner += `${keys} = Object.keys(${v});`;
+            inner += `${keysLen} = ${keys}.length;`;
+            inner += writeVaruint(keysLen);
+            inner += `for (let ${i} = 0; ${i} < ${keysLen}; ${i}++) {`;
+            inner += `const ${keyVar} = ${keys}[${i}];`;
+            inner += writeString(ctx, keyVar);
+            inner += `}`;
+            if (s.field.type === 'boolean') {
+                const valIdx = variable(ctx, 'valIdx');
+                const byteVar = variable(ctx, 'byte');
+                inner += `{`;
+                inner += `let ${byteVar};`;
+                inner += `for (let ${valIdx} = 0; ${valIdx} < Math.ceil(${keysLen} / 8); ${valIdx}++) {`;
+                inner += `${byteVar} = 0;`;
+                inner += `for (let bit = 0; bit < 8; bit++) {`;
+                inner += `const idx = ${valIdx} * 8 + bit;`;
+                inner += `if (idx >= ${keysLen}) break;`;
+                inner += `if (${v}[${keys}[idx]]) ${byteVar} |= (1 << bit);`;
                 inner += `}`;
-                return inner;
+                inner += `u8[o++] = ${byteVar};`;
+                inner += `}`;
+                inner += `}`;
+            } else {
+                const valIdx = variable(ctx, 'valIdx');
+                const valVar = variable(ctx, 'val');
+                inner += `for (let ${valIdx} = 0; ${valIdx} < ${keysLen}; ${valIdx}++) {`;
+                inner += `const ${valVar} = ${v}[${keys}[${valIdx}]];`;
+                inner += pack(ctx, s.field, valVar);
+                inner += `}`;
             }
-            case 'bitset': {
-                let inner = '';
-                inner += `if (typeof (${v}) !== "object") return false;`;
-                for (let i = 0; i < s.keys.length; i++) {
-                    const key = JSON.stringify(s.keys[i]);
-                    inner += `if (!(${key} in ${v})) return false;`;
-                    inner += `if (typeof ${v}[${key}] !== 'boolean') return false;`;
+            return inner;
+        },
+        unpack: (ctx, s, target) => {
+            const i = variable(ctx, 'i');
+            const k = variable(ctx, 'k');
+            const count = variable(ctx, 'count');
+            const keys = variable(ctx, 'keys');
+            let inner = '';
+            inner += `let ${count};`;
+            inner += readVaruint(count);
+            inner += `${target} = {};`;
+            inner += `const ${keys} = new Array(${count});`;
+            inner += `for (let ${i} = 0; ${i} < ${count}; ${i}++) { `;
+            inner += `let ${k};`;
+            inner += readString(k);
+            inner += `${keys}[${i}] = ${k};`;
+            inner += `}`;
+            if (s.field.type === 'boolean') {
+                const byteIdx = variable(ctx, 'bval');
+                const valIdx = variable(ctx, 'valIdx');
+                inner += `{`;
+                inner += `for (let ${valIdx} = 0; ${valIdx} < Math.ceil(${count} / 8); ${valIdx}++) {`;
+                inner += `const ${byteIdx} = u8[o++];`;
+                inner += `for (let bit = 0; bit < 8; bit++) {`;
+                inner += `const idx = ${valIdx} * 8 + bit;`;
+                inner += `if (idx >= ${count}) break;`;
+                inner += `${target}[${keys}[idx]] = (${byteIdx} & (1 << bit)) !== 0;`;
+                inner += `}`;
+                inner += `}`;
+                inner += `}`;
+            } else {
+                const valIdx = variable(ctx, 'valIdx');
+                inner += `for (let ${valIdx} = 0; ${valIdx} < ${count}; ${valIdx}++) { `;
+                inner += unpack(ctx, s.field, `${target}[${keys}[${valIdx}]]`);
+                inner += `}`;
+            }
+            return inner;
+        },
+        validate: (ctx, s, v) => {
+            const i = variable(ctx, 'i');
+            const keys = variable(ctx, 'keys');
+            let inner = '';
+            inner += `if (typeof (${v}) !== "object") return false;`;
+            inner += `${keys} = Object.keys(${v});`;
+            inner += `for (let ${i} = 0; ${i} < ${keys}.length; ${i}++) {`;
+            inner += validate(ctx, s.field, `${v}[${keys}[${i}]]`);
+            inner += `}`;
+            return inner;
+        },
+    },
+
+    // 1-byte flag: 0 = null, 1 = present
+    nullable: {
+        size: (ctx, s, v) => {
+            const child = size(ctx, s.of, v);
+            let inner = '';
+            inner += `if (${v} !== null) {`;
+            inner += child.code;
+            inner += `size += ${child.fixed};`;
+            inner += `}`;
+            return { code: inner, fixed: 1 };
+        },
+        pack: (ctx, s, v) => {
+            let inner = '';
+            inner += `if (${v} === null) {`;
+            inner += `u8[o++] = 0;`;
+            inner += `} else {`;
+            inner += `u8[o++] = 1;`;
+            inner += pack(ctx, s.of, v);
+            inner += `}`;
+            return inner;
+        },
+        unpack: (ctx, s, target) => {
+            const flag = variable(ctx, 'flag');
+            let inner = '';
+            inner += `const ${flag} = u8[o++];`;
+            inner += `if (${flag} === 0) {`;
+            inner += `${target} = null;`;
+            inner += `} else {`;
+            inner += unpack(ctx, s.of, target);
+            inner += `}`;
+            return inner;
+        },
+        validate: (ctx, s, v) => {
+            let inner = '';
+            inner += `if (${v} === null) return true;`;
+            inner += validate(ctx, s.of, v);
+            return inner;
+        },
+    },
+
+    // 1-byte flag: 0 = undefined, 1 = present
+    optional: {
+        size: (ctx, s, v) => {
+            const child = size(ctx, s.of, v);
+            let inner = '';
+            inner += `if (${v} !== undefined) {`;
+            inner += child.code;
+            inner += `size += ${child.fixed};`;
+            inner += `}`;
+            return { code: inner, fixed: 1 };
+        },
+        pack: (ctx, s, v) => {
+            let inner = '';
+            inner += `if (${v} === undefined) {`;
+            inner += `u8[o++] = 0;`;
+            inner += `} else {`;
+            inner += `u8[o++] = 1;`;
+            inner += pack(ctx, s.of, v);
+            inner += `}`;
+            return inner;
+        },
+        unpack: (ctx, s, target) => {
+            const flag = variable(ctx, 'flag');
+            let inner = '';
+            inner += `const ${flag} = u8[o++];`;
+            inner += `if (${flag} === 1) {`;
+            inner += unpack(ctx, s.of, target);
+            inner += `}`;
+            return inner;
+        },
+        validate: (ctx, s, v) => {
+            let inner = '';
+            inner += `if (${v} === undefined) return true;`;
+            inner += validate(ctx, s.of, v);
+            return inner;
+        },
+    },
+
+    // 1-byte flag: 0 = null, 1 = undefined, 2 = present
+    nullish: {
+        size: (ctx, s, v) => {
+            const child = size(ctx, s.of, v);
+            let inner = '';
+            inner += `if (${v} !== null && ${v} !== undefined) {`;
+            inner += child.code;
+            inner += `size += ${child.fixed};`;
+            inner += `}`;
+            return { code: inner, fixed: 1 };
+        },
+        pack: (ctx, s, v) => {
+            let inner = '';
+            inner += `if (${v} === null) {`;
+            inner += `u8[o++] = 0;`;
+            inner += `} else if (${v} === undefined) {`;
+            inner += `u8[o++] = 1;`;
+            inner += `} else {`;
+            inner += `u8[o++] = 2;`;
+            inner += pack(ctx, s.of, v);
+            inner += `}`;
+            return inner;
+        },
+        unpack: (ctx, s, target) => {
+            const flag = variable(ctx, 'flag');
+            let inner = '';
+            inner += `const ${flag} = u8[o++];`;
+            inner += `if (${flag} === 0) {`;
+            inner += `${target} = null;`;
+            inner += `} else if (${flag} === 2) {`;
+            inner += unpack(ctx, s.of, target);
+            inner += `}`;
+            return inner;
+        },
+        validate: (ctx, s, v) => {
+            let inner = '';
+            inner += `if (${v} === null || ${v} === undefined) return true;`;
+            inner += validate(ctx, s.of, v);
+            return inner;
+        },
+    },
+
+    // discriminated union: varuint tag selects variant, discriminant field must be a literal
+    union: {
+        size: (ctx, s, v) => {
+            const keyVar = variable(ctx, 'keyVal');
+            let inner = '';
+            inner += `const ${keyVar} = ${v}[${JSON.stringify(s.key)}];`;
+            for (let i = 0; i < s.variants.length; i++) {
+                const variant = s.variants[i];
+                const disc = variant.fields[s.key];
+                if (disc.type !== 'literal') {
+                    throw new Error('Union discriminant must be a literal in every variant');
                 }
-                return inner;
+                const discriminant = disc.value;
+                const elem = size(ctx, variant, v);
+                inner += ` ${i !== 0 ? 'else' : ''} if (${keyVar} === ${JSON.stringify(discriminant)}) { ${varuintSize(i.toString())} size += ${elem.fixed}; ${elem.code} }`;
             }
-            case 'literal': {
-                return `if (${JSON.stringify(s.value)} !== ${v}) return false;`;
-            }
-            case 'enumeration': {
-                // check if value is one of the allowed enum values
-                const checks = s.values.map(val => `${v} === ${JSON.stringify(val)}`).join(' || ');
-                return `if (!(${checks})) return false;`;
-            }
-            case 'uint8Array': {
-                let inner = `if (!(${v} instanceof Uint8Array)) return false;`;
-                if ('length' in s && typeof s.length === 'number') {
-                    inner += ` if (${v}.length !== ${s.length}) return false;`;
+            inner += ` else { throw new Error('Invalid discriminant for union key: ' + ${keyVar}); }`;
+            return { code: inner, fixed: 0 };
+        },
+        pack: (ctx, s, v) => {
+            const discriminant = variable(ctx, 'discriminant');
+            let inner = '';
+            inner += `const ${discriminant} = ${v}[${JSON.stringify(s.key)}];`;
+            for (let i = 0; i < s.variants.length; i++) {
+                const variant = s.variants[i];
+                const disc = variant.fields[s.key];
+                if (!disc || disc.type !== 'literal') {
+                    throw new Error('Union discriminant must be a literal in every variant');
                 }
-                return inner;
-            }
-            case 'nullable': {
-                let inner = '';
-                inner += `if (${v} === null) return true;`;
-                inner += validate(s.of, v);
-                return inner;
-            }
-            case 'optional': {
-                let inner = '';
-                inner += `if (${v} === undefined) return true;`;
-                inner += validate(s.of, v);
-                return inner;
-            }
-            case 'nullish': {
-                let inner = '';
-                inner += `if (${v} === null || ${v} === undefined) return true;`;
-                inner += validate(s.of, v);
-                return inner;
-            }
-            case 'union': {
-                // ensure value is an object and its discriminant matches one of the
-                // variant literals, then validate against that variant.
-                let inner = '';
-                inner += `if (typeof (${v}) !== "object") return false;`;
-                const keyVar = variable('key');
-                inner += `const ${keyVar} = ${v}[${JSON.stringify(s.key)}];`;
-
-                // validate against matching literal
-                let first = true;
-                for (let i = 0; i < s.variants.length; i++) {
-                    const variant = s.variants[i];
-                    const disc = variant.fields[s.key];
-                    if (!disc || (disc as any).type !== 'literal') {
-                        throw new Error('Union discriminant must be a literal in every variant');
-                    }
-                    const lit = (disc as any).value;
-                    if (first) {
-                        inner += `if (${keyVar} === ${JSON.stringify(lit)}) {`;
-                        first = false;
-                    } else {
-                        inner += ` else if (${keyVar} === ${JSON.stringify(lit)}) {`;
-                    }
-
-                    inner += validate(variant, v);
-                    inner += ` }`;
+                const lit = disc.value;
+                if (i === 0) {
+                    inner += `if (${discriminant} === ${JSON.stringify(lit)}) { ${writeVaruint(i.toString())} ${pack(ctx, variant, v)} }`;
+                } else {
+                    inner += ` else if (${discriminant} === ${JSON.stringify(lit)}) { ${writeVaruint(i.toString())} ${pack(ctx, variant, v)} }`;
                 }
-
-                inner += ` else { return false; }`;
-                return inner;
             }
-            default:
-                return `throw new Error('Unsupported schema: ${s}');`;
-        }
-    }
+            inner += ` else { throw new Error('Invalid discriminant for union key at serialize: ' + ${discriminant}); }`;
+            return inner;
+        },
+        unpack: (ctx, s, target) => {
+            const tag = variable(ctx, 'tag');
+            let out = '';
+            out += `let ${tag};`;
+            out += readVaruint(tag);
+            out += `${target} = {};`;
+            out += `switch (${tag}) {`;
+            for (let i = 0; i < s.variants.length; i++) {
+                out += `case ${i}: `;
+                out += unpack(ctx, s.variants[i], target);
+                out += ` break;`;
+            }
+            out += `default: throw new Error('Invalid union tag: ' + ${tag});`;
+            out += `}`;
+            return out;
+        },
+        validate: (ctx, s, v) => {
+            let inner = '';
+            inner += `if (typeof (${v}) !== "object") return false;`;
+            const keyVar = variable(ctx, 'key');
+            inner += `const ${keyVar} = ${v}[${JSON.stringify(s.key)}];`;
+            let first = true;
+            for (let i = 0; i < s.variants.length; i++) {
+                const variant = s.variants[i];
+                const disc = variant.fields[s.key];
+                if (!disc || disc.type !== 'literal') {
+                    throw new Error('Union discriminant must be a literal in every variant');
+                }
+                const lit = disc.value;
+                if (first) {
+                    inner += `if (${keyVar} === ${JSON.stringify(lit)}) {`;
+                    first = false;
+                } else {
+                    inner += ` else if (${keyVar} === ${JSON.stringify(lit)}) {`;
+                }
+                inner += validate(ctx, variant, v);
+                inner += ` }`;
+            }
+            inner += ` else { return false; }`;
+            return inner;
+        },
+    },
+};
 
-    code += validate(schema, 'value');
-
-    code += 'return true;';
-
-    return code;
-}
-
-function variable(str: string): string {
-    return str + variableCounter++;
-}
+/* read/write utils */
 
 function varuintSize(value: string): string {
     return `vuint = ${value} >>> 0; while (vuint > 127) { size++; vuint >>>= 7; } size += 1;`;
@@ -1340,6 +1324,7 @@ function readVaruint(target: string, offset = 'o'): string {
     return code;
 }
 
+// zigzag encoding: map signed to unsigned so small negatives are small too
 function varintSize(value: string): string {
     return `vint = ((${value} << 1) ^ (${value} >> 31)) >>> 0; ${varuintSize('vint')}`;
 }
@@ -1362,6 +1347,7 @@ function writeBool(value: string, offset = 'o'): string {
     return `u8[${offset}++] = ${value} ? 1 : 0;`;
 }
 
+// shift left then arithmetic shift right to sign-extend
 function readI8(target: string, offset = 'o'): string {
     return `${target} = (u8[${offset}++] << 24) >> 24;`;
 }
@@ -1442,10 +1428,10 @@ function writeU64(value: string, offset = 'o'): string {
     return code;
 }
 
-function readF32(target: string, offset = 'o'): string {
+function readF16(target: string, offset = 'o'): string {
     let code = '';
-    code += `f32_u8[0] = u8[${offset}++]; f32_u8[1] = u8[${offset}++]; f32_u8[2] = u8[${offset}++]; f32_u8[3] = u8[${offset}++];`;
-    code += `${target} = f32[0];`;
+    code += `f16_u8[0] = u8[${offset}++]; f16_u8[1] = u8[${offset}++];`;
+    code += `${target} = f16[0];`;
     return code;
 }
 
@@ -1456,10 +1442,10 @@ function writeF16(value: string, offset = 'o'): string {
     return code;
 }
 
-function readF16(target: string, offset = 'o'): string {
+function readF32(target: string, offset = 'o'): string {
     let code = '';
-    code += `f16_u8[0] = u8[${offset}++]; f16_u8[1] = u8[${offset}++];`;
-    code += `${target} = f16[0];`;
+    code += `f32_u8[0] = u8[${offset}++]; f32_u8[1] = u8[${offset}++]; f32_u8[2] = u8[${offset}++]; f32_u8[3] = u8[${offset}++];`;
+    code += `${target} = f32[0];`;
     return code;
 }
 
@@ -1488,25 +1474,18 @@ function writeF64(value: string, offset = 'o'): string {
 
 function readString(target: string, offset = 'o'): string {
     let code = '';
-    // Read varuint length
     code += readVaruint('len', offset);
-    // Decode string
     code += `${target} = len === 0 ? '' : textDecoder.decode(u8.subarray(${offset}, ${offset} + len)); ${offset} += len;`;
-
     return code;
 }
 
-function writeString(value: string, offset = 'o'): string {
+function writeString(ctx: Context, value: string, offset = 'o'): string {
     let code = '';
-
-    const strVar = variable('str');
+    const strVar = variable(ctx, 'str');
     code += `const ${strVar} = ${value};`;
-    
     code += `len = utf8Length(${strVar});`;
     code += writeVaruint('len', offset);
-    
     code += `textEncoder.encodeInto(${strVar}, u8.subarray(${offset}));`;
     code += `${offset} += len;`;
-
     return code;
 }

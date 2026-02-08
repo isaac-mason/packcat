@@ -4,8 +4,6 @@
 > npm install packcat
 ```
 
-> 🚧 packcat is undergoing heavy development ahead of a v1 release. if you want to try it out early, go ahead! but prepare for breaking changes :)
-
 # packcat
 
 packcat is a small library for packing objects to and from buffers.
@@ -16,6 +14,9 @@ packcat is a small library for packing objects to and from buffers.
 - [Usage](#usage)
 - [API Documentation](#api-documentation)
     - [Schema Types](#schema-types)
+- [Advanced](#advanced)
+  - [What is the packed data format?](#what-is-the-packed-data-format)
+  - [Does this library support big-endian machines?](#does-this-library-support-big-endian-machines)
 
 ## Overview
 
@@ -23,22 +24,22 @@ This library takes defined schemas, and then generates efficient functions that 
 
 It is great for use cases like networked games/apps where minimizing bandwidth is important, and both the client and server use javascript and can share schema definitions.
 
-Currently there is no formal specification for the packed data format, and no guarantees are made about the stability of the format between versions. As such, the same version of packcat should be used on both the packing and unpacking end, and it is not recommended to persist packed data.
-
-This library assumes the host machine is little-endian in its use of JavaScript typed arrays. While supporting big-endian is technically possible, it falls outside the practical scope and realistic use cases of this library.
-
 ## Usage
 
 First, define your data format with the schema utils:
 
 ```ts
 import type { SchemaType } from 'packcat';
-import { boolean, bitset, float32, list, literal, object, uint32, union } from 'packcat';
+import { boolean, float32, list, literal, object, uint32, union } from 'packcat';
 
 const playerInputSchema = object({
     frame: uint32(),
     nipple: list(float32(), 2),
-    buttons: bitset(['jump', 'sprint', 'crouch'] as const),
+    buttons: object({
+        jump: boolean(),
+        sprint: boolean(),
+        crouch: boolean(),
+    }),
     cmd: list(
         union('type', [
             // literals are not included in the serialised data, only used for discrimination
@@ -56,7 +57,7 @@ Next, you can build the schema, which gives you `pack`, `unpack`, and `validate`
 ```ts
 import { build } from 'packcat';
 
-const { pack, unpack, validate } = build(playerInputSchema);
+const { pack, packInto, unpack, validate } = build(playerInputSchema);
 
 const playerInput: PlayerInputType = {
     frame: 1,
@@ -83,17 +84,32 @@ console.log(validate(playerInput)); // true
 console.log(validate({ foo: 'bar' })); // false
 ```
 
+If you want to pack directly into an existing buffer, you can use `packInto`:
+
+```ts
+const buf = new Uint8Array(128);
+const result = packInto(playerInput, buf, 0);
+
+if (result.ok) {
+    console.log(`Packed ${result.bytesWritten} bytes into existing buffer`);
+} else {
+    console.log('Failed to pack into existing buffer');
+}
+```
+
 ## API Documentation
 
 ```ts
 export function build<S extends Schema>(schema: S): {
     pack: (value: SchemaType<S>) => Uint8Array;
+    packInto: (value: SchemaType<S>, u8: Uint8Array, offset: number) => PackIntoResult;
     unpack: (u8: Uint8Array) => SchemaType<S>;
     validate: (value: SchemaType<S>) => boolean;
     source: {
         pack: string;
         unpack: string;
         validate: string;
+        packInto: string;
     };
 };
 ```
@@ -461,30 +477,6 @@ export function uint8Array(length?: number);
 
 ```ts
 /**
- * Bitset schema - compact storage for boolean flags.
- * 
- * Each key uses 1 bit. Stored as a variable number of bytes based on key count.
- * More efficient than storing individual booleans for multiple flags.
- * 
- * @param keys Array of flag names
- * @returns A bitset schema definition
- * 
- * @example
- * bitset(['hasShield', 'isInvincible', 'canFly', 'isGrounded'])
- * // Stores 4 flags in 1 byte
- */
-export function bitset<Keys extends string[]>(keys: [
-    ...Keys
-]): {
-    type: 'bitset';
-    keys: [
-        ...Keys
-    ];
-};
-```
-
-```ts
-/**
  * Optional schema - value that can be undefined.
  * 
  * Uses 1 byte to indicate presence (0=undefined, 1=present), followed by the value if defined.
@@ -753,7 +745,7 @@ export function uv3(precision: {
 #### Schema Types
 
 ```ts
-export type Schema = BooleanSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Int64Schema | Uint64Schema | Float16Schema | Float32Schema | Float64Schema | QuantizedSchema | QuatSchema | UV2Schema | UV3Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | BitSetSchema | UnionSchema | LiteralSchema | EnumerationSchema | NullableSchema | OptionalSchema | NullishSchema;
+export type Schema = BooleanSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Int64Schema | Uint64Schema | Float16Schema | Float32Schema | Float64Schema | QuantizedSchema | QuatSchema | UV2Schema | UV3Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | UnionSchema | LiteralSchema | EnumerationSchema | NullableSchema | OptionalSchema | NullishSchema;
 ```
 
 ```ts
@@ -885,13 +877,6 @@ export type Uint8ArraySchema = {
 ```
 
 ```ts
-export type BitSetSchema = {
-    type: 'bitset';
-    keys: string[];
-};
-```
-
-```ts
 export type OptionalSchema = {
     type: 'optional';
     of: Schema;
@@ -953,3 +938,13 @@ export type UV3Schema = {
     bytes: number;
 };
 ```
+
+## Advanced
+
+### What is the packed data format?
+
+Currently there is no formal specification for the packed data format, and no guarantees are made about the stability of the format between versions. As such, the same version of packcat should be used on both the packing and unpacking end, and it is not recommended to persist packed data.
+
+### Does this library support big-endian machines?
+
+This library assumes the host machine is little-endian in its use of JavaScript typed arrays. While supporting big-endian is technically possible, it falls outside the practical scope and realistic use cases of this library.

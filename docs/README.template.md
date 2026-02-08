@@ -4,8 +4,6 @@
 > npm install packcat
 ```
 
-> 🚧 packcat is undergoing heavy development ahead of a v1 release. if you want to try it out early, go ahead! but prepare for breaking changes :)
-
 # packcat
 
 packcat is a small library for packing objects to and from buffers.
@@ -20,10 +18,6 @@ This library takes defined schemas, and then generates efficient functions that 
 
 It is great for use cases like networked games/apps where minimizing bandwidth is important, and both the client and server use javascript and can share schema definitions.
 
-Currently there is no formal specification for the packed data format, and no guarantees are made about the stability of the format between versions. As such, the same version of packcat should be used on both the packing and unpacking end, and it is not recommended to persist packed data.
-
-This library assumes the host machine is little-endian in its use of JavaScript typed arrays. While supporting big-endian is technically possible, it falls outside the practical scope and realistic use cases of this library.
-
 ## Usage
 
 First, define your data format with the schema utils:
@@ -37,6 +31,10 @@ Next, you can build the schema, which gives you `pack`, `unpack`, and `validate`
 You can also use `validate` if you don't trust whether the input data confirms to the schema type:
 
 <Snippet source="./snippets.ts" select="validate" />
+
+If you want to pack directly into an existing buffer, you can use `packInto`:
+
+<Snippet source="./snippets.ts" select="packInto" />
 
 ## API Documentation
 
@@ -83,8 +81,6 @@ You can also use `validate` if you don't trust whether the input data confirms t
 <RenderType type="import('packcat').record" />
 
 <RenderType type="import('packcat').uint8Array" />
-
-<RenderType type="import('packcat').bitset" />
 
 <RenderType type="import('packcat').optional" />
 
@@ -146,8 +142,6 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <RenderType type="import('packcat').Uint8ArraySchema" />
 
-<RenderType type="import('packcat').BitSetSchema" />
-
 <RenderType type="import('packcat').OptionalSchema" />
 
 <RenderType type="import('packcat').NullableSchema" />
@@ -163,3 +157,13 @@ You can also use `validate` if you don't trust whether the input data confirms t
 <RenderType type="import('packcat').UV2Schema" />
 
 <RenderType type="import('packcat').UV3Schema" />
+
+## Advanced
+
+### What is the packed data format?
+
+Currently there is no formal specification for the packed data format, and no guarantees are made about the stability of the format between versions. As such, the same version of packcat should be used on both the packing and unpacking end, and it is not recommended to persist packed data.
+
+### Does this library support big-endian machines?
+
+This library assumes the host machine is little-endian in its use of JavaScript typed arrays. While supporting big-endian is technically possible, it falls outside the practical scope and realistic use cases of this library.
