@@ -110,6 +110,56 @@ export type Uint8ArraySchema = {
     length?: number;
 };
 
+export type Int8ArraySchema = {
+    type: 'int8Array';
+    length?: number;
+};
+
+export type Uint8ClampedArraySchema = {
+    type: 'uint8ClampedArray';
+    length?: number;
+};
+
+export type Int16ArraySchema = {
+    type: 'int16Array';
+    length?: number;
+};
+
+export type Uint16ArraySchema = {
+    type: 'uint16Array';
+    length?: number;
+};
+
+export type Int32ArraySchema = {
+    type: 'int32Array';
+    length?: number;
+};
+
+export type Uint32ArraySchema = {
+    type: 'uint32Array';
+    length?: number;
+};
+
+export type Float32ArraySchema = {
+    type: 'float32Array';
+    length?: number;
+};
+
+export type Float64ArraySchema = {
+    type: 'float64Array';
+    length?: number;
+};
+
+export type BigInt64ArraySchema = {
+    type: 'bigInt64Array';
+    length?: number;
+};
+
+export type BigUint64ArraySchema = {
+    type: 'bigUint64Array';
+    length?: number;
+};
+
 export type LiteralSchema = {
     type: 'literal';
     value: SchemaType<PrimitiveSchema>;
@@ -178,6 +228,16 @@ export type Schema =
     | ObjectSchema
     | RecordSchema
     | Uint8ArraySchema
+    | Int8ArraySchema
+    | Uint8ClampedArraySchema
+    | Int16ArraySchema
+    | Uint16ArraySchema
+    | Int32ArraySchema
+    | Uint32ArraySchema
+    | Float32ArraySchema
+    | Float64ArraySchema
+    | BigInt64ArraySchema
+    | BigUint64ArraySchema
     | UnionSchema
     | LiteralSchema
     | EnumerationSchema
@@ -265,6 +325,16 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
     S extends ObjectSchema ? Simplify<{ [K in keyof S['fields']]: SchemaType<S['fields'][K], DecrementDepth<Depth>> }> :
     S extends RecordSchema ? Record<string, SchemaType<S['field'], DecrementDepth<Depth>>> :
     S extends Uint8ArraySchema ? Uint8Array :
+    S extends Int8ArraySchema ? Int8Array :
+    S extends Uint8ClampedArraySchema ? Uint8ClampedArray :
+    S extends Int16ArraySchema ? Int16Array :
+    S extends Uint16ArraySchema ? Uint16Array :
+    S extends Int32ArraySchema ? Int32Array :
+    S extends Uint32ArraySchema ? Uint32Array :
+    S extends Float32ArraySchema ? Float32Array :
+    S extends Float64ArraySchema ? Float64Array :
+    S extends BigInt64ArraySchema ? BigInt64Array :
+    S extends BigUint64ArraySchema ? BigUint64Array :
     S extends LiteralSchema ? S['value'] :
     S extends EnumerationSchema ? S['values'][number] :
     S extends NullableSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | null :
@@ -578,6 +648,215 @@ export const record = <F extends Schema>(field: F): { type: 'record'; field: F }
  */
 export const uint8Array = (length?: number) => 
     length === undefined ? { type: 'uint8Array' as const } : { type: 'uint8Array' as const, length };
+
+/**
+ * Int8Array schema - raw signed 8-bit integer buffer.
+ * 
+ * Without length: Variable-length buffer prefixed with varuint count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns An Int8Array schema definition
+ * 
+ * @example
+ * // Variable-length signed byte data
+ * int8Array()
+ * 
+ * @example
+ * // Fixed 16-element buffer
+ * int8Array(16)
+ */
+export const int8Array = (length?: number) => 
+    length === undefined ? { type: 'int8Array' as const } : { type: 'int8Array' as const, length };
+
+/**
+ * Uint8ClampedArray schema - raw clamped unsigned 8-bit integer buffer.
+ * 
+ * Values are clamped to 0-255 range. Commonly used for image data (canvas).
+ * Without length: Variable-length buffer prefixed with varuint count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns A Uint8ClampedArray schema definition
+ * 
+ * @example
+ * // Variable-length image pixel data
+ * uint8ClampedArray()
+ * 
+ * @example
+ * // RGBA pixel (4 bytes)
+ * uint8ClampedArray(4)
+ */
+export const uint8ClampedArray = (length?: number) => 
+    length === undefined ? { type: 'uint8ClampedArray' as const } : { type: 'uint8ClampedArray' as const, length };
+
+/**
+ * Int16Array schema - raw signed 16-bit integer buffer.
+ * 
+ * Each element is 2 bytes. Useful for audio samples or compact integer data.
+ * Without length: Variable-length buffer prefixed with varuint element count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns An Int16Array schema definition
+ * 
+ * @example
+ * // Variable-length audio samples
+ * int16Array()
+ * 
+ * @example
+ * // Fixed stereo audio frame (2 samples)
+ * int16Array(2)
+ */
+export const int16Array = (length?: number) => 
+    length === undefined ? { type: 'int16Array' as const } : { type: 'int16Array' as const, length };
+
+/**
+ * Uint16Array schema - raw unsigned 16-bit integer buffer.
+ * 
+ * Each element is 2 bytes. Useful for Unicode code units or indices.
+ * Without length: Variable-length buffer prefixed with varuint element count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns A Uint16Array schema definition
+ * 
+ * @example
+ * // Variable-length index buffer
+ * uint16Array()
+ * 
+ * @example
+ * // Triangle indices (3 vertices)
+ * uint16Array(3)
+ */
+export const uint16Array = (length?: number) => 
+    length === undefined ? { type: 'uint16Array' as const } : { type: 'uint16Array' as const, length };
+
+/**
+ * Int32Array schema - raw signed 32-bit integer buffer.
+ * 
+ * Each element is 4 bytes. Useful for large integer data.
+ * Without length: Variable-length buffer prefixed with varuint element count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns An Int32Array schema definition
+ * 
+ * @example
+ * // Variable-length integer data
+ * int32Array()
+ * 
+ * @example
+ * // Fixed coordinate pair
+ * int32Array(2)
+ */
+export const int32Array = (length?: number) => 
+    length === undefined ? { type: 'int32Array' as const } : { type: 'int32Array' as const, length };
+
+/**
+ * Uint32Array schema - raw unsigned 32-bit integer buffer.
+ * 
+ * Each element is 4 bytes. Useful for colors (RGBA), indices, or IDs.
+ * Without length: Variable-length buffer prefixed with varuint element count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns A Uint32Array schema definition
+ * 
+ * @example
+ * // Variable-length index buffer
+ * uint32Array()
+ * 
+ * @example
+ * // Fixed RGBA color
+ * uint32Array(1)
+ */
+export const uint32Array = (length?: number) => 
+    length === undefined ? { type: 'uint32Array' as const } : { type: 'uint32Array' as const, length };
+
+/**
+ * Float32Array schema - raw 32-bit floating point buffer.
+ * 
+ * Each element is 4 bytes. Commonly used for 3D graphics data (positions, normals, etc.).
+ * Without length: Variable-length buffer prefixed with varuint element count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns A Float32Array schema definition
+ * 
+ * @example
+ * // Variable-length vertex positions
+ * float32Array()
+ * 
+ * @example
+ * // Fixed 3D vector
+ * float32Array(3)
+ */
+export const float32Array = (length?: number) => 
+    length === undefined ? { type: 'float32Array' as const } : { type: 'float32Array' as const, length };
+
+/**
+ * Float64Array schema - raw 64-bit floating point buffer.
+ * 
+ * Each element is 8 bytes. Useful for high-precision numerical data.
+ * Without length: Variable-length buffer prefixed with varuint element count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns A Float64Array schema definition
+ * 
+ * @example
+ * // Variable-length scientific data
+ * float64Array()
+ * 
+ * @example
+ * // Fixed 2D coordinate
+ * float64Array(2)
+ */
+export const float64Array = (length?: number) => 
+    length === undefined ? { type: 'float64Array' as const } : { type: 'float64Array' as const, length };
+
+/**
+ * BigInt64Array schema - raw signed 64-bit BigInt buffer.
+ * 
+ * Each element is 8 bytes stored as BigInt. Useful for large integer data.
+ * Without length: Variable-length buffer prefixed with varuint element count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns A BigInt64Array schema definition
+ * 
+ * @example
+ * // Variable-length large integer data
+ * bigInt64Array()
+ * 
+ * @example
+ * // Fixed pair of large integers
+ * bigInt64Array(2)
+ */
+export const bigInt64Array = (length?: number) => 
+    length === undefined ? { type: 'bigInt64Array' as const } : { type: 'bigInt64Array' as const, length };
+
+/**
+ * BigUint64Array schema - raw unsigned 64-bit BigInt buffer.
+ * 
+ * Each element is 8 bytes stored as BigInt. Useful for large unsigned integer data.
+ * Without length: Variable-length buffer prefixed with varuint element count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns A BigUint64Array schema definition
+ * 
+ * @example
+ * // Variable-length large unsigned integer data
+ * bigUint64Array()
+ * 
+ * @example
+ * // Fixed pair of large unsigned integers
+ * bigUint64Array(2)
+ */
+export const bigUint64Array = (length?: number) => 
+    length === undefined ? { type: 'bigUint64Array' as const } : { type: 'bigUint64Array' as const, length };
 
 /**
  * Literal schema - constant value that doesn't need to be serialized.

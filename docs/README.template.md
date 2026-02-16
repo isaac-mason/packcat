@@ -82,6 +82,26 @@ If you want to pack directly into an existing buffer, you can use `packInto`:
 
 <RenderType type="import('packcat').uint8Array" />
 
+<RenderType type="import('packcat').int8Array" />
+
+<RenderType type="import('packcat').uint8ClampedArray" />
+
+<RenderType type="import('packcat').int16Array" />
+
+<RenderType type="import('packcat').uint16Array" />
+
+<RenderType type="import('packcat').int32Array" />
+
+<RenderType type="import('packcat').uint32Array" />
+
+<RenderType type="import('packcat').float32Array" />
+
+<RenderType type="import('packcat').float64Array" />
+
+<RenderType type="import('packcat').bigInt64Array" />
+
+<RenderType type="import('packcat').bigUint64Array" />
+
 <RenderType type="import('packcat').optional" />
 
 <RenderType type="import('packcat').nullable" />
@@ -141,6 +161,26 @@ If you want to pack directly into an existing buffer, you can use `packInto`:
 <RenderType type="import('packcat').RecordSchema" />
 
 <RenderType type="import('packcat').Uint8ArraySchema" />
+
+<RenderType type="import('packcat').Int8ArraySchema" />
+
+<RenderType type="import('packcat').Uint8ClampedArraySchema" />
+
+<RenderType type="import('packcat').Int16ArraySchema" />
+
+<RenderType type="import('packcat').Uint16ArraySchema" />
+
+<RenderType type="import('packcat').Int32ArraySchema" />
+
+<RenderType type="import('packcat').Uint32ArraySchema" />
+
+<RenderType type="import('packcat').Float32ArraySchema" />
+
+<RenderType type="import('packcat').Float64ArraySchema" />
+
+<RenderType type="import('packcat').BigInt64ArraySchema" />
+
+<RenderType type="import('packcat').BigUint64ArraySchema" />
 
 <RenderType type="import('packcat').OptionalSchema" />
 

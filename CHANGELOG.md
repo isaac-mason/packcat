@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 0.3.0 (Unreleased)
+
+- feat: add schemas for all typed array types
+
 ## 0.2.0
 
 - feat: re-worked schema pack and unpack code generation

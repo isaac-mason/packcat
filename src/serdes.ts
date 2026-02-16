@@ -729,6 +729,402 @@ const handlers: Handlers = {
         },
     },
 
+    // Int8Array: signed 8-bit integers, 1 byte per element
+    int8Array: {
+        size: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return { code: '', fixed: s.length };
+            }
+            const lenVar = variable(ctx, 'len');
+            return { code: `const ${lenVar} = ${v}.length; ${varuintSize(lenVar)} size += ${lenVar};`, fixed: 0 };
+        },
+        pack: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length}), o); o += ${s.length};`;
+            }
+            const lenVar = variable(ctx, 'len');
+            let inner = '';
+            inner += `const ${lenVar} = ${v}.length;`;
+            inner += writeVaruint(lenVar);
+            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar}), o); o += ${lenVar};`;
+            return inner;
+        },
+        unpack: (_ctx, s, target) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return `${target} = new Int8Array(u8.buffer, u8.byteOffset + o, ${s.length}); o += ${s.length};`;
+            }
+            let inner = '';
+            inner += readVaruint('len');
+            inner += `${target} = new Int8Array(u8.buffer, u8.byteOffset + o, len); o += len;`;
+            return inner;
+        },
+        validate: (_ctx, s, v) => {
+            let inner = `if (!(${v} instanceof Int8Array)) return false;`;
+            if ('length' in s && typeof s.length === 'number') {
+                inner += ` if (${v}.length !== ${s.length}) return false;`;
+            }
+            return inner;
+        },
+    },
+
+    // Uint8ClampedArray: clamped unsigned 8-bit integers, 1 byte per element
+    uint8ClampedArray: {
+        size: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return { code: '', fixed: s.length };
+            }
+            const lenVar = variable(ctx, 'len');
+            return { code: `const ${lenVar} = ${v}.length; ${varuintSize(lenVar)} size += ${lenVar};`, fixed: 0 };
+        },
+        pack: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length}), o); o += ${s.length};`;
+            }
+            const lenVar = variable(ctx, 'len');
+            let inner = '';
+            inner += `const ${lenVar} = ${v}.length;`;
+            inner += writeVaruint(lenVar);
+            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar}), o); o += ${lenVar};`;
+            return inner;
+        },
+        unpack: (_ctx, s, target) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return `${target} = new Uint8ClampedArray(u8.buffer, u8.byteOffset + o, ${s.length}); o += ${s.length};`;
+            }
+            let inner = '';
+            inner += readVaruint('len');
+            inner += `${target} = new Uint8ClampedArray(u8.buffer, u8.byteOffset + o, len); o += len;`;
+            return inner;
+        },
+        validate: (_ctx, s, v) => {
+            let inner = `if (!(${v} instanceof Uint8ClampedArray)) return false;`;
+            if ('length' in s && typeof s.length === 'number') {
+                inner += ` if (${v}.length !== ${s.length}) return false;`;
+            }
+            return inner;
+        },
+    },
+
+    // Int16Array: signed 16-bit integers, 2 bytes per element
+    int16Array: {
+        size: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return { code: '', fixed: s.length * 2 };
+            }
+            const lenVar = variable(ctx, 'len');
+            return { code: `const ${lenVar} = ${v}.length; ${varuintSize(lenVar)} size += ${lenVar} * 2;`, fixed: 0 };
+        },
+        pack: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 2}), o); o += ${s.length * 2};`;
+            }
+            const lenVar = variable(ctx, 'len');
+            let inner = '';
+            inner += `const ${lenVar} = ${v}.length;`;
+            inner += writeVaruint(lenVar);
+            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 2), o); o += ${lenVar} * 2;`;
+            return inner;
+        },
+        unpack: (ctx, s, target) => {
+            if ('length' in s && typeof s.length === 'number') {
+                const arrVar = variable(ctx, 'arr');
+                return `const ${arrVar} = new Int16Array(${s.length}); new Uint8Array(${arrVar}.buffer).set(u8.subarray(o, o + ${s.length * 2})); ${target} = ${arrVar}; o += ${s.length * 2};`;
+            }
+            let inner = '';
+            inner += readVaruint('len');
+            const arrVar = variable(ctx, 'arr');
+            inner += `const ${arrVar} = new Int16Array(len); new Uint8Array(${arrVar}.buffer).set(u8.subarray(o, o + len * 2)); ${target} = ${arrVar}; o += len * 2;`;
+            return inner;
+        },
+        validate: (_ctx, s, v) => {
+            let inner = `if (!(${v} instanceof Int16Array)) return false;`;
+            if ('length' in s && typeof s.length === 'number') {
+                inner += ` if (${v}.length !== ${s.length}) return false;`;
+            }
+            return inner;
+        },
+    },
+
+    // Uint16Array: unsigned 16-bit integers, 2 bytes per element
+    uint16Array: {
+        size: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return { code: '', fixed: s.length * 2 };
+            }
+            const lenVar = variable(ctx, 'len');
+            return { code: `const ${lenVar} = ${v}.length; ${varuintSize(lenVar)} size += ${lenVar} * 2;`, fixed: 0 };
+        },
+        pack: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 2}), o); o += ${s.length * 2};`;
+            }
+            const lenVar = variable(ctx, 'len');
+            let inner = '';
+            inner += `const ${lenVar} = ${v}.length;`;
+            inner += writeVaruint(lenVar);
+            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 2), o); o += ${lenVar} * 2;`;
+            return inner;
+        },
+        unpack: (ctx, s, target) => {
+            if ('length' in s && typeof s.length === 'number') {
+                const arrVar = variable(ctx, 'arr');
+                return `const ${arrVar} = new Uint16Array(${s.length}); new Uint8Array(${arrVar}.buffer).set(u8.subarray(o, o + ${s.length * 2})); ${target} = ${arrVar}; o += ${s.length * 2};`;
+            }
+            let inner = '';
+            inner += readVaruint('len');
+            const arrVar = variable(ctx, 'arr');
+            inner += `const ${arrVar} = new Uint16Array(len); new Uint8Array(${arrVar}.buffer).set(u8.subarray(o, o + len * 2)); ${target} = ${arrVar}; o += len * 2;`;
+            return inner;
+        },
+        validate: (_ctx, s, v) => {
+            let inner = `if (!(${v} instanceof Uint16Array)) return false;`;
+            if ('length' in s && typeof s.length === 'number') {
+                inner += ` if (${v}.length !== ${s.length}) return false;`;
+            }
+            return inner;
+        },
+    },
+
+    // Int32Array: signed 32-bit integers, 4 bytes per element
+    int32Array: {
+        size: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return { code: '', fixed: s.length * 4 };
+            }
+            const lenVar = variable(ctx, 'len');
+            return { code: `const ${lenVar} = ${v}.length; ${varuintSize(lenVar)} size += ${lenVar} * 4;`, fixed: 0 };
+        },
+        pack: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 4}), o); o += ${s.length * 4};`;
+            }
+            const lenVar = variable(ctx, 'len');
+            let inner = '';
+            inner += `const ${lenVar} = ${v}.length;`;
+            inner += writeVaruint(lenVar);
+            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 4), o); o += ${lenVar} * 4;`;
+            return inner;
+        },
+        unpack: (ctx, s, target) => {
+            if ('length' in s && typeof s.length === 'number') {
+                const arrVar = variable(ctx, 'arr');
+                return `const ${arrVar} = new Int32Array(${s.length}); new Uint8Array(${arrVar}.buffer).set(u8.subarray(o, o + ${s.length * 4})); ${target} = ${arrVar}; o += ${s.length * 4};`;
+            }
+            let inner = '';
+            inner += readVaruint('len');
+            const arrVar = variable(ctx, 'arr');
+            inner += `const ${arrVar} = new Int32Array(len); new Uint8Array(${arrVar}.buffer).set(u8.subarray(o, o + len * 4)); ${target} = ${arrVar}; o += len * 4;`;
+            return inner;
+        },
+        validate: (_ctx, s, v) => {
+            let inner = `if (!(${v} instanceof Int32Array)) return false;`;
+            if ('length' in s && typeof s.length === 'number') {
+                inner += ` if (${v}.length !== ${s.length}) return false;`;
+            }
+            return inner;
+        },
+    },
+
+    // Uint32Array: unsigned 32-bit integers, 4 bytes per element
+    uint32Array: {
+        size: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return { code: '', fixed: s.length * 4 };
+            }
+            const lenVar = variable(ctx, 'len');
+            return { code: `const ${lenVar} = ${v}.length; ${varuintSize(lenVar)} size += ${lenVar} * 4;`, fixed: 0 };
+        },
+        pack: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 4}), o); o += ${s.length * 4};`;
+            }
+            const lenVar = variable(ctx, 'len');
+            let inner = '';
+            inner += `const ${lenVar} = ${v}.length;`;
+            inner += writeVaruint(lenVar);
+            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 4), o); o += ${lenVar} * 4;`;
+            return inner;
+        },
+        unpack: (ctx, s, target) => {
+            if ('length' in s && typeof s.length === 'number') {
+                const arrVar = variable(ctx, 'arr');
+                return `const ${arrVar} = new Uint32Array(${s.length}); new Uint8Array(${arrVar}.buffer).set(u8.subarray(o, o + ${s.length * 4})); ${target} = ${arrVar}; o += ${s.length * 4};`;
+            }
+            let inner = '';
+            inner += readVaruint('len');
+            const arrVar = variable(ctx, 'arr');
+            inner += `const ${arrVar} = new Uint32Array(len); new Uint8Array(${arrVar}.buffer).set(u8.subarray(o, o + len * 4)); ${target} = ${arrVar}; o += len * 4;`;
+            return inner;
+        },
+        validate: (_ctx, s, v) => {
+            let inner = `if (!(${v} instanceof Uint32Array)) return false;`;
+            if ('length' in s && typeof s.length === 'number') {
+                inner += ` if (${v}.length !== ${s.length}) return false;`;
+            }
+            return inner;
+        },
+    },
+
+    // Float32Array: 32-bit floating point, 4 bytes per element
+    float32Array: {
+        size: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return { code: '', fixed: s.length * 4 };
+            }
+            const lenVar = variable(ctx, 'len');
+            return { code: `const ${lenVar} = ${v}.length; ${varuintSize(lenVar)} size += ${lenVar} * 4;`, fixed: 0 };
+        },
+        pack: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 4}), o); o += ${s.length * 4};`;
+            }
+            const lenVar = variable(ctx, 'len');
+            let inner = '';
+            inner += `const ${lenVar} = ${v}.length;`;
+            inner += writeVaruint(lenVar);
+            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 4), o); o += ${lenVar} * 4;`;
+            return inner;
+        },
+        unpack: (ctx, s, target) => {
+            if ('length' in s && typeof s.length === 'number') {
+                const arrVar = variable(ctx, 'arr');
+                return `const ${arrVar} = new Float32Array(${s.length}); new Uint8Array(${arrVar}.buffer).set(u8.subarray(o, o + ${s.length * 4})); ${target} = ${arrVar}; o += ${s.length * 4};`;
+            }
+            let inner = '';
+            inner += readVaruint('len');
+            const arrVar = variable(ctx, 'arr');
+            inner += `const ${arrVar} = new Float32Array(len); new Uint8Array(${arrVar}.buffer).set(u8.subarray(o, o + len * 4)); ${target} = ${arrVar}; o += len * 4;`;
+            return inner;
+        },
+        validate: (_ctx, s, v) => {
+            let inner = `if (!(${v} instanceof Float32Array)) return false;`;
+            if ('length' in s && typeof s.length === 'number') {
+                inner += ` if (${v}.length !== ${s.length}) return false;`;
+            }
+            return inner;
+        },
+    },
+
+    // Float64Array: 64-bit floating point, 8 bytes per element
+    float64Array: {
+        size: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return { code: '', fixed: s.length * 8 };
+            }
+            const lenVar = variable(ctx, 'len');
+            return { code: `const ${lenVar} = ${v}.length; ${varuintSize(lenVar)} size += ${lenVar} * 8;`, fixed: 0 };
+        },
+        pack: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 8}), o); o += ${s.length * 8};`;
+            }
+            const lenVar = variable(ctx, 'len');
+            let inner = '';
+            inner += `const ${lenVar} = ${v}.length;`;
+            inner += writeVaruint(lenVar);
+            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 8), o); o += ${lenVar} * 8;`;
+            return inner;
+        },
+        unpack: (ctx, s, target) => {
+            if ('length' in s && typeof s.length === 'number') {
+                const arrVar = variable(ctx, 'arr');
+                return `const ${arrVar} = new Float64Array(${s.length}); new Uint8Array(${arrVar}.buffer).set(u8.subarray(o, o + ${s.length * 8})); ${target} = ${arrVar}; o += ${s.length * 8};`;
+            }
+            let inner = '';
+            inner += readVaruint('len');
+            const arrVar = variable(ctx, 'arr');
+            inner += `const ${arrVar} = new Float64Array(len); new Uint8Array(${arrVar}.buffer).set(u8.subarray(o, o + len * 8)); ${target} = ${arrVar}; o += len * 8;`;
+            return inner;
+        },
+        validate: (_ctx, s, v) => {
+            let inner = `if (!(${v} instanceof Float64Array)) return false;`;
+            if ('length' in s && typeof s.length === 'number') {
+                inner += ` if (${v}.length !== ${s.length}) return false;`;
+            }
+            return inner;
+        },
+    },
+
+    // BigInt64Array: signed 64-bit BigInt, 8 bytes per element
+    bigInt64Array: {
+        size: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return { code: '', fixed: s.length * 8 };
+            }
+            const lenVar = variable(ctx, 'len');
+            return { code: `const ${lenVar} = ${v}.length; ${varuintSize(lenVar)} size += ${lenVar} * 8;`, fixed: 0 };
+        },
+        pack: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 8}), o); o += ${s.length * 8};`;
+            }
+            const lenVar = variable(ctx, 'len');
+            let inner = '';
+            inner += `const ${lenVar} = ${v}.length;`;
+            inner += writeVaruint(lenVar);
+            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 8), o); o += ${lenVar} * 8;`;
+            return inner;
+        },
+        unpack: (ctx, s, target) => {
+            if ('length' in s && typeof s.length === 'number') {
+                const arrVar = variable(ctx, 'arr');
+                return `const ${arrVar} = new BigInt64Array(${s.length}); new Uint8Array(${arrVar}.buffer).set(u8.subarray(o, o + ${s.length * 8})); ${target} = ${arrVar}; o += ${s.length * 8};`;
+            }
+            let inner = '';
+            inner += readVaruint('len');
+            const arrVar = variable(ctx, 'arr');
+            inner += `const ${arrVar} = new BigInt64Array(len); new Uint8Array(${arrVar}.buffer).set(u8.subarray(o, o + len * 8)); ${target} = ${arrVar}; o += len * 8;`;
+            return inner;
+        },
+        validate: (_ctx, s, v) => {
+            let inner = `if (!(${v} instanceof BigInt64Array)) return false;`;
+            if ('length' in s && typeof s.length === 'number') {
+                inner += ` if (${v}.length !== ${s.length}) return false;`;
+            }
+            return inner;
+        },
+    },
+
+    // BigUint64Array: unsigned 64-bit BigInt, 8 bytes per element
+    bigUint64Array: {
+        size: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return { code: '', fixed: s.length * 8 };
+            }
+            const lenVar = variable(ctx, 'len');
+            return { code: `const ${lenVar} = ${v}.length; ${varuintSize(lenVar)} size += ${lenVar} * 8;`, fixed: 0 };
+        },
+        pack: (ctx, s, v) => {
+            if ('length' in s && typeof s.length === 'number') {
+                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 8}), o); o += ${s.length * 8};`;
+            }
+            const lenVar = variable(ctx, 'len');
+            let inner = '';
+            inner += `const ${lenVar} = ${v}.length;`;
+            inner += writeVaruint(lenVar);
+            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 8), o); o += ${lenVar} * 8;`;
+            return inner;
+        },
+        unpack: (ctx, s, target) => {
+            if ('length' in s && typeof s.length === 'number') {
+                const arrVar = variable(ctx, 'arr');
+                return `const ${arrVar} = new BigUint64Array(${s.length}); new Uint8Array(${arrVar}.buffer).set(u8.subarray(o, o + ${s.length * 8})); ${target} = ${arrVar}; o += ${s.length * 8};`;
+            }
+            let inner = '';
+            inner += readVaruint('len');
+            const arrVar = variable(ctx, 'arr');
+            inner += `const ${arrVar} = new BigUint64Array(len); new Uint8Array(${arrVar}.buffer).set(u8.subarray(o, o + len * 8)); ${target} = ${arrVar}; o += len * 8;`;
+            return inner;
+        },
+        validate: (_ctx, s, v) => {
+            let inner = `if (!(${v} instanceof BigUint64Array)) return false;`;
+            if ('length' in s && typeof s.length === 'number') {
+                inner += ` if (${v}.length !== ${s.length}) return false;`;
+            }
+            return inner;
+        },
+    },
+
     // fixed-length lists omit the length prefix; variable-length use varuint
     // booleans are bitpacked (8 per byte)
     list: {
