@@ -3,15 +3,22 @@
 import { describe, expect, test } from 'vitest';
 import type { SchemaType } from '../src';
 import {
+    bigInt64Array,
+    bigUint64Array,
     boolean,
     build,
     enumeration,
     float16,
     float32,
+    float32Array,
     float64,
+    float64Array,
     int8,
+    int8Array,
     int16,
+    int16Array,
     int32,
+    int32Array,
     int64,
     list,
     literal,
@@ -27,8 +34,11 @@ import {
     tuple,
     uint8,
     uint8Array,
+    uint8ClampedArray,
     uint16,
+    uint16Array,
     uint32,
+    uint32Array,
     uint64,
     union,
     uv2,
@@ -2557,5 +2567,480 @@ describe('validate', () => {
         expect(validate('quaternion')).toBe(false);
         // @ts-expect-error null
         expect(validate(null)).toBe(false);
+    });
+
+    test('int8Array', () => {
+        // Variable length
+        const { pack, unpack, validate } = build(int8Array());
+
+        const empty = new Int8Array(0);
+        const serializedEmpty = pack(empty);
+        expect(serializedEmpty.byteLength).toBe(1); // varuint(0) = 1 byte
+        const outEmpty = unpack(serializedEmpty);
+        expect(outEmpty.byteLength).toBe(0);
+
+        const src = new Int8Array([-128, 0, 127]);
+        const serialized = pack(src);
+        expect(serialized.byteLength).toBe(1 + src.length); // varuint(3) = 1 byte + 3 bytes data
+        const out = unpack(serialized);
+        expect(Array.from(out)).toEqual(Array.from(src));
+
+        expect(validate(src)).toBe(true);
+        // @ts-expect-error wrong type
+        expect(validate(new Uint8Array([1, 2, 3]))).toBe(false);
+        // @ts-expect-error wrong type
+        expect(validate([1, 2, 3])).toBe(false);
+
+        // Fixed length
+        const { pack: packFixed, unpack: unpackFixed, validate: validateFixed } = build(int8Array(4));
+        const fixedSrc = new Int8Array([-1, 0, 1, 2]);
+        const serializedFixed = packFixed(fixedSrc);
+        expect(serializedFixed.byteLength).toBe(4); // no length prefix
+        const outFixed = unpackFixed(serializedFixed);
+        expect(Array.from(outFixed)).toEqual(Array.from(fixedSrc));
+
+        expect(validateFixed(new Int8Array([1, 2, 3, 4]))).toBe(true);
+        expect(validateFixed(new Int8Array([1, 2, 3]))).toBe(false); // wrong length
+    });
+
+    test('uint8ClampedArray', () => {
+        // Variable length
+        const { pack, unpack, validate } = build(uint8ClampedArray());
+
+        const empty = new Uint8ClampedArray(0);
+        const serializedEmpty = pack(empty);
+        expect(serializedEmpty.byteLength).toBe(1);
+        const outEmpty = unpack(serializedEmpty);
+        expect(outEmpty.byteLength).toBe(0);
+
+        const src = new Uint8ClampedArray([0, 128, 255]);
+        const serialized = pack(src);
+        expect(serialized.byteLength).toBe(1 + src.length);
+        const out = unpack(serialized);
+        expect(Array.from(out)).toEqual(Array.from(src));
+
+        expect(validate(src)).toBe(true);
+        // @ts-expect-error wrong type
+        expect(validate(new Uint8Array([1, 2, 3]))).toBe(false);
+
+        // Fixed length
+        const { pack: packFixed, unpack: unpackFixed, validate: validateFixed } = build(uint8ClampedArray(4));
+        const fixedSrc = new Uint8ClampedArray([0, 64, 128, 255]);
+        const serializedFixed = packFixed(fixedSrc);
+        expect(serializedFixed.byteLength).toBe(4);
+        const outFixed = unpackFixed(serializedFixed);
+        expect(Array.from(outFixed)).toEqual(Array.from(fixedSrc));
+
+        expect(validateFixed(new Uint8ClampedArray([1, 2, 3, 4]))).toBe(true);
+        expect(validateFixed(new Uint8ClampedArray([1, 2, 3]))).toBe(false);
+    });
+
+    test('int16Array', () => {
+        // Variable length
+        const { pack, unpack, validate } = build(int16Array());
+
+        const empty = new Int16Array(0);
+        const serializedEmpty = pack(empty);
+        expect(serializedEmpty.byteLength).toBe(1);
+        const outEmpty = unpack(serializedEmpty);
+        expect(outEmpty.byteLength).toBe(0);
+
+        const src = new Int16Array([-32768, 0, 32767]);
+        const serialized = pack(src);
+        expect(serialized.byteLength).toBe(1 + src.length * 2); // varuint(3) + 6 bytes data
+        const out = unpack(serialized);
+        expect(Array.from(out)).toEqual(Array.from(src));
+
+        expect(validate(src)).toBe(true);
+        // @ts-expect-error wrong type
+        expect(validate(new Int8Array([1, 2, 3]))).toBe(false);
+
+        // Fixed length
+        const { pack: packFixed, unpack: unpackFixed, validate: validateFixed } = build(int16Array(3));
+        const fixedSrc = new Int16Array([-1000, 0, 1000]);
+        const serializedFixed = packFixed(fixedSrc);
+        expect(serializedFixed.byteLength).toBe(6);
+        const outFixed = unpackFixed(serializedFixed);
+        expect(Array.from(outFixed)).toEqual(Array.from(fixedSrc));
+
+        expect(validateFixed(new Int16Array([1, 2, 3]))).toBe(true);
+        expect(validateFixed(new Int16Array([1, 2]))).toBe(false);
+    });
+
+    test('uint16Array', () => {
+        // Variable length
+        const { pack, unpack, validate } = build(uint16Array());
+
+        const empty = new Uint16Array(0);
+        const serializedEmpty = pack(empty);
+        expect(serializedEmpty.byteLength).toBe(1);
+        const outEmpty = unpack(serializedEmpty);
+        expect(outEmpty.byteLength).toBe(0);
+
+        const src = new Uint16Array([0, 32768, 65535]);
+        const serialized = pack(src);
+        expect(serialized.byteLength).toBe(1 + src.length * 2);
+        const out = unpack(serialized);
+        expect(Array.from(out)).toEqual(Array.from(src));
+
+        expect(validate(src)).toBe(true);
+        // @ts-expect-error wrong type
+        expect(validate(new Int16Array([1, 2, 3]))).toBe(false);
+
+        // Fixed length - triangle indices use case
+        const { pack: packFixed, unpack: unpackFixed, validate: validateFixed } = build(uint16Array(3));
+        const fixedSrc = new Uint16Array([0, 1, 2]);
+        const serializedFixed = packFixed(fixedSrc);
+        expect(serializedFixed.byteLength).toBe(6);
+        const outFixed = unpackFixed(serializedFixed);
+        expect(Array.from(outFixed)).toEqual(Array.from(fixedSrc));
+
+        expect(validateFixed(new Uint16Array([1, 2, 3]))).toBe(true);
+        expect(validateFixed(new Uint16Array([1, 2]))).toBe(false);
+    });
+
+    test('int32Array', () => {
+        // Variable length
+        const { pack, unpack, validate } = build(int32Array());
+
+        const empty = new Int32Array(0);
+        const serializedEmpty = pack(empty);
+        expect(serializedEmpty.byteLength).toBe(1);
+        const outEmpty = unpack(serializedEmpty);
+        expect(outEmpty.byteLength).toBe(0);
+
+        const src = new Int32Array([-2147483648, 0, 2147483647]);
+        const serialized = pack(src);
+        expect(serialized.byteLength).toBe(1 + src.length * 4);
+        const out = unpack(serialized);
+        expect(Array.from(out)).toEqual(Array.from(src));
+
+        expect(validate(src)).toBe(true);
+        // @ts-expect-error wrong type
+        expect(validate(new Int16Array([1, 2, 3]))).toBe(false);
+
+        // Fixed length
+        const { pack: packFixed, unpack: unpackFixed, validate: validateFixed } = build(int32Array(2));
+        const fixedSrc = new Int32Array([-1000000, 1000000]);
+        const serializedFixed = packFixed(fixedSrc);
+        expect(serializedFixed.byteLength).toBe(8);
+        const outFixed = unpackFixed(serializedFixed);
+        expect(Array.from(outFixed)).toEqual(Array.from(fixedSrc));
+
+        expect(validateFixed(new Int32Array([1, 2]))).toBe(true);
+        expect(validateFixed(new Int32Array([1]))).toBe(false);
+    });
+
+    test('uint32Array', () => {
+        // Variable length
+        const { pack, unpack, validate } = build(uint32Array());
+
+        const empty = new Uint32Array(0);
+        const serializedEmpty = pack(empty);
+        expect(serializedEmpty.byteLength).toBe(1);
+        const outEmpty = unpack(serializedEmpty);
+        expect(outEmpty.byteLength).toBe(0);
+
+        const src = new Uint32Array([0, 2147483648, 4294967295]);
+        const serialized = pack(src);
+        expect(serialized.byteLength).toBe(1 + src.length * 4);
+        const out = unpack(serialized);
+        expect(Array.from(out)).toEqual(Array.from(src));
+
+        expect(validate(src)).toBe(true);
+        // @ts-expect-error wrong type
+        expect(validate(new Int32Array([1, 2, 3]))).toBe(false);
+
+        // Fixed length
+        const { pack: packFixed, unpack: unpackFixed, validate: validateFixed } = build(uint32Array(2));
+        const fixedSrc = new Uint32Array([0xDEADBEEF, 0xCAFEBABE]);
+        const serializedFixed = packFixed(fixedSrc);
+        expect(serializedFixed.byteLength).toBe(8);
+        const outFixed = unpackFixed(serializedFixed);
+        expect(Array.from(outFixed)).toEqual(Array.from(fixedSrc));
+
+        expect(validateFixed(new Uint32Array([1, 2]))).toBe(true);
+        expect(validateFixed(new Uint32Array([1]))).toBe(false);
+    });
+
+    test('float32Array', () => {
+        // Variable length
+        const { pack, unpack, validate } = build(float32Array());
+
+        const empty = new Float32Array(0);
+        const serializedEmpty = pack(empty);
+        expect(serializedEmpty.byteLength).toBe(1);
+        const outEmpty = unpack(serializedEmpty);
+        expect(outEmpty.byteLength).toBe(0);
+
+        const src = new Float32Array([1.5, -3.14159, 1000.25]);
+        const serialized = pack(src);
+        expect(serialized.byteLength).toBe(1 + src.length * 4);
+        const out = unpack(serialized);
+        expect(out[0]).toBeCloseTo(1.5, 5);
+        expect(out[1]).toBeCloseTo(-3.14159, 5);
+        expect(out[2]).toBeCloseTo(1000.25, 5);
+
+        expect(validate(src)).toBe(true);
+        // @ts-expect-error wrong type
+        expect(validate(new Float64Array([1, 2, 3]))).toBe(false);
+
+        // Fixed length - 3D vector use case
+        const { pack: packFixed, unpack: unpackFixed, validate: validateFixed } = build(float32Array(3));
+        const fixedSrc = new Float32Array([1.0, 2.0, 3.0]);
+        const serializedFixed = packFixed(fixedSrc);
+        expect(serializedFixed.byteLength).toBe(12);
+        const outFixed = unpackFixed(serializedFixed);
+        expect(Array.from(outFixed)).toEqual(Array.from(fixedSrc));
+
+        expect(validateFixed(new Float32Array([1, 2, 3]))).toBe(true);
+        expect(validateFixed(new Float32Array([1, 2]))).toBe(false);
+    });
+
+    test('float64Array', () => {
+        // Variable length
+        const { pack, unpack, validate } = build(float64Array());
+
+        const empty = new Float64Array(0);
+        const serializedEmpty = pack(empty);
+        expect(serializedEmpty.byteLength).toBe(1);
+        const outEmpty = unpack(serializedEmpty);
+        expect(outEmpty.byteLength).toBe(0);
+
+        const src = new Float64Array([1.5, -3.141592653589793, 1e308]);
+        const serialized = pack(src);
+        expect(serialized.byteLength).toBe(1 + src.length * 8);
+        const out = unpack(serialized);
+        expect(out[0]).toBe(1.5);
+        expect(out[1]).toBeCloseTo(-3.141592653589793, 12);
+        expect(out[2]).toBe(1e308);
+
+        expect(validate(src)).toBe(true);
+        // @ts-expect-error wrong type
+        expect(validate(new Float32Array([1, 2, 3]))).toBe(false);
+
+        // Fixed length - high precision coordinate use case
+        const { pack: packFixed, unpack: unpackFixed, validate: validateFixed } = build(float64Array(2));
+        const fixedSrc = new Float64Array([1.123456789012345, 2.987654321098765]);
+        const serializedFixed = packFixed(fixedSrc);
+        expect(serializedFixed.byteLength).toBe(16);
+        const outFixed = unpackFixed(serializedFixed);
+        expect(outFixed[0]).toBeCloseTo(1.123456789012345, 12);
+        expect(outFixed[1]).toBeCloseTo(2.987654321098765, 12);
+
+        expect(validateFixed(new Float64Array([1, 2]))).toBe(true);
+        expect(validateFixed(new Float64Array([1]))).toBe(false);
+    });
+
+    test('bigInt64Array', () => {
+        // Variable length
+        const { pack, unpack, validate } = build(bigInt64Array());
+
+        const empty = new BigInt64Array(0);
+        const serializedEmpty = pack(empty);
+        expect(serializedEmpty.byteLength).toBe(1);
+        const outEmpty = unpack(serializedEmpty);
+        expect(outEmpty.byteLength).toBe(0);
+
+        const src = new BigInt64Array([-9223372036854775808n, 0n, 9223372036854775807n]);
+        const serialized = pack(src);
+        expect(serialized.byteLength).toBe(1 + src.length * 8);
+        const out = unpack(serialized);
+        expect(out[0]).toBe(-9223372036854775808n);
+        expect(out[1]).toBe(0n);
+        expect(out[2]).toBe(9223372036854775807n);
+
+        expect(validate(src)).toBe(true);
+        // @ts-expect-error wrong type
+        expect(validate(new BigUint64Array([1n, 2n, 3n]))).toBe(false);
+
+        // Fixed length
+        const { pack: packFixed, unpack: unpackFixed, validate: validateFixed } = build(bigInt64Array(2));
+        const fixedSrc = new BigInt64Array([-1000000000000n, 1000000000000n]);
+        const serializedFixed = packFixed(fixedSrc);
+        expect(serializedFixed.byteLength).toBe(16);
+        const outFixed = unpackFixed(serializedFixed);
+        expect(outFixed[0]).toBe(-1000000000000n);
+        expect(outFixed[1]).toBe(1000000000000n);
+
+        expect(validateFixed(new BigInt64Array([1n, 2n]))).toBe(true);
+        expect(validateFixed(new BigInt64Array([1n]))).toBe(false);
+    });
+
+    test('bigUint64Array', () => {
+        // Variable length
+        const { pack, unpack, validate } = build(bigUint64Array());
+
+        const empty = new BigUint64Array(0);
+        const serializedEmpty = pack(empty);
+        expect(serializedEmpty.byteLength).toBe(1);
+        const outEmpty = unpack(serializedEmpty);
+        expect(outEmpty.byteLength).toBe(0);
+
+        const src = new BigUint64Array([0n, 9223372036854775808n, 18446744073709551615n]);
+        const serialized = pack(src);
+        expect(serialized.byteLength).toBe(1 + src.length * 8);
+        const out = unpack(serialized);
+        expect(out[0]).toBe(0n);
+        expect(out[1]).toBe(9223372036854775808n);
+        expect(out[2]).toBe(18446744073709551615n);
+
+        expect(validate(src)).toBe(true);
+        // @ts-expect-error wrong type
+        expect(validate(new BigInt64Array([1n, 2n, 3n]))).toBe(false);
+
+        // Fixed length
+        const { pack: packFixed, unpack: unpackFixed, validate: validateFixed } = build(bigUint64Array(2));
+        const fixedSrc = new BigUint64Array([0xDEADBEEFCAFEBABEn, 0xFEEDFACEDEADC0DEn]);
+        const serializedFixed = packFixed(fixedSrc);
+        expect(serializedFixed.byteLength).toBe(16);
+        const outFixed = unpackFixed(serializedFixed);
+        expect(outFixed[0]).toBe(0xDEADBEEFCAFEBABEn);
+        expect(outFixed[1]).toBe(0xFEEDFACEDEADC0DEn);
+
+        expect(validateFixed(new BigUint64Array([1n, 2n]))).toBe(true);
+        expect(validateFixed(new BigUint64Array([1n]))).toBe(false);
+    });
+
+    test('typed arrays nested in object', () => {
+        const schema = object({
+            int8Data: int8Array(),
+            uint16Data: uint16Array(3),
+            floatData: float32Array(),
+        });
+        const { pack, unpack, validate } = build(schema);
+
+        const value = {
+            int8Data: new Int8Array([-10, 0, 10]),
+            uint16Data: new Uint16Array([100, 200, 300]),
+            floatData: new Float32Array([1.5, 2.5]),
+        };
+
+        const serialized = pack(value);
+        const out = unpack(serialized);
+
+        expect(Array.from(out.int8Data)).toEqual(Array.from(value.int8Data));
+        expect(Array.from(out.uint16Data)).toEqual(Array.from(value.uint16Data));
+        expect(out.floatData[0]).toBeCloseTo(1.5, 5);
+        expect(out.floatData[1]).toBeCloseTo(2.5, 5);
+
+        expect(validate(value)).toBe(true);
+    });
+
+    test('typed arrays in list', () => {
+        const schema = list(float32Array(3)); // List of 3D vectors
+        const { pack, unpack, validate } = build(schema);
+
+        const vectors = [
+            new Float32Array([1, 0, 0]),
+            new Float32Array([0, 1, 0]),
+            new Float32Array([0, 0, 1]),
+        ];
+
+        const serialized = pack(vectors);
+        const out = unpack(serialized);
+
+        expect(out.length).toBe(3);
+        expect(Array.from(out[0])).toEqual([1, 0, 0]);
+        expect(Array.from(out[1])).toEqual([0, 1, 0]);
+        expect(Array.from(out[2])).toEqual([0, 0, 1]);
+
+        expect(validate(vectors)).toBe(true);
+    });
+
+    test('typed arrays alignment - unaligned access', () => {
+        // These tests verify that typed arrays work correctly when placed after
+        // data that causes unaligned byte offsets (e.g., after a single byte)
+
+        // Int16Array after 1 byte (offset not multiple of 2)
+        const int16Schema = object({ flag: uint8(), data: int16Array(2) });
+        const { pack: packI16, unpack: unpackI16 } = build(int16Schema);
+        const int16Value = { flag: 1, data: new Int16Array([1000, -2000]) };
+        const int16Out = unpackI16(packI16(int16Value));
+        expect(int16Out.flag).toBe(1);
+        expect(Array.from(int16Out.data)).toEqual([1000, -2000]);
+
+        // Uint16Array after 1 byte
+        const uint16Schema = object({ flag: uint8(), data: uint16Array(2) });
+        const { pack: packU16, unpack: unpackU16 } = build(uint16Schema);
+        const uint16Value = { flag: 255, data: new Uint16Array([50000, 60000]) };
+        const uint16Out = unpackU16(packU16(uint16Value));
+        expect(uint16Out.flag).toBe(255);
+        expect(Array.from(uint16Out.data)).toEqual([50000, 60000]);
+
+        // Int32Array after 1 byte (offset not multiple of 4)
+        const int32Schema = object({ flag: uint8(), data: int32Array(2) });
+        const { pack: packI32, unpack: unpackI32 } = build(int32Schema);
+        const int32Value = { flag: 42, data: new Int32Array([-100000, 100000]) };
+        const int32Out = unpackI32(packI32(int32Value));
+        expect(int32Out.flag).toBe(42);
+        expect(Array.from(int32Out.data)).toEqual([-100000, 100000]);
+
+        // Uint32Array after 1 byte
+        const uint32Schema = object({ flag: uint8(), data: uint32Array(2) });
+        const { pack: packU32, unpack: unpackU32 } = build(uint32Schema);
+        const uint32Value = { flag: 1, data: new Uint32Array([3000000000, 4000000000]) };
+        const uint32Out = unpackU32(packU32(uint32Value));
+        expect(uint32Out.flag).toBe(1);
+        expect(Array.from(uint32Out.data)).toEqual([3000000000, 4000000000]);
+
+        // Float32Array after 1 byte (offset not multiple of 4)
+        const float32Schema = object({ flag: uint8(), data: float32Array(3) });
+        const { pack: packF32, unpack: unpackF32 } = build(float32Schema);
+        const float32Value = { flag: 7, data: new Float32Array([1.5, 2.5, 3.5]) };
+        const float32Out = unpackF32(packF32(float32Value));
+        expect(float32Out.flag).toBe(7);
+        expect(float32Out.data[0]).toBeCloseTo(1.5, 5);
+        expect(float32Out.data[1]).toBeCloseTo(2.5, 5);
+        expect(float32Out.data[2]).toBeCloseTo(3.5, 5);
+
+        // Float64Array after 1 byte (offset not multiple of 8)
+        const float64Schema = object({ flag: uint8(), data: float64Array(2) });
+        const { pack: packF64, unpack: unpackF64 } = build(float64Schema);
+        const float64Value = { flag: 99, data: new Float64Array([Math.PI, Math.E]) };
+        const float64Out = unpackF64(packF64(float64Value));
+        expect(float64Out.flag).toBe(99);
+        expect(float64Out.data[0]).toBeCloseTo(Math.PI, 12);
+        expect(float64Out.data[1]).toBeCloseTo(Math.E, 12);
+
+        // BigInt64Array after 1 byte (offset not multiple of 8)
+        const bigInt64Schema = object({ flag: uint8(), data: bigInt64Array(2) });
+        const { pack: packBI64, unpack: unpackBI64 } = build(bigInt64Schema);
+        const bigInt64Value = { flag: 128, data: new BigInt64Array([-9000000000000n, 9000000000000n]) };
+        const bigInt64Out = unpackBI64(packBI64(bigInt64Value));
+        expect(bigInt64Out.flag).toBe(128);
+        expect(bigInt64Out.data[0]).toBe(-9000000000000n);
+        expect(bigInt64Out.data[1]).toBe(9000000000000n);
+
+        // BigUint64Array after 1 byte (offset not multiple of 8)
+        const bigUint64Schema = object({ flag: uint8(), data: bigUint64Array(2) });
+        const { pack: packBU64, unpack: unpackBU64 } = build(bigUint64Schema);
+        const bigUint64Value = { flag: 200, data: new BigUint64Array([18000000000000000000n, 1n]) };
+        const bigUint64Out = unpackBU64(packBU64(bigUint64Value));
+        expect(bigUint64Out.flag).toBe(200);
+        expect(bigUint64Out.data[0]).toBe(18000000000000000000n);
+        expect(bigUint64Out.data[1]).toBe(1n);
+    });
+
+    test('typed arrays alignment - variable length after unaligned offset', () => {
+        // Test variable-length typed arrays after unaligned data
+        
+        // Float32Array (variable) after 3 bytes
+        const schema = object({
+            a: uint8(),
+            b: uint8(),
+            c: uint8(),
+            data: float32Array(),
+        });
+        const { pack, unpack } = build(schema);
+        const value = { a: 1, b: 2, c: 3, data: new Float32Array([1.1, 2.2, 3.3, 4.4]) };
+        const out = unpack(pack(value));
+        expect(out.a).toBe(1);
+        expect(out.b).toBe(2);
+        expect(out.c).toBe(3);
+        expect(out.data[0]).toBeCloseTo(1.1, 5);
+        expect(out.data[1]).toBeCloseTo(2.2, 5);
+        expect(out.data[2]).toBeCloseTo(3.3, 5);
+        expect(out.data[3]).toBeCloseTo(4.4, 5);
     });
 });

@@ -477,6 +477,225 @@ export function uint8Array(length?: number);
 
 ```ts
 /**
+ * Int8Array schema - raw signed 8-bit integer buffer.
+ * 
+ * Without length: Variable-length buffer prefixed with varuint count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns An Int8Array schema definition
+ * 
+ * @example
+ * // Variable-length signed byte data
+ * int8Array()
+ * 
+ * @example
+ * // Fixed 16-element buffer
+ * int8Array(16)
+ */
+export function int8Array(length?: number);
+```
+
+```ts
+/**
+ * Uint8ClampedArray schema - raw clamped unsigned 8-bit integer buffer.
+ * 
+ * Values are clamped to 0-255 range. Commonly used for image data (canvas).
+ * Without length: Variable-length buffer prefixed with varuint count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns A Uint8ClampedArray schema definition
+ * 
+ * @example
+ * // Variable-length image pixel data
+ * uint8ClampedArray()
+ * 
+ * @example
+ * // RGBA pixel (4 bytes)
+ * uint8ClampedArray(4)
+ */
+export function uint8ClampedArray(length?: number);
+```
+
+```ts
+/**
+ * Int16Array schema - raw signed 16-bit integer buffer.
+ * 
+ * Each element is 2 bytes. Useful for audio samples or compact integer data.
+ * Without length: Variable-length buffer prefixed with varuint element count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns An Int16Array schema definition
+ * 
+ * @example
+ * // Variable-length audio samples
+ * int16Array()
+ * 
+ * @example
+ * // Fixed stereo audio frame (2 samples)
+ * int16Array(2)
+ */
+export function int16Array(length?: number);
+```
+
+```ts
+/**
+ * Uint16Array schema - raw unsigned 16-bit integer buffer.
+ * 
+ * Each element is 2 bytes. Useful for Unicode code units or indices.
+ * Without length: Variable-length buffer prefixed with varuint element count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns A Uint16Array schema definition
+ * 
+ * @example
+ * // Variable-length index buffer
+ * uint16Array()
+ * 
+ * @example
+ * // Triangle indices (3 vertices)
+ * uint16Array(3)
+ */
+export function uint16Array(length?: number);
+```
+
+```ts
+/**
+ * Int32Array schema - raw signed 32-bit integer buffer.
+ * 
+ * Each element is 4 bytes. Useful for large integer data.
+ * Without length: Variable-length buffer prefixed with varuint element count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns An Int32Array schema definition
+ * 
+ * @example
+ * // Variable-length integer data
+ * int32Array()
+ * 
+ * @example
+ * // Fixed coordinate pair
+ * int32Array(2)
+ */
+export function int32Array(length?: number);
+```
+
+```ts
+/**
+ * Uint32Array schema - raw unsigned 32-bit integer buffer.
+ * 
+ * Each element is 4 bytes. Useful for colors (RGBA), indices, or IDs.
+ * Without length: Variable-length buffer prefixed with varuint element count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns A Uint32Array schema definition
+ * 
+ * @example
+ * // Variable-length index buffer
+ * uint32Array()
+ * 
+ * @example
+ * // Fixed RGBA color
+ * uint32Array(1)
+ */
+export function uint32Array(length?: number);
+```
+
+```ts
+/**
+ * Float32Array schema - raw 32-bit floating point buffer.
+ * 
+ * Each element is 4 bytes. Commonly used for 3D graphics data (positions, normals, etc.).
+ * Without length: Variable-length buffer prefixed with varuint element count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns A Float32Array schema definition
+ * 
+ * @example
+ * // Variable-length vertex positions
+ * float32Array()
+ * 
+ * @example
+ * // Fixed 3D vector
+ * float32Array(3)
+ */
+export function float32Array(length?: number);
+```
+
+```ts
+/**
+ * Float64Array schema - raw 64-bit floating point buffer.
+ * 
+ * Each element is 8 bytes. Useful for high-precision numerical data.
+ * Without length: Variable-length buffer prefixed with varuint element count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns A Float64Array schema definition
+ * 
+ * @example
+ * // Variable-length scientific data
+ * float64Array()
+ * 
+ * @example
+ * // Fixed 2D coordinate
+ * float64Array(2)
+ */
+export function float64Array(length?: number);
+```
+
+```ts
+/**
+ * BigInt64Array schema - raw signed 64-bit BigInt buffer.
+ * 
+ * Each element is 8 bytes stored as BigInt. Useful for large integer data.
+ * Without length: Variable-length buffer prefixed with varuint element count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns A BigInt64Array schema definition
+ * 
+ * @example
+ * // Variable-length large integer data
+ * bigInt64Array()
+ * 
+ * @example
+ * // Fixed pair of large integers
+ * bigInt64Array(2)
+ */
+export function bigInt64Array(length?: number);
+```
+
+```ts
+/**
+ * BigUint64Array schema - raw unsigned 64-bit BigInt buffer.
+ * 
+ * Each element is 8 bytes stored as BigInt. Useful for large unsigned integer data.
+ * Without length: Variable-length buffer prefixed with varuint element count
+ * With length: Fixed-length buffer with no length prefix
+ * 
+ * @param length Optional fixed length in elements
+ * @returns A BigUint64Array schema definition
+ * 
+ * @example
+ * // Variable-length large unsigned integer data
+ * bigUint64Array()
+ * 
+ * @example
+ * // Fixed pair of large unsigned integers
+ * bigUint64Array(2)
+ */
+export function bigUint64Array(length?: number);
+```
+
+```ts
+/**
  * Optional schema - value that can be undefined.
  * 
  * Uses 1 byte to indicate presence (0=undefined, 1=present), followed by the value if defined.
@@ -745,7 +964,7 @@ export function uv3(precision: {
 #### Schema Types
 
 ```ts
-export type Schema = BooleanSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Int64Schema | Uint64Schema | Float16Schema | Float32Schema | Float64Schema | QuantizedSchema | QuatSchema | UV2Schema | UV3Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | UnionSchema | LiteralSchema | EnumerationSchema | NullableSchema | OptionalSchema | NullishSchema;
+export type Schema = BooleanSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Int64Schema | Uint64Schema | Float16Schema | Float32Schema | Float64Schema | QuantizedSchema | QuatSchema | UV2Schema | UV3Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | Int8ArraySchema | Uint8ClampedArraySchema | Int16ArraySchema | Uint16ArraySchema | Int32ArraySchema | Uint32ArraySchema | Float32ArraySchema | Float64ArraySchema | BigInt64ArraySchema | BigUint64ArraySchema | UnionSchema | LiteralSchema | EnumerationSchema | NullableSchema | OptionalSchema | NullishSchema;
 ```
 
 ```ts
@@ -872,6 +1091,76 @@ export type RecordSchema = {
 ```ts
 export type Uint8ArraySchema = {
     type: 'uint8Array';
+    length?: number;
+};
+```
+
+```ts
+export type Int8ArraySchema = {
+    type: 'int8Array';
+    length?: number;
+};
+```
+
+```ts
+export type Uint8ClampedArraySchema = {
+    type: 'uint8ClampedArray';
+    length?: number;
+};
+```
+
+```ts
+export type Int16ArraySchema = {
+    type: 'int16Array';
+    length?: number;
+};
+```
+
+```ts
+export type Uint16ArraySchema = {
+    type: 'uint16Array';
+    length?: number;
+};
+```
+
+```ts
+export type Int32ArraySchema = {
+    type: 'int32Array';
+    length?: number;
+};
+```
+
+```ts
+export type Uint32ArraySchema = {
+    type: 'uint32Array';
+    length?: number;
+};
+```
+
+```ts
+export type Float32ArraySchema = {
+    type: 'float32Array';
+    length?: number;
+};
+```
+
+```ts
+export type Float64ArraySchema = {
+    type: 'float64Array';
+    length?: number;
+};
+```
+
+```ts
+export type BigInt64ArraySchema = {
+    type: 'bigInt64Array';
+    length?: number;
+};
+```
+
+```ts
+export type BigUint64ArraySchema = {
+    type: 'bigUint64Array';
     length?: number;
 };
 ```
