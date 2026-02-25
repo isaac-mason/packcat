@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 0.3.0 (Unreleased)
+## 0.3.0
 
 - feat: add schemas for all typed array types
 
