@@ -2753,7 +2753,7 @@ describe('validate', () => {
 
         // Fixed length
         const { pack: packFixed, unpack: unpackFixed, validate: validateFixed } = build(uint32Array(2));
-        const fixedSrc = new Uint32Array([0xDEADBEEF, 0xCAFEBABE]);
+        const fixedSrc = new Uint32Array([0xdeadbeef, 0xcafebabe]);
         const serializedFixed = packFixed(fixedSrc);
         expect(serializedFixed.byteLength).toBe(8);
         const outFixed = unpackFixed(serializedFixed);
@@ -2891,12 +2891,12 @@ describe('validate', () => {
 
         // Fixed length
         const { pack: packFixed, unpack: unpackFixed, validate: validateFixed } = build(bigUint64Array(2));
-        const fixedSrc = new BigUint64Array([0xDEADBEEFCAFEBABEn, 0xFEEDFACEDEADC0DEn]);
+        const fixedSrc = new BigUint64Array([0xdeadbeefcafebaben, 0xfeedfacedeadc0den]);
         const serializedFixed = packFixed(fixedSrc);
         expect(serializedFixed.byteLength).toBe(16);
         const outFixed = unpackFixed(serializedFixed);
-        expect(outFixed[0]).toBe(0xDEADBEEFCAFEBABEn);
-        expect(outFixed[1]).toBe(0xFEEDFACEDEADC0DEn);
+        expect(outFixed[0]).toBe(0xdeadbeefcafebaben);
+        expect(outFixed[1]).toBe(0xfeedfacedeadc0den);
 
         expect(validateFixed(new BigUint64Array([1n, 2n]))).toBe(true);
         expect(validateFixed(new BigUint64Array([1n]))).toBe(false);
@@ -2931,11 +2931,7 @@ describe('validate', () => {
         const schema = list(float32Array(3)); // List of 3D vectors
         const { pack, unpack, validate } = build(schema);
 
-        const vectors = [
-            new Float32Array([1, 0, 0]),
-            new Float32Array([0, 1, 0]),
-            new Float32Array([0, 0, 1]),
-        ];
+        const vectors = [new Float32Array([1, 0, 0]), new Float32Array([0, 1, 0]), new Float32Array([0, 0, 1])];
 
         const serialized = pack(vectors);
         const out = unpack(serialized);
@@ -3024,7 +3020,7 @@ describe('validate', () => {
 
     test('typed arrays alignment - variable length after unaligned offset', () => {
         // Test variable-length typed arrays after unaligned data
-        
+
         // Float32Array (variable) after 3 bytes
         const schema = object({
             a: uint8(),
@@ -3042,5 +3038,66 @@ describe('validate', () => {
         expect(out.data[1]).toBeCloseTo(2.2, 5);
         expect(out.data[2]).toBeCloseTo(3.3, 5);
         expect(out.data[3]).toBeCloseTo(4.4, 5);
+    });
+
+    test('deeply nested records in object (record > object > record > object > record)', () => {
+        // reproduces a variable shadowing bug where the size codegen for nested
+        // records reused the hardcoded variable name 'k', causing inner record
+        // loops to shadow the outer record's key variable
+        const channelSchema = object({
+            offset: uint32(),
+            keyframeCount: uint32(),
+        });
+
+        const animationSchema = object({
+            duration: float32(),
+            channels: record(channelSchema),
+        });
+
+        const modelSchema = object({
+            index: uint32(),
+            partRange: list(uint32(), 2),
+            animations: record(animationSchema),
+        });
+
+        const topSchema = object({
+            models: record(modelSchema),
+        });
+
+        const { pack, unpack, validate } = build(topSchema);
+
+        const data = {
+            models: {
+                testmodel: {
+                    index: 0,
+                    partRange: [0, 1] as [number, number],
+                    animations: {
+                        walk: {
+                            duration: 1.5,
+                            channels: {
+                                '0.translation': { offset: 0, keyframeCount: 10 },
+                                '0.rotation': { offset: 120, keyframeCount: 5 },
+                            },
+                        },
+                        idle: {
+                            duration: 2.0,
+                            channels: {
+                                '1.scale': { offset: 200, keyframeCount: 3 },
+                            },
+                        },
+                    },
+                },
+                othermodel: {
+                    index: 1,
+                    partRange: [1, 3] as [number, number],
+                    animations: {},
+                },
+            },
+        };
+
+        expect(validate(data)).toBe(true);
+        const packed = pack(data);
+        const result = unpack(packed);
+        expect(result).toEqual(data);
     });
 });

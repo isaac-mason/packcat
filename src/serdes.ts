@@ -1391,22 +1391,23 @@ const handlers: Handlers = {
             const i = variable(ctx, 'i');
             const keys = variable(ctx, 'keys');
             const keysLen = variable(ctx, 'keysLen');
+            const k = variable(ctx, 'k');
             let inner = '';
             inner += `if (${v} && typeof ${v} === 'object') {`;
             inner += `const ${keys} = Object.keys(${v});`;
             inner += `const ${keysLen} = ${keys}.length;`;
             inner += `${varuintSize(keysLen)}`;
             const strVar = variable(ctx, 'str');
-            inner += `for (let ${i} = 0; ${i} < ${keysLen}; ${i}++) { const k = ${keys}[${i}]; const ${strVar} = k; len = utf8Length(${strVar}); ${varuintSize('len')} size += len; }`;
+            inner += `for (let ${i} = 0; ${i} < ${keysLen}; ${i}++) { const ${k} = ${keys}[${i}]; const ${strVar} = ${k}; len = utf8Length(${strVar}); ${varuintSize('len')} size += len; }`;
             if (s.field.type === 'boolean') {
                 const bytesVar = variable(ctx, 'bytes');
                 inner += `const ${bytesVar} = Math.ceil(${keysLen} / 8); size += ${bytesVar};`;
             } else {
-                const childSize = size(ctx, s.field, `${v}[k]`);
+                const childSize = size(ctx, s.field, `${v}[${k}]`);
                 if (childSize.fixed > 0) inner += ` size += ${childSize.fixed} * ${keysLen}; `;
                 if (childSize.code !== '') {
                     const i2 = variable(ctx, 'i');
-                    inner += `for (let ${i2} = 0; ${i2} < ${keysLen}; ${i2}++) { const k = ${keys}[${i2}]; ${childSize.code} }`;
+                    inner += `for (let ${i2} = 0; ${i2} < ${keysLen}; ${i2}++) { const ${k} = ${keys}[${i2}]; ${childSize.code} }`;
                 }
             }
             inner += `}`;
