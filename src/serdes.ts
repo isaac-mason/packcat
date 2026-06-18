@@ -1,6 +1,6 @@
 import type { Schema, SchemaType } from './schema';
 
-export type PackIntoResult = { ok: true; bytesWritten: number } | { ok: false; bytesWritten: 0 };
+export type PackIntoResult = { ok: boolean; size: number };
 
 export function build<S extends Schema>(
     schema: S,
@@ -115,9 +115,9 @@ function buildPack(schema: Schema): { pack: string; packInto: string } {
     const packIntoSource =
         preamble +
         'let o = offset;' +
-        'if (o + size > u8.length) return { ok: false, bytesWritten: 0 };' +
+        'if (o + size > u8.length) return { ok: false, size };' +
         body +
-        'return { ok: true, bytesWritten: size };';
+        'return { ok: true, size };';
 
     return {
         pack: packSource,

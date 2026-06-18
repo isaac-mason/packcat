@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 0.4.0
+
+- feat!: `packInto` now reports the required byte count via `result.size`, including on failure so callers can allocate exactly what's needed
+    - **breaking**: `PackIntoResult` changed from `{ ok, bytesWritten }` to `{ ok, size }`. On success `size` is the number of bytes written; on failure `size` is the number of bytes that would have been required (buffer is left untouched).
+
 ## 0.3.0
 
 - feat: add schemas for all typed array types

@@ -91,9 +91,9 @@ const buf = new Uint8Array(128);
 const result = packInto(playerInput, buf, 0);
 
 if (result.ok) {
-    console.log(`Packed ${result.bytesWritten} bytes into existing buffer`);
+    console.log(`Packed ${result.size} bytes into existing buffer`);
 } else {
-    console.log('Failed to pack into existing buffer');
+    console.log(`Buffer too small: needed ${result.size} bytes`);
 }
 ```
 
