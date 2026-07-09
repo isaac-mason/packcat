@@ -1913,17 +1913,28 @@ describe('packInto', () => {
         expect(result).toEqual({ ok: false, size: 4 });
     });
 
-    test('does not mutate buffer on failure', () => {
+    test('reports true size and may partially write on failure', () => {
         const schema = uint32();
         const { packInto } = build(schema);
 
         const buf = new Uint8Array(2);
         buf.fill(0xaa);
-        packInto(42, buf, 0);
+        const result = packInto(42, buf, 0);
 
-        // buffer should be untouched since check happens before writing
-        expect(buf[0]).toBe(0xaa);
-        expect(buf[1]).toBe(0xaa);
+        // on overflow the bytes that fit are written; `size` still reports the full required length
+        expect(result).toEqual({ ok: false, size: 4 });
+        expect(buf[0]).toBe(42);
+        expect(buf[1]).toBe(0);
+    });
+
+    test('typed array too small returns ok: false instead of throwing', () => {
+        // typed-array u8.set() throws on overflow; packInto must report { ok: false, size } instead
+        const { packInto, size } = build(uint8Array());
+        const value = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
+
+        const buf = new Uint8Array(4);
+        expect(() => packInto(value, buf, 0)).not.toThrow();
+        expect(packInto(value, buf, 0)).toEqual({ ok: false, size: size(value) });
     });
 
     test('works with variable-length types (string)', () => {
@@ -2059,6 +2070,44 @@ describe('packInto', () => {
         const result = packInto(42, buf, 0);
 
         expect(result).toEqual({ ok: false, size: 4 });
+    });
+});
+
+describe('size', () => {
+    test('fixed-size schema', () => {
+        const { size } = build(uint32());
+        expect(size(42)).toBe(4);
+    });
+
+    test('matches pack length and packInto size for variable-size schema', () => {
+        const schema = object({
+            frame: uint32(),
+            name: string(),
+            pos: list(float32(), 3),
+            tags: list(string()),
+            flag: boolean(),
+            n: varuint(),
+        });
+        const { pack, packInto, size } = build(schema);
+
+        const values: SchemaType<typeof schema>[] = [
+            { frame: 1, name: 'hello', pos: [1, 2, 3], tags: ['a', 'bb', 'ccc'], flag: true, n: 300 },
+            { frame: 0, name: '', pos: [0, 0, 0], tags: [], flag: false, n: 0 },
+            { frame: 4294967295, name: 'unicode✓snow☃', pos: [-1.5, 2.5, 9], tags: ['x'], flag: true, n: 1000000 },
+        ];
+
+        for (const value of values) {
+            const s = size(value);
+            expect(s).toBe(pack(value).length);
+
+            const buf = new Uint8Array(1024);
+            expect(packInto(value, buf, 0)).toEqual({ ok: true, size: s });
+        }
+    });
+
+    test('does not mutate a buffer (measure only)', () => {
+        const { size } = build(string());
+        expect(size('☃')).toBe(size('☃'));
     });
 });
 

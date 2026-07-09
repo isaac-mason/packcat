@@ -52,12 +52,12 @@ const playerInputSchema = object({
 type PlayerInputType = SchemaType<typeof playerInputSchema>;
 ```
 
-Next, you can build the schema, which gives you `pack`, `unpack`, and `validate` functions, and use `SchemaType` to infer the TypeScript type of the schema:
+Next, you can build the schema, which gives you `pack`, `unpack`, `validate`, `packInto`, and `size` functions, and use `SchemaType` to infer the TypeScript type of the schema:
 
 ```ts
 import { build } from 'packcat';
 
-const { pack, packInto, unpack, validate } = build(playerInputSchema);
+const { pack, packInto, size, unpack, validate } = build(playerInputSchema);
 
 const playerInput: PlayerInputType = {
     frame: 1,
@@ -84,7 +84,7 @@ console.log(validate(playerInput)); // true
 console.log(validate({ foo: 'bar' })); // false
 ```
 
-If you want to pack directly into an existing buffer, you can use `packInto`:
+If you want to pack directly into an existing buffer, you can use `packInto`. It writes in a single pass without measuring up front, and reports the number of bytes required via `result.size` (including when the buffer was too small, so you can grow it and retry):
 
 ```ts
 const buf = new Uint8Array(128);
@@ -93,8 +93,20 @@ const result = packInto(playerInput, buf, 0);
 if (result.ok) {
     console.log(`Packed ${result.size} bytes into existing buffer`);
 } else {
+    // packInto writes optimistically in a single pass; on failure some bytes may already
+    // have been written, so grow/flush the buffer and pack again.
     console.log(`Buffer too small: needed ${result.size} bytes`);
 }
+```
+
+If you need to know how many bytes a value requires before allocating a buffer, use `size`:
+
+```ts
+// use `size` to find out how many bytes a value needs before you have a buffer to pack into
+const byteLength = size(playerInput);
+
+const preAllocated = new Uint8Array(byteLength);
+packInto(playerInput, preAllocated, 0); // guaranteed to fit
 ```
 
 ## API Documentation
@@ -103,6 +115,7 @@ if (result.ok) {
 export function build<S extends Schema>(schema: S): {
     pack: (value: SchemaType<S>) => Uint8Array;
     packInto: (value: SchemaType<S>, u8: Uint8Array, offset: number) => PackIntoResult;
+    size: (value: SchemaType<S>) => number;
     unpack: (u8: Uint8Array) => SchemaType<S>;
     validate: (value: SchemaType<S>) => boolean;
     source: {
@@ -110,6 +123,7 @@ export function build<S extends Schema>(schema: S): {
         unpack: string;
         validate: string;
         packInto: string;
+        size: string;
     };
 };
 ```

@@ -1,9 +1,11 @@
 # CHANGELOG
 
-## 0.4.0
+## 0.4.0 (Unreleased)
 
-- feat!: `packInto` now reports the required byte count via `result.size`, including on failure so callers can allocate exactly what's needed
-    - **breaking**: `PackIntoResult` changed from `{ ok, bytesWritten }` to `{ ok, size }`. On success `size` is the number of bytes written; on failure `size` is the number of bytes that would have been required (buffer is left untouched).
+- feat: add `size`, returns the number of bytes required to pack a value into a buffer (useful for pre-allocating before you have a buffer)
+- feat!: `packInto` now writes in a single pass and reports the required byte count via `result.size`
+    - **breaking**: `PackIntoResult` changed from `{ ok, bytesWritten }` to `{ ok, size }`. `size` is always the full number of bytes required to pack the value; `ok` reports whether it all fit at the given offset.
+    - **breaking**: `packInto` no longer measures the value up front — it writes optimistically and checks afterwards. As a result, on failure (`ok: false`) the buffer may be partially written rather than left untouched. Callers that grow/flush and retry on failure are unaffected.
 
 ## 0.3.0
 
@@ -31,4 +33,4 @@
 
 ## 0.01 - 0.0.5
 
-- Early development releases, use at your own risk!
+- Early development releases

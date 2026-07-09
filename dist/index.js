@@ -787,9 +787,10 @@ const uv3 = (precision = { step: 0.001 }) => {
 };
 
 function build(schema) {
-    const { pack: packSource, packInto: packIntoSource } = buildPack(schema);
+    const { pack: packSource, packInto: packIntoSource, size: sizeSource } = buildPack(schema);
     const pack = new Function('textEncoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'utf8Length', 'value', packSource).bind(null, textEncoder, f16, f16_u8, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8, utf8Length);
     const packInto = new Function('textEncoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'utf8Length', 'value', 'u8', 'offset', packIntoSource).bind(null, textEncoder, f16, f16_u8, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8, utf8Length);
+    const size = new Function('utf8Length', 'value', sizeSource).bind(null, utf8Length);
     const unpackSource = buildUnpack(schema);
     const unpack = new Function('textDecoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'u8', unpackSource).bind(null, textDecoder, f16, f16_u8, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8);
     const validateSource = buildValidate(schema);
@@ -797,37 +798,39 @@ function build(schema) {
     return {
         pack,
         packInto,
+        size,
         unpack,
         validate,
-        source: { pack: packSource, unpack: unpackSource, validate: validateSource, packInto: packIntoSource },
+        source: { pack: packSource, unpack: unpackSource, validate: validateSource, packInto: packIntoSource, size: sizeSource },
     };
 }
 function buildPack(schema) {
+    let decls = '';
+    decls += 'let len = 0;';
+    decls += 'let vint = 0;';
+    decls += 'let vuint = 0;';
+    decls += 'let keys;';
+    decls += 'let val = 0;';
     const ctx = createCtx();
-    let preamble = '';
-    preamble += 'let len = 0;';
-    preamble += 'let vint = 0;';
-    preamble += 'let vuint = 0;';
-    preamble += 'let keys;';
-    preamble += 'let val = 0;';
     const calc = size(ctx, schema, 'value');
-    preamble += `let size = ${calc.fixed};`;
-    preamble += calc.code;
+    const sizeCalc = `let size = ${calc.fixed};` + calc.code;
     const body = pack(ctx, schema, 'value');
-    const packSource = preamble +
+    const sizeSource = decls + sizeCalc + 'return size;';
+    const packSource = decls +
+        sizeCalc +
         'const arrayBuffer = new ArrayBuffer(size);' +
         'let o = 0;' +
         'const u8 = new Uint8Array(arrayBuffer); ' +
         body +
         'return u8;';
-    const packIntoSource = preamble +
-        'let o = offset;' +
-        'if (o + size > u8.length) return { ok: false, size };' +
-        body +
-        'return { ok: true, size };';
+    // Single pass, no upfront measure: out-of-bounds byte writes are silently dropped (and typed-array
+    // `u8.set` writes skipped) while `o` still advances, so `size` is the required length and
+    // `o <= u8.length` reports whether it fit. On overflow the buffer may be partially written.
+    const packIntoSource = decls + 'let o = offset;' + body + 'const size = o - offset;' + 'return { ok: o <= u8.length, size };';
     return {
         pack: packSource,
         packInto: packIntoSource,
+        size: sizeSource,
     };
 }
 function buildUnpack(schema) {
@@ -1335,13 +1338,13 @@ const handlers = {
         },
         pack: (ctx, s, v) => {
             if ('length' in s && typeof s.length === 'number') {
-                return `u8.set(${v}, o); o += ${s.length};`;
+                return `if (o + ${s.length} <= u8.length) u8.set(${v}, o); o += ${s.length};`;
             }
             const lenVar = variable(ctx, 'len');
             let inner = '';
             inner += `const ${lenVar} = ${v}.length;`;
             inner += writeVaruint(lenVar);
-            inner += `u8.set(${v}, o); o += ${lenVar};`;
+            inner += `if (o + ${lenVar} <= u8.length) u8.set(${v}, o); o += ${lenVar};`;
             return inner;
         },
         unpack: (_ctx, s, target) => {
@@ -1372,13 +1375,13 @@ const handlers = {
         },
         pack: (ctx, s, v) => {
             if ('length' in s && typeof s.length === 'number') {
-                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length}), o); o += ${s.length};`;
+                return `if (o + ${s.length} <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length}), o); o += ${s.length};`;
             }
             const lenVar = variable(ctx, 'len');
             let inner = '';
             inner += `const ${lenVar} = ${v}.length;`;
             inner += writeVaruint(lenVar);
-            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar}), o); o += ${lenVar};`;
+            inner += `if (o + ${lenVar} <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar}), o); o += ${lenVar};`;
             return inner;
         },
         unpack: (_ctx, s, target) => {
@@ -1409,13 +1412,13 @@ const handlers = {
         },
         pack: (ctx, s, v) => {
             if ('length' in s && typeof s.length === 'number') {
-                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length}), o); o += ${s.length};`;
+                return `if (o + ${s.length} <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length}), o); o += ${s.length};`;
             }
             const lenVar = variable(ctx, 'len');
             let inner = '';
             inner += `const ${lenVar} = ${v}.length;`;
             inner += writeVaruint(lenVar);
-            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar}), o); o += ${lenVar};`;
+            inner += `if (o + ${lenVar} <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar}), o); o += ${lenVar};`;
             return inner;
         },
         unpack: (_ctx, s, target) => {
@@ -1446,13 +1449,13 @@ const handlers = {
         },
         pack: (ctx, s, v) => {
             if ('length' in s && typeof s.length === 'number') {
-                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 2}), o); o += ${s.length * 2};`;
+                return `if (o + ${s.length * 2} <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 2}), o); o += ${s.length * 2};`;
             }
             const lenVar = variable(ctx, 'len');
             let inner = '';
             inner += `const ${lenVar} = ${v}.length;`;
             inner += writeVaruint(lenVar);
-            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 2), o); o += ${lenVar} * 2;`;
+            inner += `if (o + ${lenVar} * 2 <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 2), o); o += ${lenVar} * 2;`;
             return inner;
         },
         unpack: (ctx, s, target) => {
@@ -1485,13 +1488,13 @@ const handlers = {
         },
         pack: (ctx, s, v) => {
             if ('length' in s && typeof s.length === 'number') {
-                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 2}), o); o += ${s.length * 2};`;
+                return `if (o + ${s.length * 2} <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 2}), o); o += ${s.length * 2};`;
             }
             const lenVar = variable(ctx, 'len');
             let inner = '';
             inner += `const ${lenVar} = ${v}.length;`;
             inner += writeVaruint(lenVar);
-            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 2), o); o += ${lenVar} * 2;`;
+            inner += `if (o + ${lenVar} * 2 <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 2), o); o += ${lenVar} * 2;`;
             return inner;
         },
         unpack: (ctx, s, target) => {
@@ -1524,13 +1527,13 @@ const handlers = {
         },
         pack: (ctx, s, v) => {
             if ('length' in s && typeof s.length === 'number') {
-                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 4}), o); o += ${s.length * 4};`;
+                return `if (o + ${s.length * 4} <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 4}), o); o += ${s.length * 4};`;
             }
             const lenVar = variable(ctx, 'len');
             let inner = '';
             inner += `const ${lenVar} = ${v}.length;`;
             inner += writeVaruint(lenVar);
-            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 4), o); o += ${lenVar} * 4;`;
+            inner += `if (o + ${lenVar} * 4 <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 4), o); o += ${lenVar} * 4;`;
             return inner;
         },
         unpack: (ctx, s, target) => {
@@ -1563,13 +1566,13 @@ const handlers = {
         },
         pack: (ctx, s, v) => {
             if ('length' in s && typeof s.length === 'number') {
-                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 4}), o); o += ${s.length * 4};`;
+                return `if (o + ${s.length * 4} <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 4}), o); o += ${s.length * 4};`;
             }
             const lenVar = variable(ctx, 'len');
             let inner = '';
             inner += `const ${lenVar} = ${v}.length;`;
             inner += writeVaruint(lenVar);
-            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 4), o); o += ${lenVar} * 4;`;
+            inner += `if (o + ${lenVar} * 4 <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 4), o); o += ${lenVar} * 4;`;
             return inner;
         },
         unpack: (ctx, s, target) => {
@@ -1602,13 +1605,13 @@ const handlers = {
         },
         pack: (ctx, s, v) => {
             if ('length' in s && typeof s.length === 'number') {
-                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 4}), o); o += ${s.length * 4};`;
+                return `if (o + ${s.length * 4} <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 4}), o); o += ${s.length * 4};`;
             }
             const lenVar = variable(ctx, 'len');
             let inner = '';
             inner += `const ${lenVar} = ${v}.length;`;
             inner += writeVaruint(lenVar);
-            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 4), o); o += ${lenVar} * 4;`;
+            inner += `if (o + ${lenVar} * 4 <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 4), o); o += ${lenVar} * 4;`;
             return inner;
         },
         unpack: (ctx, s, target) => {
@@ -1641,13 +1644,13 @@ const handlers = {
         },
         pack: (ctx, s, v) => {
             if ('length' in s && typeof s.length === 'number') {
-                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 8}), o); o += ${s.length * 8};`;
+                return `if (o + ${s.length * 8} <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 8}), o); o += ${s.length * 8};`;
             }
             const lenVar = variable(ctx, 'len');
             let inner = '';
             inner += `const ${lenVar} = ${v}.length;`;
             inner += writeVaruint(lenVar);
-            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 8), o); o += ${lenVar} * 8;`;
+            inner += `if (o + ${lenVar} * 8 <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 8), o); o += ${lenVar} * 8;`;
             return inner;
         },
         unpack: (ctx, s, target) => {
@@ -1680,13 +1683,13 @@ const handlers = {
         },
         pack: (ctx, s, v) => {
             if ('length' in s && typeof s.length === 'number') {
-                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 8}), o); o += ${s.length * 8};`;
+                return `if (o + ${s.length * 8} <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 8}), o); o += ${s.length * 8};`;
             }
             const lenVar = variable(ctx, 'len');
             let inner = '';
             inner += `const ${lenVar} = ${v}.length;`;
             inner += writeVaruint(lenVar);
-            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 8), o); o += ${lenVar} * 8;`;
+            inner += `if (o + ${lenVar} * 8 <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 8), o); o += ${lenVar} * 8;`;
             return inner;
         },
         unpack: (ctx, s, target) => {
@@ -1719,13 +1722,13 @@ const handlers = {
         },
         pack: (ctx, s, v) => {
             if ('length' in s && typeof s.length === 'number') {
-                return `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 8}), o); o += ${s.length * 8};`;
+                return `if (o + ${s.length * 8} <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${s.length * 8}), o); o += ${s.length * 8};`;
             }
             const lenVar = variable(ctx, 'len');
             let inner = '';
             inner += `const ${lenVar} = ${v}.length;`;
             inner += writeVaruint(lenVar);
-            inner += `u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 8), o); o += ${lenVar} * 8;`;
+            inner += `if (o + ${lenVar} * 8 <= u8.length) u8.set(new Uint8Array(${v}.buffer, ${v}.byteOffset, ${lenVar} * 8), o); o += ${lenVar} * 8;`;
             return inner;
         },
         unpack: (ctx, s, target) => {
