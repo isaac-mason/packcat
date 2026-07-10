@@ -40,6 +40,12 @@ If you need to know how many bytes a value requires before allocating a buffer, 
 
 <Snippet source="./snippets.ts" select="size" />
 
+## Memory & lifetimes (views vs. copies)
+
+`unpack` returns single-byte arrays (`uint8Array`, `int8Array`, `uint8ClampedArray`) as **zero-copy views** into the input buffer — only valid while that buffer is alive and unchanged. Don't mutate, transfer, or recycle the buffer while such a result is in use; `.slice()` for an owned copy.
+
+Multi-byte typed arrays (`uint16Array`, `float32Array`, `float64Array`, etc.) are returned as **owned copies**, so they're safe to cache or hold across a transfer. (This split is forced by alignment: a multi-byte view needs an element-aligned offset, which packed fields can't guarantee.)
+
 ## API Documentation
 
 <RenderType type="import('packcat').build" />

@@ -634,10 +634,13 @@ export const record = <F extends Schema>(field: F): { type: 'record'; field: F }
  * 
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
+ * Lifetime: `unpack` returns a zero-copy **view** into the input buffer — don't
+ * mutate, transfer, or recycle that buffer while it's in use; `.slice()` to own.
+ *
  * @param length Optional fixed length in bytes
  * @returns A Uint8Array schema definition
- * 
+ *
  * @example
  * // Variable-length binary data
  * uint8Array()
@@ -654,10 +657,13 @@ export const uint8Array = (length?: number) =>
  * 
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
+ * Lifetime: `unpack` returns a zero-copy **view** into the input buffer — don't
+ * mutate, transfer, or recycle that buffer while it's in use; `.slice()` to own.
+ *
  * @param length Optional fixed length in elements
  * @returns An Int8Array schema definition
- * 
+ *
  * @example
  * // Variable-length signed byte data
  * int8Array()
@@ -675,7 +681,10 @@ export const int8Array = (length?: number) =>
  * Values are clamped to 0-255 range. Commonly used for image data (canvas).
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
+ * Lifetime: `unpack` returns a zero-copy **view** into the input buffer — don't
+ * mutate, transfer, or recycle that buffer while it's in use; `.slice()` to own.
+ *
  * @param length Optional fixed length in elements
  * @returns A Uint8ClampedArray schema definition
  * 

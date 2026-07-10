@@ -12,6 +12,7 @@ packcat is a small library for packing objects to and from buffers.
 
 - [Overview](#overview)
 - [Usage](#usage)
+- [Memory & lifetimes (views vs. copies)](#memory-lifetimes-views-vs-copies)
 - [API Documentation](#api-documentation)
     - [Schema Types](#schema-types)
 - [Advanced](#advanced)
@@ -108,6 +109,12 @@ const byteLength = size(playerInput);
 const preAllocated = new Uint8Array(byteLength);
 packInto(playerInput, preAllocated, 0); // guaranteed to fit
 ```
+
+## Memory & lifetimes (views vs. copies)
+
+`unpack` returns single-byte arrays (`uint8Array`, `int8Array`, `uint8ClampedArray`) as **zero-copy views** into the input buffer — only valid while that buffer is alive and unchanged. Don't mutate, transfer, or recycle the buffer while such a result is in use; `.slice()` for an owned copy.
+
+Multi-byte typed arrays (`uint16Array`, `float32Array`, `float64Array`, etc.) are returned as **owned copies**, so they're safe to cache or hold across a transfer. (This split is forced by alignment: a multi-byte view needs an element-aligned offset, which packed fields can't guarantee.)
 
 ## API Documentation
 
@@ -474,10 +481,13 @@ export function record<F extends Schema>(field: F): {
  * 
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
+ * Lifetime: `unpack` returns a zero-copy **view** into the input buffer — don't
+ * mutate, transfer, or recycle that buffer while it's in use; `.slice()` to own.
+ *
  * @param length Optional fixed length in bytes
  * @returns A Uint8Array schema definition
- * 
+ *
  * @example
  * // Variable-length binary data
  * uint8Array()
@@ -495,10 +505,13 @@ export function uint8Array(length?: number);
  * 
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
+ * Lifetime: `unpack` returns a zero-copy **view** into the input buffer — don't
+ * mutate, transfer, or recycle that buffer while it's in use; `.slice()` to own.
+ *
  * @param length Optional fixed length in elements
  * @returns An Int8Array schema definition
- * 
+ *
  * @example
  * // Variable-length signed byte data
  * int8Array()
@@ -517,7 +530,10 @@ export function int8Array(length?: number);
  * Values are clamped to 0-255 range. Commonly used for image data (canvas).
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
+ * Lifetime: `unpack` returns a zero-copy **view** into the input buffer — don't
+ * mutate, transfer, or recycle that buffer while it's in use; `.slice()` to own.
+ *
  * @param length Optional fixed length in elements
  * @returns A Uint8ClampedArray schema definition
  * 
