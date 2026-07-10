@@ -1866,7 +1866,7 @@ describe('serDes', () => {
 });
 
 describe('packInto', () => {
-    test('writes into provided buffer and returns ok with bytesWritten', () => {
+    test('writes into provided buffer and returns ok with size', () => {
         const schema = uint32();
         const { pack, packInto } = build(schema);
 
@@ -1874,7 +1874,7 @@ describe('packInto', () => {
         const buf = new Uint8Array(16);
         const result = packInto(42, buf, 0);
 
-        expect(result).toEqual({ ok: true, bytesWritten: 4 });
+        expect(result).toEqual({ ok: true, size: 4 });
         expect(buf.subarray(0, 4)).toEqual(packed);
     });
 
@@ -1886,7 +1886,7 @@ describe('packInto', () => {
         buf[0] = 0xff; // sentinel
         const result = packInto(42, buf, 4);
 
-        expect(result).toEqual({ ok: true, bytesWritten: 4 });
+        expect(result).toEqual({ ok: true, size: 4 });
         expect(buf[0]).toBe(0xff); // sentinel untouched
 
         const packed = pack(42);
@@ -1900,7 +1900,7 @@ describe('packInto', () => {
         const buf = new Uint8Array(2); // need 4 bytes
         const result = packInto(42, buf, 0);
 
-        expect(result).toEqual({ ok: false, bytesWritten: 0 });
+        expect(result).toEqual({ ok: false, size: 4 });
     });
 
     test('returns ok: false when offset leaves insufficient room', () => {
@@ -1910,20 +1910,31 @@ describe('packInto', () => {
         const buf = new Uint8Array(8);
         const result = packInto(42, buf, 6); // only 2 bytes left
 
-        expect(result).toEqual({ ok: false, bytesWritten: 0 });
+        expect(result).toEqual({ ok: false, size: 4 });
     });
 
-    test('does not mutate buffer on failure', () => {
+    test('reports true size and may partially write on failure', () => {
         const schema = uint32();
         const { packInto } = build(schema);
 
         const buf = new Uint8Array(2);
         buf.fill(0xaa);
-        packInto(42, buf, 0);
+        const result = packInto(42, buf, 0);
 
-        // buffer should be untouched since check happens before writing
-        expect(buf[0]).toBe(0xaa);
-        expect(buf[1]).toBe(0xaa);
+        // on overflow the bytes that fit are written; `size` still reports the full required length
+        expect(result).toEqual({ ok: false, size: 4 });
+        expect(buf[0]).toBe(42);
+        expect(buf[1]).toBe(0);
+    });
+
+    test('typed array too small returns ok: false instead of throwing', () => {
+        // typed-array u8.set() throws on overflow; packInto must report { ok: false, size } instead
+        const { packInto, size } = build(uint8Array());
+        const value = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
+
+        const buf = new Uint8Array(4);
+        expect(() => packInto(value, buf, 0)).not.toThrow();
+        expect(packInto(value, buf, 0)).toEqual({ ok: false, size: size(value) });
     });
 
     test('works with variable-length types (string)', () => {
@@ -1934,7 +1945,7 @@ describe('packInto', () => {
         const buf = new Uint8Array(64);
         const result = packInto('hello', buf, 0);
 
-        expect(result).toEqual({ ok: true, bytesWritten: packed.length });
+        expect(result).toEqual({ ok: true, size: packed.length });
         expect(buf.subarray(0, packed.length)).toEqual(packed);
     });
 
@@ -1945,7 +1956,7 @@ describe('packInto', () => {
         const buf = new Uint8Array(2); // 'hello' needs 6 bytes (1 varuint + 5 chars)
         const result = packInto('hello', buf, 0);
 
-        expect(result).toEqual({ ok: false, bytesWritten: 0 });
+        expect(result).toEqual({ ok: false, size: 6 });
     });
 
     test('works with object schema', () => {
@@ -1961,10 +1972,10 @@ describe('packInto', () => {
         const buf = new Uint8Array(64);
         const result = packInto(value, buf, 0);
 
-        expect(result).toEqual({ ok: true, bytesWritten: packed.length });
+        expect(result).toEqual({ ok: true, size: packed.length });
 
         // verify round-trip through unpack
-        const unpacked = unpack(buf.subarray(0, result.bytesWritten as number));
+        const unpacked = unpack(buf.subarray(0, result.size));
         expect(unpacked).toEqual(value);
     });
 
@@ -1977,7 +1988,7 @@ describe('packInto', () => {
         const buf = new Uint8Array(64);
         const result = packInto(value, buf, 0);
 
-        expect(result).toEqual({ ok: true, bytesWritten: packed.length });
+        expect(result).toEqual({ ok: true, size: packed.length });
         expect(buf.subarray(0, packed.length)).toEqual(packed);
     });
 
@@ -1990,7 +2001,7 @@ describe('packInto', () => {
         const buf = new Uint8Array(64);
         const result = packInto(value, buf, 0);
 
-        expect(result).toEqual({ ok: true, bytesWritten: packed.length });
+        expect(result).toEqual({ ok: true, size: packed.length });
         expect(buf.subarray(0, packed.length)).toEqual(packed);
     });
 
@@ -2002,13 +2013,13 @@ describe('packInto', () => {
         const packed1 = pack(5);
         const buf1 = new Uint8Array(8);
         const result1 = packInto(5, buf1, 0);
-        expect(result1).toEqual({ ok: true, bytesWritten: packed1.length });
+        expect(result1).toEqual({ ok: true, size: packed1.length });
 
         // larger value (2 bytes)
         const packed2 = pack(300);
         const buf2 = new Uint8Array(8);
         const result2 = packInto(300, buf2, 0);
-        expect(result2).toEqual({ ok: true, bytesWritten: packed2.length });
+        expect(result2).toEqual({ ok: true, size: packed2.length });
     });
 
     test('offset defaults to 0', () => {
@@ -2019,7 +2030,7 @@ describe('packInto', () => {
         const buf = new Uint8Array(4);
         const result = packInto(77, buf, 0);
 
-        expect(result).toEqual({ ok: true, bytesWritten: 1 });
+        expect(result).toEqual({ ok: true, size: 1 });
         expect(buf[0]).toBe(packed[0]);
     });
 
@@ -2032,9 +2043,9 @@ describe('packInto', () => {
         const r2 = packInto(200, buf, 4);
         const r3 = packInto(300, buf, 8);
 
-        expect(r1).toEqual({ ok: true, bytesWritten: 4 });
-        expect(r2).toEqual({ ok: true, bytesWritten: 4 });
-        expect(r3).toEqual({ ok: true, bytesWritten: 4 });
+        expect(r1).toEqual({ ok: true, size: 4 });
+        expect(r2).toEqual({ ok: true, size: 4 });
+        expect(r3).toEqual({ ok: true, size: 4 });
 
         expect(unpack(buf.subarray(0, 4))).toBe(100);
         expect(unpack(buf.subarray(4, 8))).toBe(200);
@@ -2048,7 +2059,7 @@ describe('packInto', () => {
         const buf = new Uint8Array(4); // exactly 4 bytes needed
         const result = packInto(42, buf, 0);
 
-        expect(result).toEqual({ ok: true, bytesWritten: 4 });
+        expect(result).toEqual({ ok: true, size: 4 });
     });
 
     test('one byte short fails', () => {
@@ -2058,7 +2069,45 @@ describe('packInto', () => {
         const buf = new Uint8Array(3); // 1 byte short
         const result = packInto(42, buf, 0);
 
-        expect(result).toEqual({ ok: false, bytesWritten: 0 });
+        expect(result).toEqual({ ok: false, size: 4 });
+    });
+});
+
+describe('size', () => {
+    test('fixed-size schema', () => {
+        const { size } = build(uint32());
+        expect(size(42)).toBe(4);
+    });
+
+    test('matches pack length and packInto size for variable-size schema', () => {
+        const schema = object({
+            frame: uint32(),
+            name: string(),
+            pos: list(float32(), 3),
+            tags: list(string()),
+            flag: boolean(),
+            n: varuint(),
+        });
+        const { pack, packInto, size } = build(schema);
+
+        const values: SchemaType<typeof schema>[] = [
+            { frame: 1, name: 'hello', pos: [1, 2, 3], tags: ['a', 'bb', 'ccc'], flag: true, n: 300 },
+            { frame: 0, name: '', pos: [0, 0, 0], tags: [], flag: false, n: 0 },
+            { frame: 4294967295, name: 'unicode✓snow☃', pos: [-1.5, 2.5, 9], tags: ['x'], flag: true, n: 1000000 },
+        ];
+
+        for (const value of values) {
+            const s = size(value);
+            expect(s).toBe(pack(value).length);
+
+            const buf = new Uint8Array(1024);
+            expect(packInto(value, buf, 0)).toEqual({ ok: true, size: s });
+        }
+    });
+
+    test('does not mutate a buffer (measure only)', () => {
+        const { size } = build(string());
+        expect(size('☃')).toBe(size('☃'));
     });
 });
 
@@ -2753,7 +2802,7 @@ describe('validate', () => {
 
         // Fixed length
         const { pack: packFixed, unpack: unpackFixed, validate: validateFixed } = build(uint32Array(2));
-        const fixedSrc = new Uint32Array([0xDEADBEEF, 0xCAFEBABE]);
+        const fixedSrc = new Uint32Array([0xdeadbeef, 0xcafebabe]);
         const serializedFixed = packFixed(fixedSrc);
         expect(serializedFixed.byteLength).toBe(8);
         const outFixed = unpackFixed(serializedFixed);
@@ -2891,12 +2940,12 @@ describe('validate', () => {
 
         // Fixed length
         const { pack: packFixed, unpack: unpackFixed, validate: validateFixed } = build(bigUint64Array(2));
-        const fixedSrc = new BigUint64Array([0xDEADBEEFCAFEBABEn, 0xFEEDFACEDEADC0DEn]);
+        const fixedSrc = new BigUint64Array([0xdeadbeefcafebaben, 0xfeedfacedeadc0den]);
         const serializedFixed = packFixed(fixedSrc);
         expect(serializedFixed.byteLength).toBe(16);
         const outFixed = unpackFixed(serializedFixed);
-        expect(outFixed[0]).toBe(0xDEADBEEFCAFEBABEn);
-        expect(outFixed[1]).toBe(0xFEEDFACEDEADC0DEn);
+        expect(outFixed[0]).toBe(0xdeadbeefcafebaben);
+        expect(outFixed[1]).toBe(0xfeedfacedeadc0den);
 
         expect(validateFixed(new BigUint64Array([1n, 2n]))).toBe(true);
         expect(validateFixed(new BigUint64Array([1n]))).toBe(false);
@@ -2931,11 +2980,7 @@ describe('validate', () => {
         const schema = list(float32Array(3)); // List of 3D vectors
         const { pack, unpack, validate } = build(schema);
 
-        const vectors = [
-            new Float32Array([1, 0, 0]),
-            new Float32Array([0, 1, 0]),
-            new Float32Array([0, 0, 1]),
-        ];
+        const vectors = [new Float32Array([1, 0, 0]), new Float32Array([0, 1, 0]), new Float32Array([0, 0, 1])];
 
         const serialized = pack(vectors);
         const out = unpack(serialized);
@@ -3024,7 +3069,7 @@ describe('validate', () => {
 
     test('typed arrays alignment - variable length after unaligned offset', () => {
         // Test variable-length typed arrays after unaligned data
-        
+
         // Float32Array (variable) after 3 bytes
         const schema = object({
             a: uint8(),
@@ -3042,5 +3087,66 @@ describe('validate', () => {
         expect(out.data[1]).toBeCloseTo(2.2, 5);
         expect(out.data[2]).toBeCloseTo(3.3, 5);
         expect(out.data[3]).toBeCloseTo(4.4, 5);
+    });
+
+    test('deeply nested records in object (record > object > record > object > record)', () => {
+        // reproduces a variable shadowing bug where the size codegen for nested
+        // records reused the hardcoded variable name 'k', causing inner record
+        // loops to shadow the outer record's key variable
+        const channelSchema = object({
+            offset: uint32(),
+            keyframeCount: uint32(),
+        });
+
+        const animationSchema = object({
+            duration: float32(),
+            channels: record(channelSchema),
+        });
+
+        const modelSchema = object({
+            index: uint32(),
+            partRange: list(uint32(), 2),
+            animations: record(animationSchema),
+        });
+
+        const topSchema = object({
+            models: record(modelSchema),
+        });
+
+        const { pack, unpack, validate } = build(topSchema);
+
+        const data = {
+            models: {
+                testmodel: {
+                    index: 0,
+                    partRange: [0, 1] as [number, number],
+                    animations: {
+                        walk: {
+                            duration: 1.5,
+                            channels: {
+                                '0.translation': { offset: 0, keyframeCount: 10 },
+                                '0.rotation': { offset: 120, keyframeCount: 5 },
+                            },
+                        },
+                        idle: {
+                            duration: 2.0,
+                            channels: {
+                                '1.scale': { offset: 200, keyframeCount: 3 },
+                            },
+                        },
+                    },
+                },
+                othermodel: {
+                    index: 1,
+                    partRange: [1, 3] as [number, number],
+                    animations: {},
+                },
+            },
+        };
+
+        expect(validate(data)).toBe(true);
+        const packed = pack(data);
+        const result = unpack(packed);
+        expect(result).toEqual(data);
     });
 });

@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
-    "target": "esnext",
+    "target": "ES2022",
     "useDefineForClassFields": true,
     "module": "ES2022",
-    "lib": ["esnext", "DOM"],
+    "lib": ["ES2022", "DOM"],
     "moduleResolution": "bundler",
     "strict": true,
     "resolveJsonModule": true,
@@ -15,10 +15,11 @@
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "skipLibCheck": true,
+    "baseUrl": "./",
     "rootDir": "./src",
     "allowSyntheticDefaultImports": true,
     "outDir": "dist"
   },
-  "include": ["./src"],
+  "include": ["./src", "vite-env.d.ts"],
   "exclude": ["./dist"]
 }

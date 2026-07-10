@@ -26,7 +26,7 @@ type PlayerInputType = SchemaType<typeof playerInputSchema>;
 /* SNIPPET_START: serdes */
 import { build } from 'packcat';
 
-const { pack, packInto, unpack, validate } = build(playerInputSchema);
+const { pack, packInto, size, unpack, validate } = build(playerInputSchema);
 
 const playerInput: PlayerInputType = {
     frame: 1,
@@ -56,8 +56,18 @@ const buf = new Uint8Array(128);
 const result = packInto(playerInput, buf, 0);
 
 if (result.ok) {
-    console.log(`Packed ${result.bytesWritten} bytes into existing buffer`);
+    console.log(`Packed ${result.size} bytes into existing buffer`);
 } else {
-    console.log('Failed to pack into existing buffer');
+    // packInto writes optimistically in a single pass; on failure some bytes may already
+    // have been written, so grow/flush the buffer and pack again.
+    console.log(`Buffer too small: needed ${result.size} bytes`);
 }
 /* SNIPPET_END: packInto */
+
+/* SNIPPET_START: size */
+// use `size` to find out how many bytes a value needs before you have a buffer to pack into
+const byteLength = size(playerInput);
+
+const preAllocated = new Uint8Array(byteLength);
+packInto(playerInput, preAllocated, 0); // guaranteed to fit
+/* SNIPPET_END: size */

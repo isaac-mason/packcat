@@ -1,408 +1,452 @@
-![./docs/cover.png](./docs/cover.png)
-
-```sh
-> npm install packcat
-```
-
-# packcat
-
-packcat is a small library for packing objects to and from buffers.
-
-## Table Of Contents
-
-- [Overview](#overview)
-- [Usage](#usage)
-- [API Documentation](#api-documentation)
-    - [Schema Types](#schema-types)
-- [Advanced](#advanced)
-  - [What is the packed data format?](#what-is-the-packed-data-format)
-  - [Does this library support big-endian machines?](#does-this-library-support-big-endian-machines)
-
-## Overview
-
-This library takes defined schemas, and then generates efficient functions that pack and unpack objects fitting the schemas into compact buffers.
-
-It is great for use cases like networked games/apps where minimizing bandwidth is important, and both the client and server use javascript and can share schema definitions.
-
-## Usage
-
-First, define your data format with the schema utils:
-
-```ts
-import type { SchemaType } from 'packcat';
-import { boolean, float32, list, literal, object, uint32, union } from 'packcat';
-
-const playerInputSchema = object({
-    frame: uint32(),
-    nipple: list(float32(), 2),
-    buttons: object({
-        jump: boolean(),
-        sprint: boolean(),
-        crouch: boolean(),
-    }),
-    cmd: list(
-        union('type', [
-            // literals are not included in the serialised data, only used for discrimination
-            object({ type: literal('interact') }),
-            object({ type: literal('use'), primary: boolean(), secondary: boolean() }),
-        ] as const),
-    ),
-});
-
-type PlayerInputType = SchemaType<typeof playerInputSchema>;
-```
-
-Next, you can build the schema, which gives you `pack`, `unpack`, `validate`, `packInto`, and `size` functions, and use `SchemaType` to infer the TypeScript type of the schema:
-
-```ts
-import { build } from 'packcat';
-
-const { pack, packInto, size, unpack, validate } = build(playerInputSchema);
-
-const playerInput: PlayerInputType = {
-    frame: 1,
-    nipple: [0, 1],
-    buttons: { jump: true, sprint: false, crouch: true },
-    cmd: [{ type: 'interact' }, { type: 'use', primary: true, secondary: false }],
+export type BooleanSchema = {
+    type: 'boolean';
 };
-
-const u8 = pack(playerInput);
-
-console.log(u8); // Uint8Array
-
-const value = unpack(u8);
-
-console.log(value); // { frame: 1, nipple: [ 0, 1 ], buttons: { jump: true, sprint: false, crouch: true }, cmd: [ { type: 'interact' }, { type: 'use', primary: true, secondary: false } ] }
-```
-
-You can also use `validate` if you don't trust whether the input data confirms to the schema type:
-
-```ts
-console.log(validate(playerInput)); // true
-
-// @ts-expect-error this doesn't conform to the schema type!
-console.log(validate({ foo: 'bar' })); // false
-```
-
-If you want to pack directly into an existing buffer, you can use `packInto`. It writes in a single pass without measuring up front, and reports the number of bytes required via `result.size` (including when the buffer was too small, so you can grow it and retry):
-
-```ts
-const buf = new Uint8Array(128);
-const result = packInto(playerInput, buf, 0);
-
-if (result.ok) {
-    console.log(`Packed ${result.size} bytes into existing buffer`);
-} else {
-    // packInto writes optimistically in a single pass; on failure some bytes may already
-    // have been written, so grow/flush the buffer and pack again.
-    console.log(`Buffer too small: needed ${result.size} bytes`);
-}
-```
-
-If you need to know how many bytes a value requires before allocating a buffer, use `size`:
-
-```ts
-// use `size` to find out how many bytes a value needs before you have a buffer to pack into
-const byteLength = size(playerInput);
-
-const preAllocated = new Uint8Array(byteLength);
-packInto(playerInput, preAllocated, 0); // guaranteed to fit
-```
-
-## API Documentation
-
-```ts
-export function build<S extends Schema>(schema: S): {
-    pack: (value: SchemaType<S>) => Uint8Array;
-    packInto: (value: SchemaType<S>, u8: Uint8Array, offset: number) => PackIntoResult;
-    size: (value: SchemaType<S>) => number;
-    unpack: (u8: Uint8Array) => SchemaType<S>;
-    validate: (value: SchemaType<S>) => boolean;
-    source: {
-        pack: string;
-        unpack: string;
-        validate: string;
-        packInto: string;
-        size: string;
-    };
+export type StringSchema = {
+    type: 'string';
 };
-```
-
-```ts
+export type VarIntSchema = {
+    type: 'varint';
+};
+export type VarUintSchema = {
+    type: 'varuint';
+};
+export type Int8Schema = {
+    type: 'int8';
+};
+export type Uint8Schema = {
+    type: 'uint8';
+};
+export type Int16Schema = {
+    type: 'int16';
+};
+export type Uint16Schema = {
+    type: 'uint16';
+};
+export type Int32Schema = {
+    type: 'int32';
+};
+export type Uint32Schema = {
+    type: 'uint32';
+};
+export type Int64Schema = {
+    type: 'int64';
+};
+export type Uint64Schema = {
+    type: 'uint64';
+};
+export type Float16Schema = {
+    type: 'float16';
+};
+export type Float32Schema = {
+    type: 'float32';
+};
+export type Float64Schema = {
+    type: 'float64';
+};
+export type QuantizedSchema = {
+    type: 'quantized';
+    min: number;
+    max: number;
+    step: number;
+    bytes: number;
+};
+export type QuatSchema = {
+    type: 'quat';
+    step: number;
+    bytes: number;
+};
+export type UV2Schema = {
+    type: 'uv2';
+    step: number;
+    bytes: number;
+};
+export type UV3Schema = {
+    type: 'uv3';
+    step: number;
+    bytes: number;
+};
+export type ListSchema = {
+    type: 'list';
+    of: Schema;
+    length?: number;
+};
+export type TupleSchema = {
+    type: 'tuple';
+    of: Schema[];
+};
+export type ObjectSchema = {
+    type: 'object';
+    fields: Record<string, Schema>;
+};
+export type RecordSchema = {
+    type: 'record';
+    field: Schema;
+};
+export type Uint8ArraySchema = {
+    type: 'uint8Array';
+    length?: number;
+};
+export type Int8ArraySchema = {
+    type: 'int8Array';
+    length?: number;
+};
+export type Uint8ClampedArraySchema = {
+    type: 'uint8ClampedArray';
+    length?: number;
+};
+export type Int16ArraySchema = {
+    type: 'int16Array';
+    length?: number;
+};
+export type Uint16ArraySchema = {
+    type: 'uint16Array';
+    length?: number;
+};
+export type Int32ArraySchema = {
+    type: 'int32Array';
+    length?: number;
+};
+export type Uint32ArraySchema = {
+    type: 'uint32Array';
+    length?: number;
+};
+export type Float32ArraySchema = {
+    type: 'float32Array';
+    length?: number;
+};
+export type Float64ArraySchema = {
+    type: 'float64Array';
+    length?: number;
+};
+export type BigInt64ArraySchema = {
+    type: 'bigInt64Array';
+    length?: number;
+};
+export type BigUint64ArraySchema = {
+    type: 'bigUint64Array';
+    length?: number;
+};
+export type LiteralSchema = {
+    type: 'literal';
+    value: SchemaType<PrimitiveSchema>;
+};
+export type EnumerationSchema = {
+    type: 'enumeration';
+    values: readonly (string | number)[];
+};
+export type NullableSchema = {
+    type: 'nullable';
+    of: Schema;
+};
+export type OptionalSchema = {
+    type: 'optional';
+    of: Schema;
+};
+export type NullishSchema = {
+    type: 'nullish';
+    of: Schema;
+};
+export type UnionSchema = {
+    type: 'union';
+    key: string;
+    variants: Array<ObjectSchema>;
+};
+export type PrimitiveSchema = BooleanSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Float32Schema | Float64Schema | StringSchema;
+export type Schema = BooleanSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Int64Schema | Uint64Schema | Float16Schema | Float32Schema | Float64Schema | QuantizedSchema | QuatSchema | UV2Schema | UV3Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | Int8ArraySchema | Uint8ClampedArraySchema | Int16ArraySchema | Uint16ArraySchema | Int32ArraySchema | Uint32ArraySchema | Float32ArraySchema | Float64ArraySchema | BigInt64ArraySchema | BigUint64ArraySchema | UnionSchema | LiteralSchema | EnumerationSchema | NullableSchema | OptionalSchema | NullishSchema;
+type RepeatTypeMap<T> = {
+    0: [];
+    1: [T];
+    2: [T, T];
+    3: [T, T, T];
+    4: [T, T, T, T];
+    5: [T, T, T, T, T];
+    6: [T, T, T, T, T, T];
+    7: [T, T, T, T, T, T, T];
+    8: [T, T, T, T, T, T, T, T];
+    9: [T, T, T, T, T, T, T, T, T];
+    10: [T, T, T, T, T, T, T, T, T, T];
+    11: [T, T, T, T, T, T, T, T, T, T, T];
+    12: [T, T, T, T, T, T, T, T, T, T, T, T];
+    13: [T, T, T, T, T, T, T, T, T, T, T, T, T];
+    14: [T, T, T, T, T, T, T, T, T, T, T, T, T, T];
+    15: [T, T, T, T, T, T, T, T, T, T, T, T, T, T, T];
+    16: [T, T, T, T, T, T, T, T, T, T, T, T, T, T, T, T];
+};
+type RepeatType<T, N extends number> = N extends keyof RepeatTypeMap<T> ? RepeatTypeMap<T>[N] : T[];
+type Simplify<T> = {
+    [K in keyof T]: T[K];
+} & {};
+type NextDepth = {
+    0: 0;
+    1: 0;
+    2: 1;
+    3: 2;
+    4: 3;
+    5: 4;
+    6: 5;
+    7: 6;
+    8: 7;
+    9: 8;
+    10: 9;
+    11: 10;
+    12: 11;
+    13: 12;
+    14: 13;
+    15: 14;
+};
+type DecrementDepth<N extends keyof NextDepth> = N extends keyof NextDepth ? NextDepth[N] : 0;
+export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> = Depth extends 0 ? any : S extends BooleanSchema ? boolean : S extends StringSchema ? string : S extends VarIntSchema ? number : S extends VarUintSchema ? number : S extends Int8Schema ? number : S extends Uint8Schema ? number : S extends Int16Schema ? number : S extends Uint16Schema ? number : S extends Int32Schema ? number : S extends Uint32Schema ? number : S extends Int64Schema ? bigint : S extends Uint64Schema ? bigint : S extends Float16Schema ? number : S extends Float32Schema ? number : S extends Float64Schema ? number : S extends QuantizedSchema ? number : S extends QuatSchema ? [x: number, y: number, z: number, w: number] : S extends UV2Schema ? [x: number, y: number] : S extends UV3Schema ? [x: number, y: number, z: number] : S extends ListSchema ? (S['length'] extends number ? RepeatType<SchemaType<S['of'], DecrementDepth<Depth>>, S['length']> : SchemaType<S['of'], DecrementDepth<Depth>>[]) : S extends TupleSchema ? (S['of'] extends [...infer El] ? {
+    [K in keyof El]: El[K] extends Schema ? SchemaType<El[K], DecrementDepth<Depth>> : never;
+} : never) : S extends ObjectSchema ? Simplify<{
+    [K in keyof S['fields']]: SchemaType<S['fields'][K], DecrementDepth<Depth>>;
+}> : S extends RecordSchema ? Record<string, SchemaType<S['field'], DecrementDepth<Depth>>> : S extends Uint8ArraySchema ? Uint8Array : S extends Int8ArraySchema ? Int8Array : S extends Uint8ClampedArraySchema ? Uint8ClampedArray : S extends Int16ArraySchema ? Int16Array : S extends Uint16ArraySchema ? Uint16Array : S extends Int32ArraySchema ? Int32Array : S extends Uint32ArraySchema ? Uint32Array : S extends Float32ArraySchema ? Float32Array : S extends Float64ArraySchema ? Float64Array : S extends BigInt64ArraySchema ? BigInt64Array : S extends BigUint64ArraySchema ? BigUint64Array : S extends LiteralSchema ? S['value'] : S extends EnumerationSchema ? S['values'][number] : S extends NullableSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | null : S extends OptionalSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | undefined : S extends NullishSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | null | undefined : S extends UnionSchema ? SchemaType<S['variants'][number], DecrementDepth<Depth>> : never;
 /**
  * Boolean schema - stores true/false values using 1 byte.
- * 
+ *
  * @returns A boolean schema definition
- * 
+ *
  * @example
  * boolean() // Stores boolean value (1 byte)
  */
-export function boolean(): {
-    type: 'boolean';
+export declare const boolean: () => {
+    type: "boolean";
 };
-```
-
-```ts
 /**
  * String schema - variable-length UTF-8 encoded strings.
- * 
+ *
  * Strings are prefixed with a varuint length followed by UTF-8 bytes.
- * 
+ *
  * @returns A string schema definition
- * 
+ *
  * @example
  * string() // Variable-length string
  */
-export function string(): {
-    type: 'string';
+export declare const string: () => {
+    type: "string";
 };
-```
-
-```ts
 /**
  * Alias for float64(), which is JavaScript's native number type.
  *
  * For smaller numbers, consider using `float32()`, `int32()`, or `varint()`.
- * 
+ *
  * @returns A number schema definition
- * 
+ *
  * @example
  * number() // Standard JavaScript float64 number (8 bytes)
  */
-export function number(): {
-    type: 'float64';
+export declare const number: () => {
+    type: "float64";
 };
-```
-
-```ts
+/**
+ * Variable-length signed integer using zigzag encoding.
+ *
+ * Uses 1-5 bytes depending on magnitude. Smaller absolute values use fewer bytes.
+ *
+ * Range: -2,147,483,648 to 2,147,483,647 (32-bit signed)
+ *
+ * @returns A varint schema definition
+ *
+ * @example
+ * varint() // 1-5 bytes, optimal for small integers
+ */
+export declare const varint: () => {
+    type: "varint";
+};
+/**
+ * Variable-length unsigned integer.
+ *
+ * Uses 1-5 bytes depending on magnitude. Smaller values use fewer bytes.
+ *
+ * Range: 0 to 4,294,967,295 (32-bit unsigned)
+ *
+ * @returns A varuint schema definition
+ *
+ * @example
+ * varuint() // 1-5 bytes, optimal for small positive integers
+ */
+export declare const varuint: () => {
+    type: "varuint";
+};
 /**
  * 8-bit signed integer (1 byte).
- * 
+ *
  * Range: -128 to 127
- * 
+ *
  * @returns An int8 schema definition
- * 
+ *
  * @example
  * int8() // 1 byte signed integer
  */
-export function int8(): {
-    type: 'int8';
+export declare const int8: () => {
+    type: "int8";
 };
-```
-
-```ts
 /**
  * 8-bit unsigned integer (1 byte).
- * 
+ *
  * Range: 0 to 255
- * 
+ *
  * @returns A uint8 schema definition
- * 
+ *
  * @example
  * uint8() // 1 byte unsigned integer
  */
-export function uint8(): {
-    type: 'uint8';
+export declare const uint8: () => {
+    type: "uint8";
 };
-```
-
-```ts
 /**
  * 16-bit signed integer (2 bytes).
- * 
+ *
  * Range: -32,768 to 32,767
- * 
+ *
  * @returns An int16 schema definition
- * 
+ *
  * @example
  * int16() // 2 bytes signed integer
  */
-export function int16(): {
-    type: 'int16';
+export declare const int16: () => {
+    type: "int16";
 };
-```
-
-```ts
 /**
  * 16-bit unsigned integer (2 bytes).
- * 
+ *
  * Range: 0 to 65,535
- * 
+ *
  * @returns A uint16 schema definition
- * 
+ *
  * @example
  * uint16() // 2 bytes unsigned integer
  */
-export function uint16(): {
-    type: 'uint16';
+export declare const uint16: () => {
+    type: "uint16";
 };
-```
-
-```ts
 /**
  * 32-bit signed integer (4 bytes).
- * 
+ *
  * Range: -2,147,483,648 to 2,147,483,647
- * 
+ *
  * @returns An int32 schema definition
- * 
+ *
  * @example
  * int32() // 4 bytes signed integer
  */
-export function int32(): {
-    type: 'int32';
+export declare const int32: () => {
+    type: "int32";
 };
-```
-
-```ts
 /**
  * 32-bit unsigned integer (4 bytes).
- * 
+ *
  * Range: 0 to 4,294,967,295
- * 
+ *
  * @returns A uint32 schema definition
- * 
+ *
  * @example
  * uint32() // 4 bytes unsigned integer
  */
-export function uint32(): {
-    type: 'uint32';
+export declare const uint32: () => {
+    type: "uint32";
 };
-```
-
-```ts
 /**
  * 64-bit signed integer (8 bytes) stored as BigInt.
- * 
+ *
  * Range: -9,223,372,036,854,775,808 to 9,223,372,036,854,775,807
- * 
+ *
  * @returns An int64 schema definition
- * 
+ *
  * @example
  * int64() // 8 bytes signed BigInt
  */
-export function int64(): {
-    type: 'int64';
+export declare const int64: () => {
+    type: "int64";
 };
-```
-
-```ts
 /**
  * 64-bit unsigned integer (8 bytes) stored as BigInt.
- * 
+ *
  * Range: 0 to 18,446,744,073,709,551,615
- * 
+ *
  * @returns A uint64 schema definition
- * 
+ *
  * @example
  * uint64() // 8 bytes unsigned BigInt
  */
-export function uint64(): {
-    type: 'uint64';
+export declare const uint64: () => {
+    type: "uint64";
 };
-```
-
-```ts
 /**
  * 16-bit floating point (2 bytes) - half precision.
- * 
+ *
  * Range: ±65,504 with ~3 decimal digits of precision
  * Useful for reduced bandwidth when full precision isn't needed.
- * 
+ *
  * @returns A float16 schema definition
- * 
+ *
  * @example
  * float16() // 2 bytes floating point
  */
-export function float16(): {
-    type: 'float16';
+export declare const float16: () => {
+    type: "float16";
 };
-```
-
-```ts
 /**
  * 32-bit floating point (4 bytes) - single precision.
- * 
+ *
  * Range: ±3.4e38 with ~7 decimal digits of precision
- * 
+ *
  * @returns A float32 schema definition
- * 
+ *
  * @example
  * float32() // 4 bytes floating point
  */
-export function float32(): {
-    type: 'float32';
+export declare const float32: () => {
+    type: "float32";
 };
-```
-
-```ts
 /**
  * 64-bit floating point (8 bytes) - double precision.
- * 
+ *
  * Range: ±1.7e308 with ~15 decimal digits of precision
  * This is JavaScript's native number type.
- * 
+ *
  * @returns A float64 schema definition
- * 
+ *
  * @example
  * float64() // 8 bytes floating point
  */
-export function float64(): {
-    type: 'float64';
+export declare const float64: () => {
+    type: "float64";
 };
-```
-
-```ts
 /**
- * Literal schema - constant value that doesn't need to be serialized.
- * 
- * The value is part of the schema definition and takes 0 bytes to encode.
- * Useful for discriminators in unions or constant metadata.
- * 
- * @param value The constant primitive value
- * @returns A literal schema definition
- */
-export function literal<S extends PrimitiveSchema, V extends SchemaType<S>>(value: V): {
-    type: 'literal';
-    value: V;
-};
-```
-
-```ts
-/**
- * Enumeration schema - value restricted to a predefined set of literals.
- * @param values Array of allowed string or number values
- * @returns A enumeration schema definition
- * 
+ * List (array) schema - variable or fixed-length homogeneous arrays.
+ *
+ * Without length: Variable-length array prefixed with varuint count
+ * With length: Fixed-length array with no length prefix
+ *
+ * @param of Schema for array elements
+ * @param length Optional fixed length
+ * @returns A list schema definition
+ *
  * @example
- * enumeration(['red', 'green', 'blue'] as const)
- * 
+ * // Variable-length array of numbers
+ * list(number())
+ *
  * @example
- * enumeration([1, 2, 3] as const)
+ * // Fixed-length array of 3 floats (like a 3D vector)
+ * list(float32(), 3)
  */
-export function enumeration<V extends (string | number)[]>(values: [
-    ...V
-]): {
-    type: 'enumeration';
-    values: [
-        ...V
-    ];
+export declare function list<T extends Schema>(of: T): {
+    type: 'list';
+    of: T;
 };
-```
-
-```ts
-export function list<T extends Schema, L extends number>(of: T, length?: L);
-```
-
-```ts
+export declare function list<T extends Schema, L extends number>(of: T, length: L): {
+    type: 'list';
+    of: T;
+    length: L;
+};
 /**
  * Tuple schema - fixed-length array with heterogeneous types.
- * 
+ *
  * Each element can have a different schema. No length prefix is stored.
- * 
+ *
  * @param of Array of schemas for each tuple element
  * @returns A tuple schema definition
- * 
+ *
  * @example
  * // Position with metadata: [x, y, timestamp]
  * tuple([float32(), float32(), uint32()])
@@ -411,26 +455,19 @@ export function list<T extends Schema, L extends number>(of: T, length?: L);
  * // Player data: [id, name, score]
  * tuple([uint16(), string(), varuint()])
  */
-export function tuple<T extends Schema[]>(of: [
-    ...T
-]): {
-    type: 'tuple';
-    of: [
-        ...T
-    ];
+export declare const tuple: <T extends Schema[]>(of: [...T]) => {
+    type: "tuple";
+    of: [...T];
 };
-```
-
-```ts
 /**
  * Object schema - fixed set of named fields.
- * 
+ *
  * Fields are serialized in alphabetically sorted order (by field name).
  * Field names are not stored in the binary format.
- * 
+ *
  * @param fields Record mapping field names to their schemas
  * @returns An object schema definition
- * 
+ *
  * @example
  * object({
  *   id: uint32(),
@@ -438,350 +475,396 @@ export function tuple<T extends Schema[]>(of: [
  *   health: uint8()
  * })
  */
-export function object<F extends Record<string, Schema>>(fields: F): {
-    type: 'object';
+export declare const object: <F extends Record<string, Schema>>(fields: F) => {
+    type: "object";
     fields: F;
 };
-```
-
-```ts
 /**
  * Record schema - dynamic key-value map with homogeneous values.
- * 
+ *
  * Keys are strings, all values share the same schema.
  * Stored as varuint count followed by [key, value] pairs.
- * 
+ *
  * @param field Schema for all values
  * @returns A record schema definition
- * 
+ *
  * @example
  * // Map of player IDs to scores
  * record(uint32())
- * 
+ *
  * @example
  * // Map of item names to quantities
  * record(varuint())
  */
-export function record<F extends Schema>(field: F): {
-    type: 'record';
+export declare const record: <F extends Schema>(field: F) => {
+    type: "record";
     field: F;
 };
-```
-
-```ts
 /**
  * Uint8Array schema - raw byte buffer.
- * 
+ *
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
  * @param length Optional fixed length in bytes
  * @returns A Uint8Array schema definition
- * 
+ *
  * @example
  * // Variable-length binary data
  * uint8Array()
- * 
+ *
  * @example
  * // 16-byte UUID or hash
  * uint8Array(16)
  */
-export function uint8Array(length?: number);
-```
-
-```ts
+export declare const uint8Array: (length?: number) => {
+    type: "uint8Array";
+    length?: undefined;
+} | {
+    type: "uint8Array";
+    length: number;
+};
 /**
  * Int8Array schema - raw signed 8-bit integer buffer.
- * 
+ *
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
  * @param length Optional fixed length in elements
  * @returns An Int8Array schema definition
- * 
+ *
  * @example
  * // Variable-length signed byte data
  * int8Array()
- * 
+ *
  * @example
  * // Fixed 16-element buffer
  * int8Array(16)
  */
-export function int8Array(length?: number);
-```
-
-```ts
+export declare const int8Array: (length?: number) => {
+    type: "int8Array";
+    length?: undefined;
+} | {
+    type: "int8Array";
+    length: number;
+};
 /**
  * Uint8ClampedArray schema - raw clamped unsigned 8-bit integer buffer.
- * 
+ *
  * Values are clamped to 0-255 range. Commonly used for image data (canvas).
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
  * @param length Optional fixed length in elements
  * @returns A Uint8ClampedArray schema definition
- * 
+ *
  * @example
  * // Variable-length image pixel data
  * uint8ClampedArray()
- * 
+ *
  * @example
  * // RGBA pixel (4 bytes)
  * uint8ClampedArray(4)
  */
-export function uint8ClampedArray(length?: number);
-```
-
-```ts
+export declare const uint8ClampedArray: (length?: number) => {
+    type: "uint8ClampedArray";
+    length?: undefined;
+} | {
+    type: "uint8ClampedArray";
+    length: number;
+};
 /**
  * Int16Array schema - raw signed 16-bit integer buffer.
- * 
+ *
  * Each element is 2 bytes. Useful for audio samples or compact integer data.
  * Without length: Variable-length buffer prefixed with varuint element count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
  * @param length Optional fixed length in elements
  * @returns An Int16Array schema definition
- * 
+ *
  * @example
  * // Variable-length audio samples
  * int16Array()
- * 
+ *
  * @example
  * // Fixed stereo audio frame (2 samples)
  * int16Array(2)
  */
-export function int16Array(length?: number);
-```
-
-```ts
+export declare const int16Array: (length?: number) => {
+    type: "int16Array";
+    length?: undefined;
+} | {
+    type: "int16Array";
+    length: number;
+};
 /**
  * Uint16Array schema - raw unsigned 16-bit integer buffer.
- * 
+ *
  * Each element is 2 bytes. Useful for Unicode code units or indices.
  * Without length: Variable-length buffer prefixed with varuint element count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
  * @param length Optional fixed length in elements
  * @returns A Uint16Array schema definition
- * 
+ *
  * @example
  * // Variable-length index buffer
  * uint16Array()
- * 
+ *
  * @example
  * // Triangle indices (3 vertices)
  * uint16Array(3)
  */
-export function uint16Array(length?: number);
-```
-
-```ts
+export declare const uint16Array: (length?: number) => {
+    type: "uint16Array";
+    length?: undefined;
+} | {
+    type: "uint16Array";
+    length: number;
+};
 /**
  * Int32Array schema - raw signed 32-bit integer buffer.
- * 
+ *
  * Each element is 4 bytes. Useful for large integer data.
  * Without length: Variable-length buffer prefixed with varuint element count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
  * @param length Optional fixed length in elements
  * @returns An Int32Array schema definition
- * 
+ *
  * @example
  * // Variable-length integer data
  * int32Array()
- * 
+ *
  * @example
  * // Fixed coordinate pair
  * int32Array(2)
  */
-export function int32Array(length?: number);
-```
-
-```ts
+export declare const int32Array: (length?: number) => {
+    type: "int32Array";
+    length?: undefined;
+} | {
+    type: "int32Array";
+    length: number;
+};
 /**
  * Uint32Array schema - raw unsigned 32-bit integer buffer.
- * 
+ *
  * Each element is 4 bytes. Useful for colors (RGBA), indices, or IDs.
  * Without length: Variable-length buffer prefixed with varuint element count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
  * @param length Optional fixed length in elements
  * @returns A Uint32Array schema definition
- * 
+ *
  * @example
  * // Variable-length index buffer
  * uint32Array()
- * 
+ *
  * @example
  * // Fixed RGBA color
  * uint32Array(1)
  */
-export function uint32Array(length?: number);
-```
-
-```ts
+export declare const uint32Array: (length?: number) => {
+    type: "uint32Array";
+    length?: undefined;
+} | {
+    type: "uint32Array";
+    length: number;
+};
 /**
  * Float32Array schema - raw 32-bit floating point buffer.
- * 
+ *
  * Each element is 4 bytes. Commonly used for 3D graphics data (positions, normals, etc.).
  * Without length: Variable-length buffer prefixed with varuint element count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
  * @param length Optional fixed length in elements
  * @returns A Float32Array schema definition
- * 
+ *
  * @example
  * // Variable-length vertex positions
  * float32Array()
- * 
+ *
  * @example
  * // Fixed 3D vector
  * float32Array(3)
  */
-export function float32Array(length?: number);
-```
-
-```ts
+export declare const float32Array: (length?: number) => {
+    type: "float32Array";
+    length?: undefined;
+} | {
+    type: "float32Array";
+    length: number;
+};
 /**
  * Float64Array schema - raw 64-bit floating point buffer.
- * 
+ *
  * Each element is 8 bytes. Useful for high-precision numerical data.
  * Without length: Variable-length buffer prefixed with varuint element count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
  * @param length Optional fixed length in elements
  * @returns A Float64Array schema definition
- * 
+ *
  * @example
  * // Variable-length scientific data
  * float64Array()
- * 
+ *
  * @example
  * // Fixed 2D coordinate
  * float64Array(2)
  */
-export function float64Array(length?: number);
-```
-
-```ts
+export declare const float64Array: (length?: number) => {
+    type: "float64Array";
+    length?: undefined;
+} | {
+    type: "float64Array";
+    length: number;
+};
 /**
  * BigInt64Array schema - raw signed 64-bit BigInt buffer.
- * 
+ *
  * Each element is 8 bytes stored as BigInt. Useful for large integer data.
  * Without length: Variable-length buffer prefixed with varuint element count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
  * @param length Optional fixed length in elements
  * @returns A BigInt64Array schema definition
- * 
+ *
  * @example
  * // Variable-length large integer data
  * bigInt64Array()
- * 
+ *
  * @example
  * // Fixed pair of large integers
  * bigInt64Array(2)
  */
-export function bigInt64Array(length?: number);
-```
-
-```ts
+export declare const bigInt64Array: (length?: number) => {
+    type: "bigInt64Array";
+    length?: undefined;
+} | {
+    type: "bigInt64Array";
+    length: number;
+};
 /**
  * BigUint64Array schema - raw unsigned 64-bit BigInt buffer.
- * 
+ *
  * Each element is 8 bytes stored as BigInt. Useful for large unsigned integer data.
  * Without length: Variable-length buffer prefixed with varuint element count
  * With length: Fixed-length buffer with no length prefix
- * 
+ *
  * @param length Optional fixed length in elements
  * @returns A BigUint64Array schema definition
- * 
+ *
  * @example
  * // Variable-length large unsigned integer data
  * bigUint64Array()
- * 
+ *
  * @example
  * // Fixed pair of large unsigned integers
  * bigUint64Array(2)
  */
-export function bigUint64Array(length?: number);
-```
-
-```ts
-/**
- * Optional schema - value that can be undefined.
- * 
- * Uses 1 byte to indicate presence (0=undefined, 1=present), followed by the value if defined.
- * 
- * @param of - Schema for the defined value
- * @returns An optional schema definition
- * 
- * @example
- * optional(uint32()) // number | undefined
- * 
- * @example
- * optional(string()) // string | undefined
- */
-export function optional<S extends Schema>(of: S): {
-    type: 'optional';
-    of: S;
+export declare const bigUint64Array: (length?: number) => {
+    type: "bigUint64Array";
+    length?: undefined;
+} | {
+    type: "bigUint64Array";
+    length: number;
 };
-```
-
-```ts
+/**
+ * Literal schema - constant value that doesn't need to be serialized.
+ *
+ * The value is part of the schema definition and takes 0 bytes to encode.
+ * Useful for discriminators in unions or constant metadata.
+ *
+ * @param value The constant primitive value
+ * @returns A literal schema definition
+ */
+export declare const literal: <S extends PrimitiveSchema, V extends SchemaType<S>>(value: V) => {
+    type: "literal";
+    value: V;
+};
+/**
+ * Enumeration schema - value restricted to a predefined set of literals.
+ * @param values Array of allowed string or number values
+ * @returns A enumeration schema definition
+ *
+ * @example
+ * enumeration(['red', 'green', 'blue'] as const)
+ *
+ * @example
+ * enumeration([1, 2, 3] as const)
+ */
+export declare const enumeration: <V extends (string | number)[]>(values: [...V]) => {
+    type: "enumeration";
+    values: [...V];
+};
 /**
  * Nullable schema - value that can be null.
- * 
+ *
  * Uses 1 byte to indicate presence (0=null, 1=present), followed by the value if non-null.
- * 
+ *
  * @param of - Schema for the non-null value
  * @returns A nullable schema definition
- * 
+ *
  * @example
  * nullable(string()) // string | null
- * 
+ *
  * @example
  * nullable(object({ x: float32(), y: float32() })) // object | null
  */
-export function nullable<S extends Schema>(of: S): {
-    type: 'nullable';
+export declare const nullable: <S extends Schema>(of: S) => {
+    type: "nullable";
     of: S;
 };
-```
-
-```ts
+/**
+ * Optional schema - value that can be undefined.
+ *
+ * Uses 1 byte to indicate presence (0=undefined, 1=present), followed by the value if defined.
+ *
+ * @param of - Schema for the defined value
+ * @returns An optional schema definition
+ *
+ * @example
+ * optional(uint32()) // number | undefined
+ *
+ * @example
+ * optional(string()) // string | undefined
+ */
+export declare const optional: <S extends Schema>(of: S) => {
+    type: "optional";
+    of: S;
+};
 /**
  * Nullish schema - value that can be null or undefined.
- * 
+ *
  * Uses 1 byte to indicate state (0=null, 1=undefined, 2=present), followed by the value if present.
- * 
+ *
  * @param of - Schema for the non-nullish value
  * @returns A nullish schema definition
- * 
+ *
  * @example
  * nullish(float32()) // number | null | undefined
- * 
+ *
  * @example
  * nullish(string()) // string | null | undefined
  */
-export function nullish<S extends Schema>(of: S): {
-    type: 'nullish';
+export declare const nullish: <S extends Schema>(of: S) => {
+    type: "nullish";
     of: S;
 };
-```
-
-```ts
 /**
  * Union schema - discriminated union of object variants.
- * 
+ *
  * Each variant must be an object with a literal discriminator field.
  * The discriminator is used to determine which variant to deserialize.
- * 
+ *
  * @param key - Name of the discriminator field
  * @param variants - Array of object schemas, each with a literal for the key field
  * @returns A union schema definition
- * 
+ *
  * @example
  * union('type', [
  *   object({ type: literal('player'), id: uint32(), name: string() }),
@@ -789,465 +872,170 @@ export function nullish<S extends Schema>(of: S): {
  *   object({ type: literal('npc'), id: uint32(), dialog: string() })
  * ])
  */
-export function union<K extends string, V extends (ObjectSchema & {
-    fields: {
-        [k in K]: LiteralSchema;
-    };
-})[]>(key: K, variants: [
-    ...V
-]): {
-    type: 'union';
+export declare const union: <K extends string, V extends (ObjectSchema & {
+    fields: { [k in K]: LiteralSchema; };
+})[]>(key: K, variants: [...V]) => {
+    type: "union";
     key: K;
-    variants: [
-        ...V
-    ];
+    variants: [...V];
 };
-```
-
-```ts
 /**
  * Quantize a floating point number to discrete steps within a range.
- * 
+ *
  * Values are encoded using the minimum number of bits needed to represent
  * all possible steps, rounded up to the nearest byte boundary.
- * 
+ *
  * You can specify precision either by step size or byte budget:
  * - `{ step }`: Desired step size, bytes are calculated
  * - `{ bytes }`: Byte budget, actual step is calculated
- * 
+ *
  * The actual step size may be slightly smaller than requested due to rounding
  * up to the nearest power of 2. For example, a range of 0-100 with step=1
  * requires 101 steps, which rounds to 128 (7 bits), giving an actual step
  * size of ~0.787.
- * 
+ *
  * @param min - Minimum value in the range
  * @param max - Maximum value in the range
  * @param precision - Either `{ step: number }` or `{ bytes: number }`
- * 
+ *
  * @example
  * // Rotation angle with 0.5° precision (uses 2 bytes, actual ~0.35°)
  * quantized(0, 360, { step: 0.5 })
- * 
+ *
  * @example
  * // Health percentage with 1 byte budget (actual step ~0.39)
  * quantized(0, 100, { bytes: 1 })
- * 
+ *
  * @example
  * // Position with 10cm precision (uses 2 bytes, actual ~3cm)
  * quantized(-1000, 1000, { step: 0.1 })
- * 
+ *
  * @example
  * // Normalized value with 1% increments (uses 1 byte, actual ~0.39%)
  * quantized(0, 1, { step: 0.01 })
  */
-export function quantized(min: number, max: number, precision: {
+export declare const quantized: (min: number, max: number, precision?: {
     step: number;
 } | {
     bytes: number;
-} = { step: 0.01 }): {
-    type: 'quantized';
+}) => {
+    type: "quantized";
     min: number;
     max: number;
     step: number;
     bytes: number;
 };
-```
-
-```ts
 /**
  * Compressed quaternion using "smallest three" encoding.
- * 
+ *
  * Since quaternions are unit length (x² + y² + z² + w² = 1), we can
  * store only the 3 smallest components and reconstruct the largest.
  * This uses significantly less space than storing all 4 components.
- * 
+ *
  * The encoding stores:
  * - Index of the dropped (largest) component (2 bits)
  * - Sign of the dropped component (1 bit)
  * - 3 quantized components
- * 
+ *
  * Component values range from -1/√2 to 1/√2, so the quantization step
  * is relative to this range (~1.414).
- * 
+ *
  * You can specify precision either by step size or byte budget:
  * - `{ step }`: Desired step size, bytes are calculated
  * - `{ bytes }`: Byte budget, actual step is calculated
- * 
+ *
  * @param precision - Either `{ step: number }` or `{ bytes: number }` (default: { step: 0.001 })
- * 
+ *
  * @example
  * // Default 0.001 precision (7 bytes)
  * quat()
- * 
+ *
  * @example
  * // High precision via step (7 bytes)
  * quat({ step: 0.0002 })
- * 
+ *
  * @example
  * // Low bandwidth via bytes (4 bytes, step ~0.002)
  * quat({ bytes: 4 })
  */
-export function quat(precision: {
+export declare const quat: (precision?: {
     step: number;
 } | {
     bytes: number;
-} = { step: 0.001 }): {
-    type: 'quat';
+}) => {
+    type: "quat";
     step: number;
     bytes: number;
 };
-```
-
-```ts
 /**
  * Compressed unit vector in 2D using angle encoding.
- * 
+ *
  * Since 2D unit vectors can be represented as a single angle (0 to 2π),
  * this is more efficient than storing x,y components. The angle range
  * is 0 to 2π (~6.283 radians).
- * 
+ *
  * You can specify precision either by step size or byte budget:
  * - `{ step }`: Desired step size in radians, bytes are calculated
  * - `{ bytes }`: Byte budget, actual step is calculated
- * 
+ *
  * @param precision - Either `{ step: number }` or `{ bytes: number }` (default: { step: 0.0015 })
- * 
+ *
  * @example
  * // Default ~0.09° precision (2 bytes)
  * uv2()
- * 
+ *
  * @example
  * // High precision ~0.006° via step (3 bytes)
  * uv2({ step: 0.0001 })
- * 
+ *
  * @example
  * // 1 byte budget (step ~0.025 radians = 1.4°)
  * uv2({ bytes: 1 })
  */
-export function uv2(precision: {
+export declare const uv2: (precision?: {
     step: number;
 } | {
     bytes: number;
-} = { step: 0.0015 }): {
-    type: 'uv2';
+}) => {
+    type: "uv2";
     step: number;
     bytes: number;
 };
-```
-
-```ts
 /**
  * Compressed unit vector in 3D using "smallest two" encoding.
- * 
+ *
  * Similar to quaternion compression, we exploit the unit length constraint.
  * We store the 2 smallest components and reconstruct the largest, plus
  * the index and sign of the dropped component.
- * 
+ *
  * Component values range from -1/√2 to 1/√2, so the quantization step
  * is relative to this range (~1.414).
- * 
+ *
  * You can specify precision either by step size or byte budget:
  * - `{ step }`: Desired step size, bytes are calculated
  * - `{ bytes }`: Byte budget, actual step is calculated
- * 
+ *
  * @param precision - Either `{ step: number }` or `{ bytes: number }` (default: { step: 0.001 })
- * 
+ *
  * @example
  * // Default 0.001 precision (3 bytes)
  * uv3()
- * 
+ *
  * @example
  * // Low bandwidth via bytes (2 bytes, step ~0.006)
  * uv3({ bytes: 2 })
- * 
+ *
  * @example
  * // High precision via step (4 bytes)
  * uv3({ step: 0.0002 })
  */
-export function uv3(precision: {
+export declare const uv3: (precision?: {
     step: number;
 } | {
     bytes: number;
-} = { step: 0.001 }): {
-    type: 'uv3';
+}) => {
+    type: "uv3";
     step: number;
     bytes: number;
 };
-```
-
-#### Schema Types
-
-```ts
-export type Schema = BooleanSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Int64Schema | Uint64Schema | Float16Schema | Float32Schema | Float64Schema | QuantizedSchema | QuatSchema | UV2Schema | UV3Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | Int8ArraySchema | Uint8ClampedArraySchema | Int16ArraySchema | Uint16ArraySchema | Int32ArraySchema | Uint32ArraySchema | Float32ArraySchema | Float64ArraySchema | BigInt64ArraySchema | BigUint64ArraySchema | UnionSchema | LiteralSchema | EnumerationSchema | NullableSchema | OptionalSchema | NullishSchema;
-```
-
-```ts
-export type BooleanSchema = {
-    type: 'boolean';
-};
-```
-
-```ts
-export type StringSchema = {
-    type: 'string';
-};
-```
-
-```ts
-export type Int8Schema = {
-    type: 'int8';
-};
-```
-
-```ts
-export type Uint8Schema = {
-    type: 'uint8';
-};
-```
-
-```ts
-export type Int16Schema = {
-    type: 'int16';
-};
-```
-
-```ts
-export type Uint16Schema = {
-    type: 'uint16';
-};
-```
-
-```ts
-export type Int32Schema = {
-    type: 'int32';
-};
-```
-
-```ts
-export type Uint32Schema = {
-    type: 'uint32';
-};
-```
-
-```ts
-export type Int64Schema = {
-    type: 'int64';
-};
-```
-
-```ts
-export type Uint64Schema = {
-    type: 'uint64';
-};
-```
-
-```ts
-export type Float16Schema = {
-    type: 'float16';
-};
-```
-
-```ts
-export type Float32Schema = {
-    type: 'float32';
-};
-```
-
-```ts
-export type Float64Schema = {
-    type: 'float64';
-};
-```
-
-```ts
-export type LiteralSchema = {
-    type: 'literal';
-    value: SchemaType<PrimitiveSchema>;
-};
-```
-
-```ts
-export type EnumerationSchema = {
-    type: 'enumeration';
-    values: readonly (string | number)[];
-};
-```
-
-```ts
-export type ListSchema = {
-    type: 'list';
-    of: Schema;
-    length?: number;
-};
-```
-
-```ts
-export type TupleSchema = {
-    type: 'tuple';
-    of: Schema[];
-};
-```
-
-```ts
-export type ObjectSchema = {
-    type: 'object';
-    fields: Record<string, Schema>;
-};
-```
-
-```ts
-export type RecordSchema = {
-    type: 'record';
-    field: Schema;
-};
-```
-
-```ts
-export type Uint8ArraySchema = {
-    type: 'uint8Array';
-    length?: number;
-};
-```
-
-```ts
-export type Int8ArraySchema = {
-    type: 'int8Array';
-    length?: number;
-};
-```
-
-```ts
-export type Uint8ClampedArraySchema = {
-    type: 'uint8ClampedArray';
-    length?: number;
-};
-```
-
-```ts
-export type Int16ArraySchema = {
-    type: 'int16Array';
-    length?: number;
-};
-```
-
-```ts
-export type Uint16ArraySchema = {
-    type: 'uint16Array';
-    length?: number;
-};
-```
-
-```ts
-export type Int32ArraySchema = {
-    type: 'int32Array';
-    length?: number;
-};
-```
-
-```ts
-export type Uint32ArraySchema = {
-    type: 'uint32Array';
-    length?: number;
-};
-```
-
-```ts
-export type Float32ArraySchema = {
-    type: 'float32Array';
-    length?: number;
-};
-```
-
-```ts
-export type Float64ArraySchema = {
-    type: 'float64Array';
-    length?: number;
-};
-```
-
-```ts
-export type BigInt64ArraySchema = {
-    type: 'bigInt64Array';
-    length?: number;
-};
-```
-
-```ts
-export type BigUint64ArraySchema = {
-    type: 'bigUint64Array';
-    length?: number;
-};
-```
-
-```ts
-export type OptionalSchema = {
-    type: 'optional';
-    of: Schema;
-};
-```
-
-```ts
-export type NullableSchema = {
-    type: 'nullable';
-    of: Schema;
-};
-```
-
-```ts
-export type NullishSchema = {
-    type: 'nullish';
-    of: Schema;
-};
-```
-
-```ts
-export type UnionSchema = {
-    type: 'union';
-    key: string;
-    variants: Array<ObjectSchema>;
-};
-```
-
-```ts
-export type QuantizedSchema = {
-    type: 'quantized';
-    min: number;
-    max: number;
-    step: number;
-    bytes: number;
-};
-```
-
-```ts
-export type QuatSchema = {
-    type: 'quat';
-    step: number;
-    bytes: number;
-};
-```
-
-```ts
-export type UV2Schema = {
-    type: 'uv2';
-    step: number;
-    bytes: number;
-};
-```
-
-```ts
-export type UV3Schema = {
-    type: 'uv3';
-    step: number;
-    bytes: number;
-};
-```
-
-## Advanced
-
-### What is the packed data format?
-
-Currently there is no formal specification for the packed data format, and no guarantees are made about the stability of the format between versions. As such, the same version of packcat should be used on both the packing and unpacking end, and it is not recommended to persist packed data.
-
-### Does this library support big-endian machines?
-
-This library assumes the host machine is little-endian in its use of JavaScript typed arrays. While supporting big-endian is technically possible, it falls outside the practical scope and realistic use cases of this library.
+export {};

@@ -1,0 +1,21 @@
+{
+  "name": "website",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "packcat": "workspace:*",
+    "three": "^0.183.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "@types/three": "^0.183.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.1"
+  }
+}

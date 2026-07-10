@@ -24,7 +24,7 @@ First, define your data format with the schema utils:
 
 <Snippet source="./snippets.ts" select="schema" />
 
-Next, you can build the schema, which gives you `pack`, `unpack`, and `validate` functions, and use `SchemaType` to infer the TypeScript type of the schema:
+Next, you can build the schema, which gives you `pack`, `unpack`, `validate`, `packInto`, and `size` functions, and use `SchemaType` to infer the TypeScript type of the schema:
 
 <Snippet source="./snippets.ts" select="serdes" />
 
@@ -32,9 +32,13 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <Snippet source="./snippets.ts" select="validate" />
 
-If you want to pack directly into an existing buffer, you can use `packInto`:
+If you want to pack directly into an existing buffer, you can use `packInto`. It writes in a single pass without measuring up front, and reports the number of bytes required via `result.size` (including when the buffer was too small, so you can grow it and retry):
 
 <Snippet source="./snippets.ts" select="packInto" />
+
+If you need to know how many bytes a value requires before allocating a buffer, use `size`:
+
+<Snippet source="./snippets.ts" select="size" />
 
 ## API Documentation
 

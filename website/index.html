@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>packcat - pack javascript objects into array buffers</title>
+    <meta name="description" content="packcat is a small library for packing javascript objects to and from array buffers.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./src/index.css" />
+  </head>
+  <body>
+    <div id="root">
+      <div id="loading" class="loading-container">
+        <div class="spinner"></div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-info">
+        <h1 class="nav-title">packcat</h1>
+        <p class="nav-subtitle">pack javascript objects into array buffers</p>
+      </div>
+      <div class="nav-links">
+        <a href="https://github.com/isaac-mason/packcat" target="_blank" rel="noopener noreferrer">github</a>
+        <a href="https://www.npmjs.com/package/packcat">npm</a>
+      </div>
+    </nav>
+
+    <section class="demo" id="demo">
+      <div class="demo-schema">
+        <div class="demo-label">// a snapshot of world state, described once</div>
+<pre class="demo-code">const Position = list(
+  quantized(-16, 16, { step: 0.01 }),
+  3,
+);
+
+const Entity = object({
+  id:       uint16(),
+  position: Position,   <span class="demo-comment">// 6 bytes</span>
+  rotation: quat(),     <span class="demo-comment">// 7 bytes</span>
+});
+
+const WorldSchema = object({
+  frame:    uint32(),
+  entities: list(Entity),
+});
+
+const { pack, unpack } = build(WorldSchema);
+
+const bytes = pack(state);  <span class="demo-comment">// &rarr; Uint8Array</span>
+const back  = unpack(bytes); <span class="demo-comment">// &rarr; WorldState</span></pre>
+      </div>
+      <div class="demo-compare">
+        <div class="demo-row">
+          <span class="demo-name">JSON.stringify</span>
+          <span class="demo-bytes" id="json-bytes">&ndash;</span>
+        </div>
+        <div class="demo-track"><div class="demo-fill demo-fill--json" id="json-fill"></div></div>
+        <div class="demo-row">
+          <span class="demo-name">packcat</span>
+          <span class="demo-bytes" id="pack-bytes">&ndash;</span>
+        </div>
+        <div class="demo-track"><div class="demo-fill demo-fill--pack" id="pack-fill"></div></div>
+        <div class="demo-savings"><span id="savings">&ndash;</span> smaller</div>
+
+        <div class="demo-speed">
+          <span class="demo-speed-head"></span>
+          <span class="demo-speed-head"></span>
+          <span class="demo-speed-head">JSON</span>
+          <span class="demo-speed-head">packcat</span>
+
+          <span class="demo-x" id="ser-x">&ndash;</span>
+          <span class="demo-speed-op">serialize</span>
+          <span class="demo-time" id="ser-json">&ndash;</span>
+          <span class="demo-time demo-time--pack" id="ser-pack">&ndash;</span>
+
+          <span class="demo-x" id="deser-x">&ndash;</span>
+          <span class="demo-speed-op">deserialize</span>
+          <span class="demo-time" id="deser-json">&ndash;</span>
+          <span class="demo-time demo-time--pack" id="deser-pack">&ndash;</span>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div class="footer-links">
+        <a href="https://x.com/isaac_mason_" class="footer-link" target="_blank" rel="noopener noreferrer">x.com/isaac_mason_</a>
+        <a href="https://github.com/sponsors/isaac-mason" class="footer-link" target="_blank" rel="noopener noreferrer">sponsor me!</a>
+      </div>
+    </footer>
+
+    <script type="module" src="./src/index.ts"></script>
+  </body>
+</html>
