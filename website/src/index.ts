@@ -158,6 +158,9 @@ function formatMicros(ms: number): string {
 
 // `ratio` is (json time / packcat time): >1 means packcat is faster
 function formatSpeedup(ratio: number): string {
+    // a non-finite ratio means we don't have a usable sample yet (e.g. a
+    // coarse-resolution timer measured 0µs for both sides → 0/0 = NaN)
+    if (!Number.isFinite(ratio) || ratio <= 0) return '—';
     const [n, word] = ratio >= 1 ? [ratio, 'faster'] : [1 / ratio, 'slower'];
     return `${n.toFixed(1)}× <span class="demo-x-word">${word}</span>`;
 }
@@ -180,7 +183,12 @@ let deserPackSmooth = 0;
 let serXSmooth = 0;
 let deserXSmooth = 0;
 
-const smooth = (prev: number, next: number, a: number) => (prev === 0 ? next : prev + (next - prev) * a);
+const smooth = (prev: number, next: number, a: number) => {
+    // ignore non-finite samples so a single bad reading (e.g. 0/0 from a
+    // coarse timer) can't poison the accumulator permanently
+    if (!Number.isFinite(next)) return prev;
+    return prev === 0 ? next : prev + (next - prev) * a;
+};
 
 function updateStats() {
     const jsonStr = JSON.stringify(world);
