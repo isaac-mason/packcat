@@ -249,6 +249,9 @@ const record = (field) => ({
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
  *
+ * Lifetime: `unpack` returns a zero-copy **view** into the input buffer — don't
+ * mutate, transfer, or recycle that buffer while it's in use; `.slice()` to own.
+ *
  * @param length Optional fixed length in bytes
  * @returns A Uint8Array schema definition
  *
@@ -266,6 +269,9 @@ const uint8Array = (length) => length === undefined ? { type: 'uint8Array' } : {
  *
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
+ *
+ * Lifetime: `unpack` returns a zero-copy **view** into the input buffer — don't
+ * mutate, transfer, or recycle that buffer while it's in use; `.slice()` to own.
  *
  * @param length Optional fixed length in elements
  * @returns An Int8Array schema definition
@@ -285,6 +291,9 @@ const int8Array = (length) => length === undefined ? { type: 'int8Array' } : { t
  * Values are clamped to 0-255 range. Commonly used for image data (canvas).
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
+ *
+ * Lifetime: `unpack` returns a zero-copy **view** into the input buffer — don't
+ * mutate, transfer, or recycle that buffer while it's in use; `.slice()` to own.
  *
  * @param length Optional fixed length in elements
  * @returns A Uint8ClampedArray schema definition

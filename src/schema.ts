@@ -269,30 +269,9 @@ type RepeatType<T, N extends number> = N extends keyof RepeatTypeMap<T> ? Repeat
 
 type Simplify<T> = { [K in keyof T]: T[K] } & {};
 
-type NextDepth = {
-    0: 0;
-    1: 0;
-    2: 1;
-    3: 2;
-    4: 3;
-    5: 4;
-    6: 5;
-    7: 6;
-    8: 7;
-    9: 8;
-    10: 9;
-    11: 10;
-    12: 11;
-    13: 12;
-    14: 13;
-    15: 14;
-};
-
-type DecrementDepth<N extends keyof NextDepth> = N extends keyof NextDepth ? NextDepth[N] : 0;
-
 // biome-ignore format: readability
-export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
-    Depth extends 0 ? any :
+export type SchemaType<S extends Schema> =
+    [Schema] extends [S] ? unknown :
     S extends BooleanSchema ? boolean :
     S extends StringSchema ? string :
     S extends VarIntSchema ? number :
@@ -314,16 +293,16 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
     S extends UV3Schema ? [x: number, y: number, z: number] :
     S extends ListSchema ? (
         S['length'] extends number
-            ? RepeatType<SchemaType<S['of'], DecrementDepth<Depth>>, S['length']>
-            : SchemaType<S['of'], DecrementDepth<Depth>>[]
+            ? RepeatType<SchemaType<S['of']>, S['length']>
+            : SchemaType<S['of']>[]
     ) :
     S extends TupleSchema ? (
         S['of'] extends [...infer El]
-            ? { [K in keyof El]: El[K] extends Schema ? SchemaType<El[K], DecrementDepth<Depth>> : never }
+            ? { [K in keyof El]: El[K] extends Schema ? SchemaType<El[K]> : never }
             : never 
     ) :
-    S extends ObjectSchema ? Simplify<{ [K in keyof S['fields']]: SchemaType<S['fields'][K], DecrementDepth<Depth>> }> :
-    S extends RecordSchema ? Record<string, SchemaType<S['field'], DecrementDepth<Depth>>> :
+    S extends ObjectSchema ? Simplify<{ [K in keyof S['fields']]: SchemaType<S['fields'][K]> }> :
+    S extends RecordSchema ? Record<string, SchemaType<S['field']>> :
     S extends Uint8ArraySchema ? Uint8Array :
     S extends Int8ArraySchema ? Int8Array :
     S extends Uint8ClampedArraySchema ? Uint8ClampedArray :
@@ -337,10 +316,10 @@ export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> =
     S extends BigUint64ArraySchema ? BigUint64Array :
     S extends LiteralSchema ? S['value'] :
     S extends EnumerationSchema ? S['values'][number] :
-    S extends NullableSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | null :
-    S extends OptionalSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | undefined :
-    S extends NullishSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | null | undefined :
-    S extends UnionSchema ? SchemaType<S['variants'][number], DecrementDepth<Depth>> :
+    S extends NullableSchema ? SchemaType<S['of']> | null :
+    S extends OptionalSchema ? SchemaType<S['of']> | undefined :
+    S extends NullishSchema ? SchemaType<S['of']> | null | undefined :
+    S extends UnionSchema ? SchemaType<S['variants'][number]> :
     never;
 
 /* lightweight helpers that just return objects */
@@ -876,7 +855,7 @@ export const bigUint64Array = (length?: number) =>
  * @param value The constant primitive value
  * @returns A literal schema definition
  */
-export const literal = <S extends PrimitiveSchema, V extends SchemaType<S>>(
+export const literal = <V extends SchemaType<PrimitiveSchema>>(
     value: V,
 ): {
     type: 'literal';
