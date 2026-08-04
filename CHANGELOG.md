@@ -6,6 +6,7 @@
 - feat!: `packInto` now writes in a single pass and reports the required byte count via `result.size`
     - **breaking**: `PackIntoResult` changed from `{ ok, bytesWritten }` to `{ ok, size }`. `size` is always the full number of bytes required to pack the value; `ok` reports whether it all fit at the given offset.
     - **breaking**: `packInto` no longer measures the value up front — it writes optimistically and checks afterwards. As a result, on failure (`ok: false`) the buffer may be partially written rather than left untouched. Callers that grow/flush and retry on failure are unaffected.
+- fix: prevent SchemaType signature-help OOM 
 
 ## 0.3.0
 
