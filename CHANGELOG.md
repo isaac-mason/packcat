@@ -7,7 +7,7 @@
     - **breaking**: `packInto` returns a number instead of `{ ok, bytesWritten }`, and `PackIntoResult` is removed. The value fit if the returned offset is `<= u8.length`; if it's greater, the return value is the length the buffer needs. Bytes written is `end - offset`, and calls chain: `offset = packInto(value, u8, offset)`.
     - **breaking**: `packInto` no longer measures the value up front — it writes optimistically and checks afterwards. As a result, when the value doesn't fit the buffer may be partially written rather than left untouched. Callers that grow/flush and retry on failure are unaffected.
 - feat!: remove the `float16` schema type
-    - **breaking**: it relied on `Float16Array`, which older browsers (Chrome before 135, Safari before 18.2) don't have, and packcat created one at load, so importing packcat at all failed there. Use `float32` or `quantized` instead.
+    - **breaking**: it relied on `Float16Array`, which older browsers (Chrome before 135, Safari before 18.2) don't have, and packcat created one at load, so importing packcat at all failed there. Use `float32` or `quantized` instead. This will be reintroduced in future
 - fix: prevent SchemaType signature-help OOM 
 
 ## 0.3.0
