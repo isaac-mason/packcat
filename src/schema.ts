@@ -46,10 +46,6 @@ export type Uint64Schema = {
     type: 'uint64';
 };
 
-export type Float16Schema = {
-    type: 'float16';
-};
-
 export type Float32Schema = {
     type: 'float32';
 };
@@ -215,7 +211,6 @@ export type Schema =
     | Uint32Schema
     | Int64Schema
     | Uint64Schema
-    | Float16Schema
     | Float32Schema
     | Float64Schema
     | QuantizedSchema
@@ -284,7 +279,6 @@ export type SchemaType<S extends Schema> =
     S extends Uint32Schema ? number :
     S extends Int64Schema ? bigint :
     S extends Uint64Schema ? bigint :
-    S extends Float16Schema ? number :
     S extends Float32Schema ? number :
     S extends Float64Schema ? number :
     S extends QuantizedSchema ? number :
@@ -481,19 +475,6 @@ export const int64 = (): { type: 'int64' } => ({ type: 'int64' });
  * uint64() // 8 bytes unsigned BigInt
  */
 export const uint64 = (): { type: 'uint64' } => ({ type: 'uint64' });
-
-/**
- * 16-bit floating point (2 bytes) - half precision.
- * 
- * Range: ±65,504 with ~3 decimal digits of precision
- * Useful for reduced bandwidth when full precision isn't needed.
- * 
- * @returns A float16 schema definition
- * 
- * @example
- * float16() // 2 bytes floating point
- */
-export const float16 = (): { type: 'float16' } => ({ type: 'float16' });
 
 /**
  * 32-bit floating point (4 bytes) - single precision.

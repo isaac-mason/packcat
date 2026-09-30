@@ -3,9 +3,11 @@
 ## 0.4.0 (Unreleased)
 
 - feat: add `size`, returns the number of bytes required to pack a value into a buffer (useful for pre-allocating before you have a buffer)
-- feat!: `packInto` now writes in a single pass and reports the required byte count via `result.size`
-    - **breaking**: `PackIntoResult` changed from `{ ok, bytesWritten }` to `{ ok, size }`. `size` is always the full number of bytes required to pack the value; `ok` reports whether it all fit at the given offset.
-    - **breaking**: `packInto` no longer measures the value up front — it writes optimistically and checks afterwards. As a result, on failure (`ok: false`) the buffer may be partially written rather than left untouched. Callers that grow/flush and retry on failure are unaffected.
+- feat!: `packInto` now writes in a single pass, allocates nothing, and returns the offset just past the packed value
+    - **breaking**: `packInto` returns a number instead of `{ ok, bytesWritten }`, and `PackIntoResult` is removed. The value fit if the returned offset is `<= u8.length`; if it's greater, the return value is the length the buffer needs. Bytes written is `end - offset`, and calls chain: `offset = packInto(value, u8, offset)`.
+    - **breaking**: `packInto` no longer measures the value up front — it writes optimistically and checks afterwards. As a result, when the value doesn't fit the buffer may be partially written rather than left untouched. Callers that grow/flush and retry on failure are unaffected.
+- feat!: remove the `float16` schema type
+    - **breaking**: it relied on `Float16Array`, which older browsers (Chrome before 135, Safari before 18.2) don't have, and packcat created one at load, so importing packcat at all failed there. Use `float32` or `quantized` instead.
 - fix: prevent SchemaType signature-help OOM 
 
 ## 0.3.0

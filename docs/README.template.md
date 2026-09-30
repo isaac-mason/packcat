@@ -32,7 +32,7 @@ You can also use `validate` if you don't trust whether the input data confirms t
 
 <Snippet source="./snippets.ts" select="validate" />
 
-If you want to pack directly into an existing buffer, you can use `packInto`. It writes in a single pass without measuring up front, and reports the number of bytes required via `result.size` (including when the buffer was too small, so you can grow it and retry):
+If you want to pack directly into an existing buffer, you can use `packInto`. It writes in a single pass without measuring up front, allocates nothing, and returns the offset just past the packed value. If that's greater than the buffer's length, the value didn't fit: nothing past the end was written (though bytes before it may have been), and the return value is the length the buffer needs, so you can grow it and pack again:
 
 <Snippet source="./snippets.ts" select="packInto" />
 
@@ -71,8 +71,6 @@ Multi-byte typed arrays (`uint16Array`, `float32Array`, `float64Array`, etc.) ar
 <RenderType type="import('packcat').int64" />
 
 <RenderType type="import('packcat').uint64" />
-
-<RenderType type="import('packcat').float16" />
 
 <RenderType type="import('packcat').float32" />
 
@@ -151,8 +149,6 @@ Multi-byte typed arrays (`uint16Array`, `float32Array`, `float64Array`, etc.) ar
 <RenderType type="import('packcat').Int64Schema" />
 
 <RenderType type="import('packcat').Uint64Schema" />
-
-<RenderType type="import('packcat').Float16Schema" />
 
 <RenderType type="import('packcat').Float32Schema" />
 

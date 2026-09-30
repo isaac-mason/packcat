@@ -34,9 +34,6 @@ export type Int64Schema = {
 export type Uint64Schema = {
     type: 'uint64';
 };
-export type Float16Schema = {
-    type: 'float16';
-};
 export type Float32Schema = {
     type: 'float32';
 };
@@ -152,7 +149,7 @@ export type UnionSchema = {
     variants: Array<ObjectSchema>;
 };
 export type PrimitiveSchema = BooleanSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Float32Schema | Float64Schema | StringSchema;
-export type Schema = BooleanSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Int64Schema | Uint64Schema | Float16Schema | Float32Schema | Float64Schema | QuantizedSchema | QuatSchema | UV2Schema | UV3Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | Int8ArraySchema | Uint8ClampedArraySchema | Int16ArraySchema | Uint16ArraySchema | Int32ArraySchema | Uint32ArraySchema | Float32ArraySchema | Float64ArraySchema | BigInt64ArraySchema | BigUint64ArraySchema | UnionSchema | LiteralSchema | EnumerationSchema | NullableSchema | OptionalSchema | NullishSchema;
+export type Schema = BooleanSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Int64Schema | Uint64Schema | Float32Schema | Float64Schema | QuantizedSchema | QuatSchema | UV2Schema | UV3Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | Int8ArraySchema | Uint8ClampedArraySchema | Int16ArraySchema | Uint16ArraySchema | Int32ArraySchema | Uint32ArraySchema | Float32ArraySchema | Float64ArraySchema | BigInt64ArraySchema | BigUint64ArraySchema | UnionSchema | LiteralSchema | EnumerationSchema | NullableSchema | OptionalSchema | NullishSchema;
 type RepeatTypeMap<T> = {
     0: [];
     1: [T];
@@ -178,7 +175,7 @@ type Simplify<T> = {
 } & {};
 export type SchemaType<S extends Schema> = [
     Schema
-] extends [S] ? unknown : S extends BooleanSchema ? boolean : S extends StringSchema ? string : S extends VarIntSchema ? number : S extends VarUintSchema ? number : S extends Int8Schema ? number : S extends Uint8Schema ? number : S extends Int16Schema ? number : S extends Uint16Schema ? number : S extends Int32Schema ? number : S extends Uint32Schema ? number : S extends Int64Schema ? bigint : S extends Uint64Schema ? bigint : S extends Float16Schema ? number : S extends Float32Schema ? number : S extends Float64Schema ? number : S extends QuantizedSchema ? number : S extends QuatSchema ? [x: number, y: number, z: number, w: number] : S extends UV2Schema ? [x: number, y: number] : S extends UV3Schema ? [x: number, y: number, z: number] : S extends ListSchema ? (S['length'] extends number ? RepeatType<SchemaType<S['of']>, S['length']> : SchemaType<S['of']>[]) : S extends TupleSchema ? (S['of'] extends [...infer El] ? {
+] extends [S] ? unknown : S extends BooleanSchema ? boolean : S extends StringSchema ? string : S extends VarIntSchema ? number : S extends VarUintSchema ? number : S extends Int8Schema ? number : S extends Uint8Schema ? number : S extends Int16Schema ? number : S extends Uint16Schema ? number : S extends Int32Schema ? number : S extends Uint32Schema ? number : S extends Int64Schema ? bigint : S extends Uint64Schema ? bigint : S extends Float32Schema ? number : S extends Float64Schema ? number : S extends QuantizedSchema ? number : S extends QuatSchema ? [x: number, y: number, z: number, w: number] : S extends UV2Schema ? [x: number, y: number] : S extends UV3Schema ? [x: number, y: number, z: number] : S extends ListSchema ? (S['length'] extends number ? RepeatType<SchemaType<S['of']>, S['length']> : SchemaType<S['of']>[]) : S extends TupleSchema ? (S['of'] extends [...infer El] ? {
     [K in keyof El]: El[K] extends Schema ? SchemaType<El[K]> : never;
 } : never) : S extends ObjectSchema ? Simplify<{
     [K in keyof S['fields']]: SchemaType<S['fields'][K]>;
@@ -353,20 +350,6 @@ export declare const int64: () => {
  */
 export declare const uint64: () => {
     type: "uint64";
-};
-/**
- * 16-bit floating point (2 bytes) - half precision.
- *
- * Range: ±65,504 with ~3 decimal digits of precision
- * Useful for reduced bandwidth when full precision isn't needed.
- *
- * @returns A float16 schema definition
- *
- * @example
- * float16() // 2 bytes floating point
- */
-export declare const float16: () => {
-    type: "float16";
 };
 /**
  * 32-bit floating point (4 bytes) - single precision.

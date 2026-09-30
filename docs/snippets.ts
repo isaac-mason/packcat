@@ -52,16 +52,22 @@ console.log(validate({ foo: 'bar' })); // false
 /* SNIPPET_END: validate */
 
 /* SNIPPET_START: packInto */
-const buf = new Uint8Array(128);
-const result = packInto(playerInput, buf, 0);
+let buf = new Uint8Array(128);
+let end = packInto(playerInput, buf, 0);
 
-if (result.ok) {
-    console.log(`Packed ${result.size} bytes into existing buffer`);
-} else {
-    // packInto writes optimistically in a single pass; on failure some bytes may already
-    // have been written, so grow/flush the buffer and pack again.
-    console.log(`Buffer too small: needed ${result.size} bytes`);
+if (end > buf.length) {
+    // didn't fit: `end` is the length the buffer needs, so grow it and pack again
+    buf = new Uint8Array(end);
+    end = packInto(playerInput, buf, 0);
 }
+
+console.log(buf.subarray(0, end)); // the packed bytes
+
+// packInto returns where the value ended, so several values can be packed back to back
+const frame = new Uint8Array(256);
+let offset = 0;
+offset = packInto(playerInput, frame, offset);
+offset = packInto(playerInput, frame, offset);
 /* SNIPPET_END: packInto */
 
 /* SNIPPET_START: size */

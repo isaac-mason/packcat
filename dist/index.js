@@ -145,18 +145,6 @@ const int64 = () => ({ type: 'int64' });
  */
 const uint64 = () => ({ type: 'uint64' });
 /**
- * 16-bit floating point (2 bytes) - half precision.
- *
- * Range: ±65,504 with ~3 decimal digits of precision
- * Useful for reduced bandwidth when full precision isn't needed.
- *
- * @returns A float16 schema definition
- *
- * @example
- * float16() // 2 bytes floating point
- */
-const float16 = () => ({ type: 'float16' });
-/**
  * 32-bit floating point (4 bytes) - single precision.
  *
  * Range: ±3.4e38 with ~7 decimal digits of precision
@@ -797,11 +785,11 @@ const uv3 = (precision = { step: 0.001 }) => {
 
 function build(schema) {
     const { pack: packSource, packInto: packIntoSource, size: sizeSource } = buildPack(schema);
-    const pack = new Function('textEncoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'utf8Length', 'value', packSource).bind(null, textEncoder, f16, f16_u8, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8, utf8Length);
-    const packInto = new Function('textEncoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'utf8Length', 'value', 'u8', 'offset', packIntoSource).bind(null, textEncoder, f16, f16_u8, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8, utf8Length);
+    const pack = new Function('textEncoder', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'utf8Length', 'value', packSource).bind(null, textEncoder, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8, utf8Length);
+    const packInto = new Function('textEncoder', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'utf8Length', 'value', 'u8', 'offset', packIntoSource).bind(null, textEncoder, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8, utf8Length);
     const size = new Function('utf8Length', 'value', sizeSource).bind(null, utf8Length);
     const unpackSource = buildUnpack(schema);
-    const unpack = new Function('textDecoder', 'f16', 'f16_u8', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'u8', unpackSource).bind(null, textDecoder, f16, f16_u8, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8);
+    const unpack = new Function('textDecoder', 'f32', 'f32_u8', 'f64', 'f64_u8', 'i64', 'i64_u8', 'u64', 'u64_u8', 'u8', unpackSource).bind(null, textDecoder, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8);
     const validateSource = buildValidate(schema);
     const validate = new Function('value', validateSource);
     return {
@@ -833,9 +821,9 @@ function buildPack(schema) {
         body +
         'return u8;';
     // Single pass, no upfront measure: out-of-bounds byte writes are silently dropped (and typed-array
-    // `u8.set` writes skipped) while `o` still advances, so `size` is the required length and
-    // `o <= u8.length` reports whether it fit. On overflow the buffer may be partially written.
-    const packIntoSource = decls + 'let o = offset;' + body + 'const size = o - offset;' + 'return { ok: o <= u8.length, size };';
+    // `u8.set` writes skipped) while `o` still advances, so the returned `o` is where the value ends
+    // whether or not it fit.
+    const packIntoSource = `${decls}let o = offset;${body}return o;`;
     return {
         pack: packSource,
         packInto: packIntoSource,
@@ -862,9 +850,6 @@ function buildValidate(schema) {
     code += 'return true;';
     return code;
 }
-const f16_buffer = new ArrayBuffer(2);
-const f16 = new Float16Array(f16_buffer);
-const f16_u8 = new Uint8Array(f16_buffer);
 const f32_buffer = new ArrayBuffer(4);
 const f32 = new Float32Array(f32_buffer);
 const f32_u8 = new Uint8Array(f32_buffer);
@@ -991,7 +976,6 @@ const handlers = {
     uint32: fixedHandler(4, writeU32, readU32, (v) => `if (typeof ${v} !== 'number' || !Number.isInteger(${v}) || ${v} < 0 || ${v} > 4294967295) return false;`),
     int64: fixedHandler(8, writeI64, readI64, (v) => `if (typeof ${v} !== 'bigint' || ${v} < -9223372036854775808n || ${v} > 9223372036854775807n) return false;`),
     uint64: fixedHandler(8, writeU64, readU64, (v) => `if (typeof ${v} !== 'bigint' || ${v} < 0n || ${v} > 18446744073709551615n) return false;`),
-    float16: fixedHandler(2, writeF16, readF16, (v) => `if (typeof ${v} !== 'number') return false;`),
     float32: fixedHandler(4, writeF32, readF32, (v) => `if (typeof ${v} !== 'number') return false;`),
     float64: fixedHandler(8, writeF64, readF64, (v) => `if (typeof ${v} !== 'number') return false;`),
     // quantize value to discrete steps, round up bits to bytes
@@ -2429,18 +2413,6 @@ function writeU64(value, offset = 'o') {
     code += `u8[${offset}++] = u64_u8[4]; u8[${offset}++] = u64_u8[5]; u8[${offset}++] = u64_u8[6]; u8[${offset}++] = u64_u8[7];`;
     return code;
 }
-function readF16(target, offset = 'o') {
-    let code = '';
-    code += `f16_u8[0] = u8[${offset}++]; f16_u8[1] = u8[${offset}++];`;
-    code += `${target} = f16[0];`;
-    return code;
-}
-function writeF16(value, offset = 'o') {
-    let code = '';
-    code += `f16[0] = ${value};`;
-    code += `u8[${offset}++] = f16_u8[0]; u8[${offset}++] = f16_u8[1];`;
-    return code;
-}
 function readF32(target, offset = 'o') {
     let code = '';
     code += `f32_u8[0] = u8[${offset}++]; f32_u8[1] = u8[${offset}++]; f32_u8[2] = u8[${offset}++]; f32_u8[3] = u8[${offset}++];`;
@@ -2484,5 +2456,5 @@ function writeString(ctx, value, offset = 'o') {
     return code;
 }
 
-export { bigInt64Array, bigUint64Array, boolean, build, enumeration, float16, float32, float32Array, float64, float64Array, int16, int16Array, int32, int32Array, int64, int8, int8Array, list, literal, nullable, nullish, number, object, optional, quantized, quat, record, string, tuple, uint16, uint16Array, uint32, uint32Array, uint64, uint8, uint8Array, uint8ClampedArray, union, uv2, uv3, varint, varuint };
+export { bigInt64Array, bigUint64Array, boolean, build, enumeration, float32, float32Array, float64, float64Array, int16, int16Array, int32, int32Array, int64, int8, int8Array, list, literal, nullable, nullish, number, object, optional, quantized, quat, record, string, tuple, uint16, uint16Array, uint32, uint32Array, uint64, uint8, uint8Array, uint8ClampedArray, union, uv2, uv3, varint, varuint };
 //# sourceMappingURL=index.js.map
