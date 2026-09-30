@@ -1,12 +1,15 @@
 import type { Schema, SchemaType } from './schema';
 
-export type PackIntoResult = { ok: boolean; size: number };
-
 export function build<S extends Schema>(
     schema: S,
 ): {
     pack: (value: SchemaType<S>) => Uint8Array;
-    packInto: (value: SchemaType<S>, u8: Uint8Array, offset: number) => PackIntoResult;
+    /**
+     * Packs `value` into `u8` starting at `offset`, and returns the offset just past the packed value.
+     * If that is greater than `u8.length` the value didn't fit: nothing past the end was written, and
+     * the return value is the length the buffer needs. Bytes before the end may already be written.
+     */
+    packInto: (value: SchemaType<S>, u8: Uint8Array, offset: number) => number;
     size: (value: SchemaType<S>) => number;
     unpack: (u8: Uint8Array) => SchemaType<S>;
     validate: (value: SchemaType<S>) => boolean;
@@ -16,8 +19,6 @@ export function build<S extends Schema>(
 
     const pack = new Function(
         'textEncoder',
-        'f16',
-        'f16_u8',
         'f32',
         'f32_u8',
         'f64',
@@ -29,14 +30,12 @@ export function build<S extends Schema>(
         'utf8Length',
         'value',
         packSource,
-    ).bind(null, textEncoder, f16, f16_u8, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8, utf8Length) as (
+    ).bind(null, textEncoder, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8, utf8Length) as (
         value: SchemaType<S>,
     ) => Uint8Array;
 
     const packInto = new Function(
         'textEncoder',
-        'f16',
-        'f16_u8',
         'f32',
         'f32_u8',
         'f64',
@@ -50,11 +49,11 @@ export function build<S extends Schema>(
         'u8',
         'offset',
         packIntoSource,
-    ).bind(null, textEncoder, f16, f16_u8, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8, utf8Length) as (
+    ).bind(null, textEncoder, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8, utf8Length) as (
         value: SchemaType<S>,
         u8: Uint8Array,
         offset: number,
-    ) => PackIntoResult;
+    ) => number;
 
     const size = new Function('utf8Length', 'value', sizeSource).bind(null, utf8Length) as (
         value: SchemaType<S>,
@@ -64,8 +63,6 @@ export function build<S extends Schema>(
 
     const unpack = new Function(
         'textDecoder',
-        'f16',
-        'f16_u8',
         'f32',
         'f32_u8',
         'f64',
@@ -76,7 +73,7 @@ export function build<S extends Schema>(
         'u64_u8',
         'u8',
         unpackSource,
-    ).bind(null, textDecoder, f16, f16_u8, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8) as (
+    ).bind(null, textDecoder, f32, f32_u8, f64, f64_u8, i64, i64_u8, u64, u64_u8) as (
         u8: Uint8Array,
     ) => SchemaType<S>;
 
@@ -119,10 +116,9 @@ function buildPack(schema: Schema): { pack: string; packInto: string; size: stri
         'return u8;';
 
     // Single pass, no upfront measure: out-of-bounds byte writes are silently dropped (and typed-array
-    // `u8.set` writes skipped) while `o` still advances, so `size` is the required length and
-    // `o <= u8.length` reports whether it fit. On overflow the buffer may be partially written.
-    const packIntoSource =
-        decls + 'let o = offset;' + body + 'const size = o - offset;' + 'return { ok: o <= u8.length, size };';
+    // `u8.set` writes skipped) while `o` still advances, so the returned `o` is where the value ends
+    // whether or not it fit.
+    const packIntoSource = `${decls}let o = offset;${body}return o;`;
 
     return {
         pack: packSource,
@@ -157,10 +153,6 @@ function buildValidate(schema: Schema): string {
 
     return code;
 }
-
-const f16_buffer = new ArrayBuffer(2);
-const f16 = new Float16Array(f16_buffer);
-const f16_u8 = new Uint8Array(f16_buffer);
 
 const f32_buffer = new ArrayBuffer(4);
 const f32 = new Float32Array(f32_buffer);
@@ -357,7 +349,6 @@ const handlers: Handlers = {
         readU64,
         (v) => `if (typeof ${v} !== 'bigint' || ${v} < 0n || ${v} > 18446744073709551615n) return false;`,
     ),
-    float16: fixedHandler(2, writeF16, readF16, (v) => `if (typeof ${v} !== 'number') return false;`),
     float32: fixedHandler(4, writeF32, readF32, (v) => `if (typeof ${v} !== 'number') return false;`),
     float64: fixedHandler(8, writeF64, readF64, (v) => `if (typeof ${v} !== 'number') return false;`),
 
@@ -1828,20 +1819,6 @@ function writeU64(value: string, offset = 'o'): string {
     code += `u64[0] = ${value};`;
     code += `u8[${offset}++] = u64_u8[0]; u8[${offset}++] = u64_u8[1]; u8[${offset}++] = u64_u8[2]; u8[${offset}++] = u64_u8[3];`;
     code += `u8[${offset}++] = u64_u8[4]; u8[${offset}++] = u64_u8[5]; u8[${offset}++] = u64_u8[6]; u8[${offset}++] = u64_u8[7];`;
-    return code;
-}
-
-function readF16(target: string, offset = 'o'): string {
-    let code = '';
-    code += `f16_u8[0] = u8[${offset}++]; f16_u8[1] = u8[${offset}++];`;
-    code += `${target} = f16[0];`;
-    return code;
-}
-
-function writeF16(value: string, offset = 'o'): string {
-    let code = '';
-    code += `f16[0] = ${value};`;
-    code += `u8[${offset}++] = f16_u8[0]; u8[${offset}++] = f16_u8[1];`;
     return code;
 }
 

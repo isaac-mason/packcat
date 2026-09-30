@@ -34,9 +34,6 @@ export type Int64Schema = {
 export type Uint64Schema = {
     type: 'uint64';
 };
-export type Float16Schema = {
-    type: 'float16';
-};
 export type Float32Schema = {
     type: 'float32';
 };
@@ -152,7 +149,7 @@ export type UnionSchema = {
     variants: Array<ObjectSchema>;
 };
 export type PrimitiveSchema = BooleanSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Float32Schema | Float64Schema | StringSchema;
-export type Schema = BooleanSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Int64Schema | Uint64Schema | Float16Schema | Float32Schema | Float64Schema | QuantizedSchema | QuatSchema | UV2Schema | UV3Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | Int8ArraySchema | Uint8ClampedArraySchema | Int16ArraySchema | Uint16ArraySchema | Int32ArraySchema | Uint32ArraySchema | Float32ArraySchema | Float64ArraySchema | BigInt64ArraySchema | BigUint64ArraySchema | UnionSchema | LiteralSchema | EnumerationSchema | NullableSchema | OptionalSchema | NullishSchema;
+export type Schema = BooleanSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Int64Schema | Uint64Schema | Float32Schema | Float64Schema | QuantizedSchema | QuatSchema | UV2Schema | UV3Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | Int8ArraySchema | Uint8ClampedArraySchema | Int16ArraySchema | Uint16ArraySchema | Int32ArraySchema | Uint32ArraySchema | Float32ArraySchema | Float64ArraySchema | BigInt64ArraySchema | BigUint64ArraySchema | UnionSchema | LiteralSchema | EnumerationSchema | NullableSchema | OptionalSchema | NullishSchema;
 type RepeatTypeMap<T> = {
     0: [];
     1: [T];
@@ -176,30 +173,13 @@ type RepeatType<T, N extends number> = N extends keyof RepeatTypeMap<T> ? Repeat
 type Simplify<T> = {
     [K in keyof T]: T[K];
 } & {};
-type NextDepth = {
-    0: 0;
-    1: 0;
-    2: 1;
-    3: 2;
-    4: 3;
-    5: 4;
-    6: 5;
-    7: 6;
-    8: 7;
-    9: 8;
-    10: 9;
-    11: 10;
-    12: 11;
-    13: 12;
-    14: 13;
-    15: 14;
-};
-type DecrementDepth<N extends keyof NextDepth> = N extends keyof NextDepth ? NextDepth[N] : 0;
-export type SchemaType<S extends Schema, Depth extends keyof NextDepth = 15> = Depth extends 0 ? any : S extends BooleanSchema ? boolean : S extends StringSchema ? string : S extends VarIntSchema ? number : S extends VarUintSchema ? number : S extends Int8Schema ? number : S extends Uint8Schema ? number : S extends Int16Schema ? number : S extends Uint16Schema ? number : S extends Int32Schema ? number : S extends Uint32Schema ? number : S extends Int64Schema ? bigint : S extends Uint64Schema ? bigint : S extends Float16Schema ? number : S extends Float32Schema ? number : S extends Float64Schema ? number : S extends QuantizedSchema ? number : S extends QuatSchema ? [x: number, y: number, z: number, w: number] : S extends UV2Schema ? [x: number, y: number] : S extends UV3Schema ? [x: number, y: number, z: number] : S extends ListSchema ? (S['length'] extends number ? RepeatType<SchemaType<S['of'], DecrementDepth<Depth>>, S['length']> : SchemaType<S['of'], DecrementDepth<Depth>>[]) : S extends TupleSchema ? (S['of'] extends [...infer El] ? {
-    [K in keyof El]: El[K] extends Schema ? SchemaType<El[K], DecrementDepth<Depth>> : never;
+export type SchemaType<S extends Schema> = [
+    Schema
+] extends [S] ? unknown : S extends BooleanSchema ? boolean : S extends StringSchema ? string : S extends VarIntSchema ? number : S extends VarUintSchema ? number : S extends Int8Schema ? number : S extends Uint8Schema ? number : S extends Int16Schema ? number : S extends Uint16Schema ? number : S extends Int32Schema ? number : S extends Uint32Schema ? number : S extends Int64Schema ? bigint : S extends Uint64Schema ? bigint : S extends Float32Schema ? number : S extends Float64Schema ? number : S extends QuantizedSchema ? number : S extends QuatSchema ? [x: number, y: number, z: number, w: number] : S extends UV2Schema ? [x: number, y: number] : S extends UV3Schema ? [x: number, y: number, z: number] : S extends ListSchema ? (S['length'] extends number ? RepeatType<SchemaType<S['of']>, S['length']> : SchemaType<S['of']>[]) : S extends TupleSchema ? (S['of'] extends [...infer El] ? {
+    [K in keyof El]: El[K] extends Schema ? SchemaType<El[K]> : never;
 } : never) : S extends ObjectSchema ? Simplify<{
-    [K in keyof S['fields']]: SchemaType<S['fields'][K], DecrementDepth<Depth>>;
-}> : S extends RecordSchema ? Record<string, SchemaType<S['field'], DecrementDepth<Depth>>> : S extends Uint8ArraySchema ? Uint8Array : S extends Int8ArraySchema ? Int8Array : S extends Uint8ClampedArraySchema ? Uint8ClampedArray : S extends Int16ArraySchema ? Int16Array : S extends Uint16ArraySchema ? Uint16Array : S extends Int32ArraySchema ? Int32Array : S extends Uint32ArraySchema ? Uint32Array : S extends Float32ArraySchema ? Float32Array : S extends Float64ArraySchema ? Float64Array : S extends BigInt64ArraySchema ? BigInt64Array : S extends BigUint64ArraySchema ? BigUint64Array : S extends LiteralSchema ? S['value'] : S extends EnumerationSchema ? S['values'][number] : S extends NullableSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | null : S extends OptionalSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | undefined : S extends NullishSchema ? SchemaType<S['of'], DecrementDepth<Depth>> | null | undefined : S extends UnionSchema ? SchemaType<S['variants'][number], DecrementDepth<Depth>> : never;
+    [K in keyof S['fields']]: SchemaType<S['fields'][K]>;
+}> : S extends RecordSchema ? Record<string, SchemaType<S['field']>> : S extends Uint8ArraySchema ? Uint8Array : S extends Int8ArraySchema ? Int8Array : S extends Uint8ClampedArraySchema ? Uint8ClampedArray : S extends Int16ArraySchema ? Int16Array : S extends Uint16ArraySchema ? Uint16Array : S extends Int32ArraySchema ? Int32Array : S extends Uint32ArraySchema ? Uint32Array : S extends Float32ArraySchema ? Float32Array : S extends Float64ArraySchema ? Float64Array : S extends BigInt64ArraySchema ? BigInt64Array : S extends BigUint64ArraySchema ? BigUint64Array : S extends LiteralSchema ? S['value'] : S extends EnumerationSchema ? S['values'][number] : S extends NullableSchema ? SchemaType<S['of']> | null : S extends OptionalSchema ? SchemaType<S['of']> | undefined : S extends NullishSchema ? SchemaType<S['of']> | null | undefined : S extends UnionSchema ? SchemaType<S['variants'][number]> : never;
 /**
  * Boolean schema - stores true/false values using 1 byte.
  *
@@ -372,20 +352,6 @@ export declare const uint64: () => {
     type: "uint64";
 };
 /**
- * 16-bit floating point (2 bytes) - half precision.
- *
- * Range: ±65,504 with ~3 decimal digits of precision
- * Useful for reduced bandwidth when full precision isn't needed.
- *
- * @returns A float16 schema definition
- *
- * @example
- * float16() // 2 bytes floating point
- */
-export declare const float16: () => {
-    type: "float16";
-};
-/**
  * 32-bit floating point (4 bytes) - single precision.
  *
  * Range: ±3.4e38 with ~7 decimal digits of precision
@@ -506,6 +472,9 @@ export declare const record: <F extends Schema>(field: F) => {
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
  *
+ * Lifetime: `unpack` returns a zero-copy **view** into the input buffer — don't
+ * mutate, transfer, or recycle that buffer while it's in use; `.slice()` to own.
+ *
  * @param length Optional fixed length in bytes
  * @returns A Uint8Array schema definition
  *
@@ -529,6 +498,9 @@ export declare const uint8Array: (length?: number) => {
  *
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
+ *
+ * Lifetime: `unpack` returns a zero-copy **view** into the input buffer — don't
+ * mutate, transfer, or recycle that buffer while it's in use; `.slice()` to own.
  *
  * @param length Optional fixed length in elements
  * @returns An Int8Array schema definition
@@ -554,6 +526,9 @@ export declare const int8Array: (length?: number) => {
  * Values are clamped to 0-255 range. Commonly used for image data (canvas).
  * Without length: Variable-length buffer prefixed with varuint count
  * With length: Fixed-length buffer with no length prefix
+ *
+ * Lifetime: `unpack` returns a zero-copy **view** into the input buffer — don't
+ * mutate, transfer, or recycle that buffer while it's in use; `.slice()` to own.
  *
  * @param length Optional fixed length in elements
  * @returns A Uint8ClampedArray schema definition
@@ -782,7 +757,7 @@ export declare const bigUint64Array: (length?: number) => {
  * @param value The constant primitive value
  * @returns A literal schema definition
  */
-export declare const literal: <S extends PrimitiveSchema, V extends SchemaType<S>>(value: V) => {
+export declare const literal: <V extends SchemaType<PrimitiveSchema>>(value: V) => {
     type: "literal";
     value: V;
 };

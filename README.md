@@ -85,19 +85,25 @@ console.log(validate(playerInput)); // true
 console.log(validate({ foo: 'bar' })); // false
 ```
 
-If you want to pack directly into an existing buffer, you can use `packInto`. It writes in a single pass without measuring up front, and reports the number of bytes required via `result.size` (including when the buffer was too small, so you can grow it and retry):
+If you want to pack directly into an existing buffer, you can use `packInto`. It writes in a single pass without measuring up front, allocates nothing, and returns the offset just past the packed value. If that's greater than the buffer's length, the value didn't fit: nothing past the end was written (though bytes before it may have been), and the return value is the length the buffer needs, so you can grow it and pack again:
 
 ```ts
-const buf = new Uint8Array(128);
-const result = packInto(playerInput, buf, 0);
+let buf = new Uint8Array(128);
+let end = packInto(playerInput, buf, 0);
 
-if (result.ok) {
-    console.log(`Packed ${result.size} bytes into existing buffer`);
-} else {
-    // packInto writes optimistically in a single pass; on failure some bytes may already
-    // have been written, so grow/flush the buffer and pack again.
-    console.log(`Buffer too small: needed ${result.size} bytes`);
+if (end > buf.length) {
+    // didn't fit: `end` is the length the buffer needs, so grow it and pack again
+    buf = new Uint8Array(end);
+    end = packInto(playerInput, buf, 0);
 }
+
+console.log(buf.subarray(0, end)); // the packed bytes
+
+// packInto returns where the value ended, so several values can be packed back to back
+const frame = new Uint8Array(256);
+let offset = 0;
+offset = packInto(playerInput, frame, offset);
+offset = packInto(playerInput, frame, offset);
 ```
 
 If you need to know how many bytes a value requires before allocating a buffer, use `size`:
@@ -121,7 +127,12 @@ Multi-byte typed arrays (`uint16Array`, `float32Array`, `float64Array`, etc.) ar
 ```ts
 export function build<S extends Schema>(schema: S): {
     pack: (value: SchemaType<S>) => Uint8Array;
-    packInto: (value: SchemaType<S>, u8: Uint8Array, offset: number) => PackIntoResult;
+    /**
+     * Packs `value` into `u8` starting at `offset`, and returns the offset just past the packed value.
+     * If that is greater than `u8.length` the value didn't fit: nothing past the end was written, and
+     * the return value is the length the buffer needs. Bytes before the end may already be written.
+     */
+    packInto: (value: SchemaType<S>, u8: Uint8Array, offset: number) => number;
     size: (value: SchemaType<S>) => number;
     unpack: (u8: Uint8Array) => SchemaType<S>;
     validate: (value: SchemaType<S>) => boolean;
@@ -311,23 +322,6 @@ export function uint64(): {
 
 ```ts
 /**
- * 16-bit floating point (2 bytes) - half precision.
- * 
- * Range: ±65,504 with ~3 decimal digits of precision
- * Useful for reduced bandwidth when full precision isn't needed.
- * 
- * @returns A float16 schema definition
- * 
- * @example
- * float16() // 2 bytes floating point
- */
-export function float16(): {
-    type: 'float16';
-};
-```
-
-```ts
-/**
  * 32-bit floating point (4 bytes) - single precision.
  * 
  * Range: ±3.4e38 with ~7 decimal digits of precision
@@ -369,7 +363,7 @@ export function float64(): {
  * @param value The constant primitive value
  * @returns A literal schema definition
  */
-export function literal<S extends PrimitiveSchema, V extends SchemaType<S>>(value: V): {
+export function literal<V extends SchemaType<PrimitiveSchema>>(value: V): {
     type: 'literal';
     value: V;
 };
@@ -994,7 +988,7 @@ export function uv3(precision: {
 #### Schema Types
 
 ```ts
-export type Schema = BooleanSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Int64Schema | Uint64Schema | Float16Schema | Float32Schema | Float64Schema | QuantizedSchema | QuatSchema | UV2Schema | UV3Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | Int8ArraySchema | Uint8ClampedArraySchema | Int16ArraySchema | Uint16ArraySchema | Int32ArraySchema | Uint32ArraySchema | Float32ArraySchema | Float64ArraySchema | BigInt64ArraySchema | BigUint64ArraySchema | UnionSchema | LiteralSchema | EnumerationSchema | NullableSchema | OptionalSchema | NullishSchema;
+export type Schema = BooleanSchema | VarIntSchema | VarUintSchema | Int8Schema | Uint8Schema | Int16Schema | Uint16Schema | Int32Schema | Uint32Schema | Int64Schema | Uint64Schema | Float32Schema | Float64Schema | QuantizedSchema | QuatSchema | UV2Schema | UV3Schema | StringSchema | ListSchema | TupleSchema | ObjectSchema | RecordSchema | Uint8ArraySchema | Int8ArraySchema | Uint8ClampedArraySchema | Int16ArraySchema | Uint16ArraySchema | Int32ArraySchema | Uint32ArraySchema | Float32ArraySchema | Float64ArraySchema | BigInt64ArraySchema | BigUint64ArraySchema | UnionSchema | LiteralSchema | EnumerationSchema | NullableSchema | OptionalSchema | NullishSchema;
 ```
 
 ```ts
@@ -1054,12 +1048,6 @@ export type Int64Schema = {
 ```ts
 export type Uint64Schema = {
     type: 'uint64';
-};
-```
-
-```ts
-export type Float16Schema = {
-    type: 'float16';
 };
 ```
 

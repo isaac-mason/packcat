@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/suspicious/noApproximativeNumericConstant: test data */
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import type { SchemaType } from '../src';
 import {
     bigInt64Array,
@@ -8,7 +8,6 @@ import {
     boolean,
     build,
     enumeration,
-    float16,
     float32,
     float32Array,
     float64,
@@ -101,14 +100,6 @@ describe('serDes', () => {
         const serializedU32 = packU32(4000000000);
         expect(serializedU32.byteLength).toBe(4);
         expect(unpackU32(serializedU32)).toBe(4000000000);
-
-        // float16
-        const { pack: packF16, unpack: unpackF16 } = build(float16());
-        const serializedF16 = packF16(3.14159);
-        expect(serializedF16.byteLength).toBe(2);
-        const outF16 = unpackF16(serializedF16);
-        // Float16 has lower precision than float32
-        expect(outF16).toBeCloseTo(3.14159, 2);
 
         // float32
         const { pack: packF32, unpack: unpackF32 } = build(float32());
@@ -314,36 +305,6 @@ describe('serDes', () => {
         expect(validateVarUInt(1.5)).toBe(false);
         // @ts-expect-error testing invalid input
         expect(validateVarUInt('123')).toBe(false);
-    });
-
-    test('float16 precision and special values', () => {
-        const { pack, unpack } = build(float16());
-
-        // Test basic values
-        expect(unpack(pack(0))).toBe(0);
-        expect(unpack(pack(1))).toBeCloseTo(1, 3);
-        expect(unpack(pack(-1))).toBeCloseTo(-1, 3);
-        expect(unpack(pack(3.14159))).toBeCloseTo(3.14159, 2);
-
-        // Test max representable value (~65504)
-        const maxVal = 65504;
-        expect(unpack(pack(maxVal))).toBeCloseTo(maxVal, -3);
-
-        // Test small values
-        expect(unpack(pack(0.0001))).toBeCloseTo(0.0001, 4);
-        expect(unpack(pack(0.5))).toBeCloseTo(0.5, 3);
-
-        // Test special values
-        expect(unpack(pack(Infinity))).toBe(Infinity);
-        expect(unpack(pack(-Infinity))).toBe(-Infinity);
-        expect(unpack(pack(NaN))).toBe(NaN);
-
-        // Test values beyond range become infinity
-        expect(unpack(pack(100000))).toBe(Infinity);
-        expect(unpack(pack(-100000))).toBe(-Infinity);
-
-        // Verify byte size
-        expect(pack(123.45).byteLength).toBe(2);
     });
 
     test('quantized basic ranges', () => {
@@ -1866,15 +1827,14 @@ describe('serDes', () => {
 });
 
 describe('packInto', () => {
-    test('writes into provided buffer and returns ok with size', () => {
+    test('writes into provided buffer and returns the end offset', () => {
         const schema = uint32();
         const { pack, packInto } = build(schema);
 
         const packed = pack(42);
         const buf = new Uint8Array(16);
-        const result = packInto(42, buf, 0);
 
-        expect(result).toEqual({ ok: true, size: 4 });
+        expect(packInto(42, buf, 0)).toBe(4);
         expect(buf.subarray(0, 4)).toEqual(packed);
     });
 
@@ -1884,57 +1844,67 @@ describe('packInto', () => {
 
         const buf = new Uint8Array(16);
         buf[0] = 0xff; // sentinel
-        const result = packInto(42, buf, 4);
 
-        expect(result).toEqual({ ok: true, size: 4 });
+        expect(packInto(42, buf, 4)).toBe(8);
         expect(buf[0]).toBe(0xff); // sentinel untouched
 
         const packed = pack(42);
         expect(buf.subarray(4, 8)).toEqual(packed);
     });
 
-    test('returns ok: false when buffer is too small', () => {
+    test('returns past the buffer length when the buffer is too small', () => {
         const schema = uint32();
         const { packInto } = build(schema);
 
         const buf = new Uint8Array(2); // need 4 bytes
-        const result = packInto(42, buf, 0);
 
-        expect(result).toEqual({ ok: false, size: 4 });
+        expect(packInto(42, buf, 0)).toBe(4);
     });
 
-    test('returns ok: false when offset leaves insufficient room', () => {
+    test('returns past the buffer length when offset leaves insufficient room', () => {
         const schema = uint32();
         const { packInto } = build(schema);
 
         const buf = new Uint8Array(8);
-        const result = packInto(42, buf, 6); // only 2 bytes left
 
-        expect(result).toEqual({ ok: false, size: 4 });
+        expect(packInto(42, buf, 6)).toBe(10); // only 2 bytes left
     });
 
-    test('reports true size and may partially write on failure', () => {
+    test('reports the required length and may partially write on overflow', () => {
         const schema = uint32();
         const { packInto } = build(schema);
 
         const buf = new Uint8Array(2);
         buf.fill(0xaa);
-        const result = packInto(42, buf, 0);
 
-        // on overflow the bytes that fit are written; `size` still reports the full required length
-        expect(result).toEqual({ ok: false, size: 4 });
+        // on overflow the bytes that fit are written; the end offset is still the full required length
+        expect(packInto(42, buf, 0)).toBe(4);
         expect(buf[0]).toBe(42);
         expect(buf[1]).toBe(0);
     });
 
-    test('typed array too small returns ok: false instead of throwing', () => {
-        // typed-array u8.set() throws on overflow; packInto must report { ok: false, size } instead
+    test('typed array too small reports overflow instead of throwing', () => {
+        // typed-array u8.set() throws on overflow; packInto must return the required end offset instead
         const { packInto, size } = build(uint8Array());
         const value = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
 
         const buf = new Uint8Array(4);
         expect(() => packInto(value, buf, 0)).not.toThrow();
-        expect(packInto(value, buf, 0)).toEqual({ ok: false, size: size(value) });
+        expect(packInto(value, buf, 0)).toBe(size(value));
+    });
+
+    test('grow and retry', () => {
+        const schema = string();
+        const { pack, packInto } = build(schema);
+
+        let buf = new Uint8Array(2);
+        let end = packInto('hello', buf, 0);
+        expect(end).toBeGreaterThan(buf.length);
+
+        buf = new Uint8Array(end);
+        end = packInto('hello', buf, 0);
+        expect(end).toBe(buf.length);
+        expect(buf).toEqual(pack('hello'));
     });
 
     test('works with variable-length types (string)', () => {
@@ -1943,20 +1913,18 @@ describe('packInto', () => {
 
         const packed = pack('hello');
         const buf = new Uint8Array(64);
-        const result = packInto('hello', buf, 0);
 
-        expect(result).toEqual({ ok: true, size: packed.length });
+        expect(packInto('hello', buf, 0)).toBe(packed.length);
         expect(buf.subarray(0, packed.length)).toEqual(packed);
     });
 
-    test('returns ok: false for string when buffer too small', () => {
+    test('returns past the buffer length for string when buffer too small', () => {
         const schema = string();
         const { packInto } = build(schema);
 
         const buf = new Uint8Array(2); // 'hello' needs 6 bytes (1 varuint + 5 chars)
-        const result = packInto('hello', buf, 0);
 
-        expect(result).toEqual({ ok: false, size: 6 });
+        expect(packInto('hello', buf, 0)).toBe(6);
     });
 
     test('works with object schema', () => {
@@ -1970,13 +1938,12 @@ describe('packInto', () => {
         const value = { x: 1.5, y: 2.5, active: true };
         const packed = pack(value);
         const buf = new Uint8Array(64);
-        const result = packInto(value, buf, 0);
+        const end = packInto(value, buf, 0);
 
-        expect(result).toEqual({ ok: true, size: packed.length });
+        expect(end).toBe(packed.length);
 
         // verify round-trip through unpack
-        const unpacked = unpack(buf.subarray(0, result.size));
-        expect(unpacked).toEqual(value);
+        expect(unpack(buf.subarray(0, end))).toEqual(value);
     });
 
     test('works with list schema', () => {
@@ -1986,9 +1953,8 @@ describe('packInto', () => {
         const value = [1, 2, 3, 4, 5];
         const packed = pack(value);
         const buf = new Uint8Array(64);
-        const result = packInto(value, buf, 0);
 
-        expect(result).toEqual({ ok: true, size: packed.length });
+        expect(packInto(value, buf, 0)).toBe(packed.length);
         expect(buf.subarray(0, packed.length)).toEqual(packed);
     });
 
@@ -1999,9 +1965,8 @@ describe('packInto', () => {
         const value: [number, number, boolean] = [42, 3.14, true];
         const packed = pack(value);
         const buf = new Uint8Array(64);
-        const result = packInto(value, buf, 0);
 
-        expect(result).toEqual({ ok: true, size: packed.length });
+        expect(packInto(value, buf, 0)).toBe(packed.length);
         expect(buf.subarray(0, packed.length)).toEqual(packed);
     });
 
@@ -2010,46 +1975,26 @@ describe('packInto', () => {
         const { pack, packInto } = build(schema);
 
         // small value (1 byte)
-        const packed1 = pack(5);
-        const buf1 = new Uint8Array(8);
-        const result1 = packInto(5, buf1, 0);
-        expect(result1).toEqual({ ok: true, size: packed1.length });
+        expect(packInto(5, new Uint8Array(8), 0)).toBe(pack(5).length);
 
         // larger value (2 bytes)
-        const packed2 = pack(300);
-        const buf2 = new Uint8Array(8);
-        const result2 = packInto(300, buf2, 0);
-        expect(result2).toEqual({ ok: true, size: packed2.length });
+        expect(packInto(300, new Uint8Array(8), 0)).toBe(pack(300).length);
     });
 
-    test('offset defaults to 0', () => {
-        const schema = uint8();
-        const { pack, packInto } = build(schema);
+    test('chains: each call starts where the previous one ended', () => {
+        const header = build(uint8());
+        const body = build(string());
 
-        const packed = pack(77);
-        const buf = new Uint8Array(4);
-        const result = packInto(77, buf, 0);
+        const buf = new Uint8Array(32);
+        let offset = 0;
+        offset = header.packInto(7, buf, offset);
+        offset = body.packInto('hi', buf, offset);
+        offset = header.packInto(9, buf, offset);
 
-        expect(result).toEqual({ ok: true, size: 1 });
-        expect(buf[0]).toBe(packed[0]);
-    });
-
-    test('multiple packInto calls at successive offsets', () => {
-        const schema = uint32();
-        const { packInto, unpack } = build(schema);
-
-        const buf = new Uint8Array(12);
-        const r1 = packInto(100, buf, 0);
-        const r2 = packInto(200, buf, 4);
-        const r3 = packInto(300, buf, 8);
-
-        expect(r1).toEqual({ ok: true, size: 4 });
-        expect(r2).toEqual({ ok: true, size: 4 });
-        expect(r3).toEqual({ ok: true, size: 4 });
-
-        expect(unpack(buf.subarray(0, 4))).toBe(100);
-        expect(unpack(buf.subarray(4, 8))).toBe(200);
-        expect(unpack(buf.subarray(8, 12))).toBe(300);
+        expect(offset).toBe(1 + 3 + 1);
+        expect(header.unpack(buf.subarray(0, 1))).toBe(7);
+        expect(body.unpack(buf.subarray(1, 4))).toBe('hi');
+        expect(header.unpack(buf.subarray(4, 5))).toBe(9);
     });
 
     test('exact fit succeeds', () => {
@@ -2057,19 +2002,17 @@ describe('packInto', () => {
         const { packInto } = build(schema);
 
         const buf = new Uint8Array(4); // exactly 4 bytes needed
-        const result = packInto(42, buf, 0);
 
-        expect(result).toEqual({ ok: true, size: 4 });
+        expect(packInto(42, buf, 0)).toBe(buf.length);
     });
 
-    test('one byte short fails', () => {
+    test('one byte short overflows', () => {
         const schema = uint32();
         const { packInto } = build(schema);
 
         const buf = new Uint8Array(3); // 1 byte short
-        const result = packInto(42, buf, 0);
 
-        expect(result).toEqual({ ok: false, size: 4 });
+        expect(packInto(42, buf, 0)).toBe(4);
     });
 });
 
@@ -2101,7 +2044,7 @@ describe('size', () => {
             expect(s).toBe(pack(value).length);
 
             const buf = new Uint8Array(1024);
-            expect(packInto(value, buf, 0)).toEqual({ ok: true, size: s });
+            expect(packInto(value, buf, 0)).toBe(s);
         }
     });
 
@@ -2431,13 +2374,7 @@ describe('validate', () => {
         expect(u32.validate(-1)).toBe(false);
     });
 
-    test('float16/float32/float64', () => {
-        const f16 = build(float16());
-        expect(f16.validate(0)).toBe(true);
-        expect(f16.validate(1.5)).toBe(true);
-        // @ts-expect-error expected failure
-        expect(f16.validate('1.5')).toBe(false);
-
+    test('float32', () => {
         const f32 = build(float32());
         expect(f32.validate(0)).toBe(true);
         expect(f32.validate(1.5)).toBe(true);
@@ -3148,5 +3085,24 @@ describe('validate', () => {
         const packed = pack(data);
         const result = unpack(packed);
         expect(result).toEqual(data);
+    });
+});
+
+describe('without Float16Array', () => {
+    // Older browsers (Chrome before 135, Safari before 18.2) have no Float16Array, and
+    // packcat must load and work there.
+    test('loads and packs', async () => {
+        const original = globalThis.Float16Array;
+        // @ts-expect-error simulating a browser without it
+        delete globalThis.Float16Array;
+        try {
+            vi.resetModules();
+            const fresh = await import('../src');
+            const { pack, unpack } = fresh.build(fresh.object({ x: fresh.float32(), name: fresh.string() }));
+            expect(unpack(pack({ x: 1.5, name: 'a' }))).toEqual({ x: 1.5, name: 'a' });
+        } finally {
+            globalThis.Float16Array = original;
+            vi.resetModules();
+        }
     });
 });
