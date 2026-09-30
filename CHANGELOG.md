@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 0.4.0 (Unreleased)
+## 0.4.0
 
 - feat: add `size`, returns the number of bytes required to pack a value into a buffer (useful for pre-allocating before you have a buffer)
 - feat!: `packInto` now writes in a single pass, allocates nothing, and returns the offset just past the packed value
